@@ -34,13 +34,13 @@ namespace CsgBrush
         }
 
         [InspectorName("Форма сечения"), Tooltip("Форма сечения, протягиваемого вдоль траектории.")] public Profile profile = Profile.Circle;
-        [InspectorName("Размер сечения"), Tooltip("Ширина и высота в метрах. У круга ширина задаёт диаметр. Каждый размер ограничен снизу 0,01 м.")] public Vector2 size = DefaultSize;
+        [InspectorName("Размер сечения (м)"), Tooltip("Ширина и высота в метрах. У круга ширина задаёт диаметр. Каждый размер ограничен снизу 0,01 м.")] public Vector2 size = DefaultSize;
         /// <summary>A new spline's profile size, metres.</summary>
         public static readonly Vector2 DefaultSize = new Vector2(0.5f, 0.5f);
         [InspectorName("Стороны круга"), Tooltip("Число граней круглого сечения. От 0 до 2 — автоматический расчёт по допуску, от 3 до 64 — заданное число. Больше граней дают более гладкий профиль.")] public int sides = 0;
         [InspectorName("Нижняя половина"), Tooltip("Оставляет нижнюю половину профиля с верхом на уровне траектории. Вместе с полостью образует открытый жёлоб.")] public bool half;
         [InspectorName("Полый профиль"), Tooltip("Вырезает внутреннюю часть, оставляя стенку заданной толщины. При отключении профиль сплошной.")] public bool hollow;
-        [InspectorName("Толщина стенки"), Tooltip("Толщина в метрах для полого профиля. Больше — уже полость. Минимум 0,001 м, максимум на 0,001 м меньше половины меньшей стороны сечения.")] public float thickness = 0.05f;
+        [InspectorName("Толщина стенки (м)"), Tooltip("Толщина в метрах для полого профиля. Больше — уже полость. Минимум 0,001 м, максимум на 0,001 м меньше половины меньшей стороны сечения.")] public float thickness = 0.05f;
         [InspectorName("Окончания"), Tooltip("Определяет форму открытых концов траектории. Замкнутый участок не имеет концов.")] public Ends ends = Ends.Open;
         [InspectorName("Ориентация сечения"), Tooltip("Задаёт направление верха сечения вдоль траектории.")] public Orientation orientation = Orientation.Follow;
         [InspectorName("Материал"), Tooltip("Материал граней сплайна. Пустое поле использует материал по умолчанию из настроек брашей.")] public Material material;

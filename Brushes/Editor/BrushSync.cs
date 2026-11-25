@@ -28,7 +28,7 @@ namespace CsgBrush.Editor
             if (brush.shape == BrushShape.Custom)
             {
                 if (brush.polyhedron == null || !brush.polyhedron.IsValid)
-                    brush.polyhedron = BrushGeometry.ShapePolyhedron(brush.customFrom, BrushGeometry.ShapeParams.From(brush)); // picked Custom in the dropdown
+                    brush.polyhedron = BrushGeometry.Polyhedron(brush); // regenerate the original shape when editable vertices are missing
                 brush.size = brush.polyhedron.Bounds().size;
                 if (!brush.polyhedron.IsSound(out var why)) brush.problem = "Некорректная форма: " + BrushBoolean.DescribeProblem(why) + ".";
             }

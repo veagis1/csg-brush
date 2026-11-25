@@ -9,7 +9,7 @@ namespace CsgBrush.Tests
     /// <summary>World-space grid enforcement: positions, sizes and rotations stay on the grid whatever the hierarchy does.</summary>
     public class BrushSnapTests
     {
-        const float kGrid = 0.5f; // 16 Quake units
+        const float kGrid = 0.5f;
 
         [SetUp]
         public void SetUp()
@@ -17,8 +17,8 @@ namespace CsgBrush.Tests
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             Undo.ClearAll();
             var s = BrushSettings.instance;
-            s.ApplyPreset(BrushSettings.Preset.Quake);
-            s.gridIndex = System.Array.IndexOf(s.gridSizes, 16f);
+            s.gridSizes = new[] { 0.03125f, 0.0625f, 0.125f, 0.25f, kGrid, 1f, 2f, 4f, 8f };
+            s.gridIndex = System.Array.IndexOf(s.gridSizes, kGrid);
             s.rotationSnapDegrees = 15f;
             s.snapToGrid = true;
             Assert.AreEqual(kGrid, s.GridMeters, 1e-5f);

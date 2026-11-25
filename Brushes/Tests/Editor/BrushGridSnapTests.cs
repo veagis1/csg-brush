@@ -20,7 +20,7 @@ namespace CsgBrush.Tests
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var s = BrushSettings.instance; m_Snap = s.snapToGrid; m_Grid = s.gridIndex;
             s.snapToGrid = true;
-            for (int i = 0; i < s.gridSizes.Length; i++) if (s.ToMeters(s.gridSizes[i]) <= 0.5f) s.SetGridIndex(i); // the largest step up to 0.5 m, whatever the preset
+            for (int i = 0; i < s.gridSizes.Length; i++) if (s.gridSizes[i] <= 0.5f) s.SetGridIndex(i); // the largest step up to 0.5 m
             g = s.GridMeters;
         }
 

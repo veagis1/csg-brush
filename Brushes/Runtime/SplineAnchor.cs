@@ -15,9 +15,9 @@ namespace CsgBrush
     public sealed class SplineAnchor : MonoBehaviour
     {
         [HideInInspector] public int startId = WallAnchor.Unplaced, endId = WallAnchor.Unplaced;
-        [InspectorName("Расстояние вдоль звена"), Tooltip("Расстояние в метрах от начала звена до точки привязки. Ноль — начало звена, увеличение сдвигает объект вдоль него.")] public float distance;
+        [InspectorName("Расстояние вдоль звена (м)"), Tooltip("Расстояние в метрах от начала звена до точки привязки. Ноль — начало звена, увеличение сдвигает объект вдоль него.")] public float distance;
         [InspectorName("Угол вокруг сечения"), Tooltip("Угол в градусах вокруг сечения. Ноль — сверху, 90° — справа, 180° — снизу.")] public float angle;
-        [InspectorName("Отступ от поверхности"), Tooltip("Расстояние в метрах от поверхности до опорной точки объекта. Ноль — на поверхности, положительное значение сдвигает наружу.")] public float offset;
+        [InspectorName("Отступ от поверхности (м)"), Tooltip("Расстояние в метрах от поверхности до опорной точки объекта. Ноль — на поверхности, положительное значение сдвигает наружу.")] public float offset;
         [InspectorName("Вертикально относительно сечения"), Tooltip("Ориентирует верх объекта по верху сечения. При отключении верх направлен наружу вдоль нормали поверхности.")] public bool upright;
         /// <summary>The object's rotation relative to the surface: identity stands on it, facing along the path.</summary>
         [HideInInspector] public Quaternion rotation = Quaternion.identity;

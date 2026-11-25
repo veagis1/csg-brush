@@ -233,7 +233,7 @@ namespace CsgBrush.Editor
         {
             var e = Event.current;
             EditModeMouse.ReleaseStaleAfter(e); // once every edit mode and tool has had the event
-            if (Application.isPlaying) return;
+            if (Application.isPlaying || BrushPivotTool.Active) return;
             if (BrushSurfaceGrid.OnSceneGUI(view)) { s_MouseDownValid = false; return; }
             if (BrushSettings.instance.showDimensions && !e.alt)
                 BrushShapeDrawing.DrawSelectionDimensions();
@@ -752,7 +752,7 @@ namespace CsgBrush.Editor
             finally { redirecting = false; }
         }
 
-        /// <summary>Unity's grid snapping and its visible Scene view grid follow the world preset's grid size.</summary>
+        /// <summary>Unity's grid snapping and its visible Scene view grid follow the configured grid step in metres.</summary>
         public static void ApplyGrid()
         {
             var s = BrushSettings.instance;
@@ -760,10 +760,8 @@ namespace CsgBrush.Editor
             EditorSnapSettings.move = new Vector3(g, g, g);
             EditorSnapSettings.gridSize = new Vector3(g, g, g);
             EditorSnapSettings.rotate = s.rotationSnapDegrees;
-            // Unity's absolute grid snapping (Global handle) matches how Unreal and TrenchBroom snap: to the
-            // world grid, not by increments from where the object happens to be.
+            // BrushSnap enforces the grid separately. Preserve the axes chosen for the Move and Rotate gizmos.
             EditorSnapSettings.gridSnapEnabled = s.snapToGrid;
-            if (s.snapToGrid) Tools.pivotRotation = PivotRotation.Global;
         }
     }
 }

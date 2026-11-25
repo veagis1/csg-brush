@@ -329,10 +329,10 @@ namespace CsgBrush.Tests
                 var shape = BrushEditState.ShapeOf(brush);
                 int top = 0; for (int f = 0; f < shape.faces.Length; f++) if (Vector3.Dot(shape.Plane(f), Vector3.up) > 0.9f) top = f;
                 BrushEditState.Sel(brush).faces = new HashSet<int> { top };
-                s.extrudeDistance = s.ToUnits(1.5f);
+                s.extrudeDistance = 1.5f;
                 Assert.AreEqual(2.5f, BrushExtrude.PreviewShape(brush).Bounds().max.y, 1e-4f, "the preview: the top 1.5 m higher");
                 Assert.AreEqual(BrushShape.Box, brush.shape, "the brush itself is untouched");
-                s.extrudeDistance = s.ToUnits(0.5f);
+                s.extrudeDistance = 0.5f;
                 Assert.AreEqual(1.5f, BrushExtrude.PreviewShape(brush).Bounds().max.y, 1e-4f, "a new distance: a new preview");
                 Assert.AreEqual(BrushShape.Box, brush.shape, "still untouched");
                 BrushExtrude.Apply();

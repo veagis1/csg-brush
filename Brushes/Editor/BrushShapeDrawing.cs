@@ -88,7 +88,7 @@ namespace CsgBrush.Editor
                 float meters = PointGraph.PathLength(path);
                 if (meters <= 1e-4f) continue;
                 PointGraph.PathPoint(path, meters * 0.5f, out var midpoint, out _);
-                Handles.Label(midpoint, BrushSettings.instance.FormatUnits(meters), EditorStyles.whiteMiniLabel);
+                Handles.Label(midpoint, BrushSettings.FormatMeters(meters), EditorStyles.whiteMiniLabel);
             }
         }
 

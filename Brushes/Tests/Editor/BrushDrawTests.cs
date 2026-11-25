@@ -75,7 +75,7 @@ namespace CsgBrush.Tests
         {
             var s = BrushSettings.instance; bool snap = s.snapToGrid; int grid = s.gridIndex;
             s.snapToGrid = true;
-            for (int i = 0; i < s.gridSizes.Length; i++) if (s.ToMeters(s.gridSizes[i]) <= 0.5f) s.SetGridIndex(i); // the largest step up to 0.5 m, whatever the preset
+            for (int i = 0; i < s.gridSizes.Length; i++) if (s.gridSizes[i] <= 0.5f) s.SetGridIndex(i); // the largest step up to 0.5 m
             float g = s.GridMeters;
             try
             {

@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using CsgBrush.Editor;
 using NUnit.Framework;
 using UnityEditor;
@@ -56,6 +58,97 @@ namespace CsgBrush.Tests
         }
 
         [Test]
+        public void FreeConstructionGridSnapsInItsPlaneWithoutAnOwner()
+        {
+            var point = new Vector3(1.35f, -0.8f, 2.1f);
+            var normal = new Vector3(0.2f, 1f, 0.9f).normalized;
+            var frame = BrushSurfaceGrid.Frame.OnPlane(point, normal);
+            Assert.That(frame.Valid, Is.True);
+            Assert.That(frame.Owner, Is.Null);
+            Assert.That(Vector3.Distance(frame.Normal, normal), Is.LessThan(0.0001f));
+            Assert.That(frame.Plane.GetDistanceToPoint(point), Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(Vector3.Distance(frame.Origin, normal * Vector3.Dot(point, normal)),
+                Is.LessThan(0.0001f));
+            var otherPoint = point + Vector3.ProjectOnPlane(Vector3.right * 4f, normal);
+            var samePlane = BrushSurfaceGrid.Frame.OnPlane(otherPoint, normal);
+            Assert.That(Vector3.Distance(samePlane.Origin, frame.Origin), Is.LessThan(0.0001f));
+
+            var cursor = frame.Origin + frame.Rotation * new Vector3(0.26f, 0f, -0.76f);
+            var snapped = BrushDraw.SnapInPlane(cursor, frame.Origin, frame.Rotation, 0.5f);
+            var expected = frame.Origin + frame.Rotation * new Vector3(0.5f, 0f, -1f);
+            Assert.That(Vector3.Distance(snapped, expected), Is.LessThan(0.0001f));
+            Assert.That(frame.Plane.GetDistanceToPoint(snapped), Is.EqualTo(0f).Within(0.0001f));
+        }
+
+        [Test]
+        public void CreationCommandsAreRegisteredInBothMenus()
+        {
+            string[] names =
+            {
+                "Блок", "Клин", "Цилиндр", "Конус", "Сфера", "Прямая лестница",
+                "Изогнутая лестница", "Винтовая лестница", "Арка", "Дверь", "Окно", "План стен", "Сплайн"
+            };
+            var menuPaths = typeof(BrushCreateTool).Assembly.GetTypes()
+                .Where(type => type.IsSubclassOf(typeof(BrushCreateTool)) ||
+                    type == typeof(CreateFloorPlanTool) || type == typeof(CreateSplineTool))
+                .SelectMany(type => type.GetMethods(BindingFlags.Static | BindingFlags.Public |
+                    BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                .SelectMany(method => method.GetCustomAttributesData())
+                .Where(attribute => attribute.AttributeType == typeof(MenuItem))
+                .Select(attribute => (string)attribute.ConstructorArguments[0].Value)
+                .ToArray();
+
+            foreach (string name in names)
+            {
+                Assert.That(menuPaths, Does.Contain("CSG Brush/Создать/" + name));
+                Assert.That(menuPaths, Does.Contain("Tools/CSG Brush/Создать/" + name));
+            }
+        }
+
+        [Test]
+        public void LegacyUnitSettingsConvertTheirLengthsOnceAndKeepOtherValues()
+        {
+            var settings = BrushSettings.instance;
+            string saved = EditorJsonUtility.ToJson(settings);
+            try
+            {
+                EditorJsonUtility.FromJsonOverwrite(@"{""MonoBehaviour"":{
+                    ""unitsPerMeter"": 100, ""unitLabel"": ""cm"",
+                    ""gridSizes"": [25,50,100], ""gridIndex"": 1,
+                    ""defaultBoxSize"": { ""x"":200, ""y"":300, ""z"":400 },
+                    ""newStepHeight"": 25, ""newInnerRadius"": 0, ""newStepThickness"": 10,
+                    ""newWallThickness"": 30, ""newDoorWidth"": 95, ""newDoorHeight"": 210,
+                    ""newWindowWidth"": 120, ""newWindowHeight"": 110, ""newWindowSill"": 85,
+                    ""extrudeDistance"": -50, ""curveTolerance"": 0.1, ""rotationSnapDegrees"": 30
+                }}", settings);
+
+                Assert.That(settings.MigrateLegacyUnits(), Is.True);
+                Assert.That(settings.gridSizes, Is.EqualTo(new[] { 0.25f, 0.5f, 1f }));
+                Assert.That(settings.gridIndex, Is.EqualTo(1));
+                Assert.That(settings.GridMeters, Is.EqualTo(0.5f));
+                Assert.That(settings.defaultBoxSize, Is.EqualTo(new Vector3(2f, 3f, 4f)));
+                Assert.That(settings.newStepHeight, Is.EqualTo(0.25f).Within(0.00001f));
+                Assert.That(settings.newInnerRadius, Is.Zero);
+                Assert.That(settings.newStepThickness, Is.EqualTo(0.1f).Within(0.00001f));
+                Assert.That(settings.newWallThickness, Is.EqualTo(0.3f).Within(0.00001f));
+                Assert.That(settings.newDoorWidth, Is.EqualTo(0.95f).Within(0.00001f));
+                Assert.That(settings.newDoorHeight, Is.EqualTo(2.1f).Within(0.00001f));
+                Assert.That(settings.newWindowWidth, Is.EqualTo(1.2f).Within(0.00001f));
+                Assert.That(settings.newWindowHeight, Is.EqualTo(1.1f).Within(0.00001f));
+                Assert.That(settings.newWindowSill, Is.EqualTo(0.85f).Within(0.00001f));
+                Assert.That(settings.extrudeDistance, Is.EqualTo(-0.5f).Within(0.00001f));
+                Assert.That(settings.curveTolerance, Is.EqualTo(0.1f));
+                Assert.That(settings.rotationSnapDegrees, Is.EqualTo(30f));
+                Assert.That(settings.MigrateLegacyUnits(), Is.False);
+                Assert.That(settings.newDoorWidth, Is.EqualTo(0.95f).Within(0.00001f));
+            }
+            finally
+            {
+                EditorJsonUtility.FromJsonOverwrite(saved, settings);
+            }
+        }
+
+        [Test]
         public void TypedWidthStaysExactOnGridAndRestoresOnUndo()
         {
             BrushSettings.instance.snapToGrid = true;
@@ -75,6 +168,36 @@ namespace CsgBrush.Tests
             Assert.That(box.size.x, Is.EqualTo(2f));
             Undo.PerformRedo();
             Assert.That(box.size.x, Is.EqualTo(4.2f).Within(0.00001f));
+        }
+
+        [Test]
+        public void TypedDimensionUsesWorldMetresUnderNonUniformParentScale()
+        {
+            BrushSettings.instance.snapToGrid = true;
+            var parent = new GameObject("Родитель").transform;
+            parent.SetPositionAndRotation(new Vector3(1.5f, 2f, -0.3f), Quaternion.Euler(6f, 19f, 13f));
+            parent.localScale = new Vector3(2f, 0.75f, 1.3f);
+            var brush = BrushApi.Create(BrushShape.Box, parent.position, new Vector3(2f, 3f, 4f),
+                Quaternion.Euler(11f, 32f, 8f), parent, snap: false);
+            var transform = brush.transform;
+            var bounds = BrushGeometry.Polyhedron(brush).Bounds();
+            var originalFixedEnd = transform.TransformPoint(bounds.min);
+            var originalOtherSpans = new Vector2(
+                transform.TransformVector(Vector3.up * bounds.size.y).magnitude,
+                transform.TransformVector(Vector3.forward * bounds.size.z).magnitude);
+
+            Assert.That(BrushDimensionFields.Resize(brush, 0, 0f), Is.False);
+            Assert.That(BrushDimensionFields.Resize(brush, 0, 4.23f), Is.True);
+            BrushSnap.Snap(brush);
+
+            bounds = BrushGeometry.Polyhedron(brush).Bounds();
+            Assert.That(transform.TransformVector(Vector3.right * bounds.size.x).magnitude,
+                Is.EqualTo(4.23f).Within(0.0001f));
+            Assert.That(Vector3.Distance(originalFixedEnd, transform.TransformPoint(bounds.min)), Is.LessThan(0.0001f));
+            Assert.That(transform.TransformVector(Vector3.up * bounds.size.y).magnitude,
+                Is.EqualTo(originalOtherSpans.x).Within(0.0001f));
+            Assert.That(transform.TransformVector(Vector3.forward * bounds.size.z).magnitude,
+                Is.EqualTo(originalOtherSpans.y).Within(0.0001f));
         }
 
         static bool Solid(Vector3 point) =>

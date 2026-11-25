@@ -115,7 +115,7 @@ namespace CsgBrush.Tests
             try
             {
                 s.snapToGrid = true;
-                for (int i = 0; i < s.gridSizes.Length; i++) if (Mathf.Abs(s.ToMeters(s.gridSizes[i]) - 1f) < 1e-4f) s.SetGridIndex(i);
+                for (int i = 0; i < s.gridSizes.Length; i++) if (Mathf.Abs(s.gridSizes[i] - 1f) < 1e-4f) s.SetGridIndex(i);
                 Assume.That(s.GridMeters, Is.EqualTo(1f).Within(1e-4f));
                 var from = Vector3.zero;
                 Assert.AreEqual(new Vector3(3f, 0f, 0f), FloorPlanTools.Constrain(from, new Vector3(3f, 0f, 1f), false), "nearly along x: along x");

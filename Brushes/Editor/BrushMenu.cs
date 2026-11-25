@@ -37,7 +37,7 @@ namespace CsgBrush.Editor
         static Brush CreateAtPivot(BrushShape shape)
         {
             var s = BrushSettings.instance;
-            var size = s.ToMeters(s.defaultBoxSize);
+            var size = s.defaultBoxSize;
             Vector3 pivot = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero;
             pivot = Snap(pivot, s.GridMeters);
             var brush = BrushApi.Create(shape, pivot, size, Quaternion.identity, CreationParent(useSelection: true));
@@ -80,8 +80,8 @@ namespace CsgBrush.Editor
         {
             var brush = CreateAtPivot(BrushShape.Box);
             var s = BrushSettings.instance;
-            BrushApi.SetSize(brush, s.ToMeters(new Vector3(s.defaultBoxSize.x * 4f, s.defaultBoxSize.y * 2f, s.defaultBoxSize.z * 4f)));
-            BrushApi.SetHollow(brush, true, s.ToMeters(s.GridUnits));
+            BrushApi.SetSize(brush, new Vector3(s.defaultBoxSize.x * 4f, s.defaultBoxSize.y * 2f, s.defaultBoxSize.z * 4f));
+            BrushApi.SetHollow(brush, true, s.GridMeters);
             brush.name = "Room";
         }
 

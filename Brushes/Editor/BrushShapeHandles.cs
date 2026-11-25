@@ -56,12 +56,15 @@ namespace CsgBrush.Editor
         {
             public Vector3 size, position, pivot;
             public Quaternion rotation;
+            public Matrix4x4 localToWorld;
+            public Vector3 exactSizeMeters;
             public float stepHeight, innerRadius, stepWidth, curveAngle, wallThickness;
             public int numSteps;
 
             public static State Of(Brush b) => new State
             {
                 size = b.size, position = b.transform.position, rotation = b.transform.rotation, pivot = b.pivot,
+                localToWorld = b.transform.localToWorldMatrix, exactSizeMeters = b.exactSizeMeters,
                 stepHeight = b.stepHeight, innerRadius = b.innerRadius, stepWidth = b.stepWidth, curveAngle = b.curveAngle,
                 wallThickness = b.wallThickness, numSteps = b.numSteps,
             };
@@ -218,7 +221,9 @@ namespace CsgBrush.Editor
             int sub = Mathf.Max(1, Mathf.CeilToInt(stepAngle * Mathf.Rad2Deg / 10f));   // pieces per step, so curved faces stay close to the steps
             bool slab = spiral || !b.supportUnderSteps;
             float thickness = Mathf.Max(0.001f, b.stepThickness);
+            var origin = b.PivotShift;
             Vector3 At(float radius, float angle, float y) => new Vector3(radius * Mathf.Cos(angle * sign), y, radius * Mathf.Sin(angle * sign));
+            Vector3 Point(float radius, float angle, float y) => origin + At(radius, angle, y);
             float Top(int k) => b.addToFirstStep + (k + 1) * h;
             float Bottom(int k) => slab ? Mathf.Max(0f, Top(k) - thickness) : 0f;
 
@@ -230,7 +235,7 @@ namespace CsgBrush.Editor
                     for (int j = 0; j < sub; j++)
                     {
                         float t0 = (k + (float)j / sub) * stepAngle, t1 = (k + (float)(j + 1) / sub) * stepAngle, tm = (t0 + t1) * 0.5f;
-                        polygons.Add(new[] { At(radius, t0, Bottom(k)), At(radius, t1, Bottom(k)), At(radius, t1, Top(k)), At(radius, t0, Top(k)) });
+                        polygons.Add(new[] { Point(radius, t0, Bottom(k)), Point(radius, t1, Bottom(k)), Point(radius, t1, Top(k)), Point(radius, t0, Top(k)) });
                         faceNormals.Add(At(inner ? -1f : 1f, tm, 0f));
                     }
                 normals = faceNormals.ToArray();
@@ -240,7 +245,7 @@ namespace CsgBrush.Editor
             var outerFaces = Wall(ro, false, out var outerNormals);
             list.Add(new Handle
             {
-                id = "inner", local = Vector3.zero, direction = At(1f, stepAngle * 0.5f, 0f), faces = innerFaces, faceNormals = innerNormals, radial = true,
+                id = "inner", local = origin, direction = At(1f, stepAngle * 0.5f, 0f), faces = innerFaces, faceNormals = innerNormals, radial = true,
                 // the inner edge moves (away from the axis is positive); the outer edge stays
                 apply = (br, st, d, sym, snap) =>
                 {
@@ -252,7 +257,7 @@ namespace CsgBrush.Editor
             });
             list.Add(new Handle
             {
-                id = "outer", local = Vector3.zero, direction = At(1f, stepAngle * 0.5f, 0f), faces = outerFaces, faceNormals = outerNormals, radial = true,
+                id = "outer", local = origin, direction = At(1f, stepAngle * 0.5f, 0f), faces = outerFaces, faceNormals = outerNormals, radial = true,
                 apply = (br, st, d, sym, snap) => { br.stepWidth = Mathf.Max(0.05f, SnapLength(br, st.stepWidth + d, snap)); },
                 label = br => $"Ширина ступени {Length(br.stepWidth)}",
             });
@@ -262,11 +267,11 @@ namespace CsgBrush.Editor
             for (int j = 0; j < sub; j++)
             {
                 float t0 = (n - 1 + (float)j / sub) * stepAngle, t1 = (n - 1 + (float)(j + 1) / sub) * stepAngle;
-                tread[j] = new[] { At(ri, t0, Top(n - 1)), At(ro, t0, Top(n - 1)), At(ro, t1, Top(n - 1)), At(ri, t1, Top(n - 1)) };
+                tread[j] = new[] { Point(ri, t0, Top(n - 1)), Point(ro, t0, Top(n - 1)), Point(ro, t1, Top(n - 1)), Point(ri, t1, Top(n - 1)) };
             }
             list.Add(new Handle
             {
-                id = "height", local = At((ri + ro) * 0.5f, total - stepAngle * 0.5f, Top(n - 1)), direction = Vector3.up, faces = tread,
+                id = "height", local = Point((ri + ro) * 0.5f, total - stepAngle * 0.5f, Top(n - 1)), direction = Vector3.up, faces = tread,
                 // curved: the height spreads over the same steps; spiral: more height is more steps, going round further
                 apply = spiral
                     ? (System.Action<Brush, State, float, bool, bool>)((br, st, d, sym, snap) => { br.numSteps = Mathf.Max(1, Mathf.RoundToInt((st.numSteps * st.stepHeight + d) / Mathf.Max(BrushPolyhedron.MinStepHeight, st.stepHeight))); })
@@ -278,8 +283,8 @@ namespace CsgBrush.Editor
             Vector3 onward = (At(1f, total + 0.01f, 0f) - At(1f, total, 0f)).normalized;
             list.Add(new Handle
             {
-                id = "angle", local = At((ri + ro) * 0.5f, total, (Bottom(n - 1) + Top(n - 1)) * 0.5f), direction = onward,
-                faces = new[] { new[] { At(ri, total, Bottom(n - 1)), At(ro, total, Bottom(n - 1)), At(ro, total, Top(n - 1)), At(ri, total, Top(n - 1)) } },
+                id = "angle", local = Point((ri + ro) * 0.5f, total, (Bottom(n - 1) + Top(n - 1)) * 0.5f), direction = onward,
+                faces = new[] { new[] { Point(ri, total, Bottom(n - 1)), Point(ro, total, Bottom(n - 1)), Point(ro, total, Top(n - 1)), Point(ri, total, Top(n - 1)) } },
                 apply = (br, st, d, sym, snap) =>
                 {
                     float radius = Mathf.Max(0.01f, st.innerRadius + st.stepWidth * 0.5f);   // the middle of the steps
@@ -521,7 +526,7 @@ namespace CsgBrush.Editor
             Vector3 centre = (min + max) * 0.5f;
             Vector3 shift = b.PivotShiftFor(size);
             b.size = size;
-            b.transform.position = start.position + start.rotation * (centre - shift);
+            b.transform.position = start.position + start.localToWorld.MultiplyVector(centre - shift);
         }
 
         /// <summary>Apply a drag of one handle to a brush: one call per change, from the brush's state when the drag began.</summary>
@@ -531,11 +536,21 @@ namespace CsgBrush.Editor
             if (h != null) Apply(b, h.Value, start, distance, symmetric);
         }
 
-        static void Apply(Brush b, Handle h, State start, float distance, bool symmetric, bool record = true)
+        static void Apply(Brush b, Handle h, State start, float distance, bool symmetric, bool record = true, bool incremental = false)
         {
             if (record) Undo.RecordObjects(new Object[] { b, b.transform }, "Изменить форму браша");
-            h.apply(b, start, distance, symmetric, Snaps(b));
+            h.apply(b, start, distance, symmetric, !incremental && Snaps(b));
+            b.exactSizeMeters = start.exactSizeMeters;
+            if (incremental && !b.HasParametricSize)
+            {
+                // Keep an off-grid starting dimension and the exact relative step through the next rebuild.
+                var snapped = BrushSnap.SnapSize(b.size, BrushSettings.instance.GridMeters);
+                for (int axis = 0; axis < 3; axis++)
+                    if (!Mathf.Approximately(b.size[axis], snapped[axis])) b.exactSizeMeters[axis] = b.size[axis];
+            }
             BrushSnap.Accept(b); // placed by the handle: the grid pass must not move it again
+            PrefabUtility.RecordPrefabInstancePropertyModifications(b);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(b.transform);
             BrushSync.NotifyTransformChanged(b);
             BrushSync.Ensure(b);
         }
@@ -546,23 +561,36 @@ namespace CsgBrush.Editor
         /// </summary>
         public static void ApplyToSelection(List<Brush> brushes, Brush dragged, string handleId, float distance, bool symmetric,
             ShapeEditSelection mode, Dictionary<Brush, State> starts)
+            => ApplyToSelection(brushes, dragged, handleId, distance, symmetric, mode, starts, false);
+
+        public static void ApplyToSelection(List<Brush> brushes, Brush dragged, string handleId, float distance, bool symmetric,
+            ShapeEditSelection mode, Dictionary<Brush, State> starts, bool incremental, Vector3? localDragAxis = null)
         {
             if (!starts.TryGetValue(dragged, out var draggedStart)) return;
             var handle = Find(dragged, handleId);
             if (handle == null) return;
-            Apply(dragged, handle.Value, draggedStart, distance, symmetric);
+            if (incremental) distance = BrushSnap.Round(distance, BrushSettings.instance.GridMeters);
+            float LocalDistance(Handle h, State start)
+            {
+                if (!incremental) return distance;
+                var axis = (localDragAxis ?? h.direction).normalized;
+                float scale = start.localToWorld.MultiplyVector(axis).magnitude;
+                return scale > 1e-6f ? distance / scale : 0f;
+            }
+            float draggedDistance = LocalDistance(handle.Value, draggedStart);
+            Apply(dragged, handle.Value, draggedStart, draggedDistance, symmetric, incremental: incremental);
             if (mode == ShapeEditSelection.Single) return;
-            int measure = mode == ShapeEditSelection.Match ? Measured(starts, dragged, handle.Value, draggedStart, distance, symmetric) : -1;
+            int measure = mode == ShapeEditSelection.Match ? Measured(starts, dragged, handle.Value, draggedStart, draggedDistance, symmetric) : -1;
             float target = measure >= 0 ? Values(State.Of(dragged))[measure] : 0f;
             foreach (var other in brushes)
             {
                 if (other == dragged || other.shape != dragged.shape || !starts.TryGetValue(other, out var start)) continue;
                 var h = Find(other, handleId);
                 if (h == null) continue;
-                if (mode == ShapeEditSelection.Offset) { Apply(other, h.Value, start, distance, symmetric); continue; }
-                if (measure < 0) { Apply(other, h.Value, start, 0f, symmetric); continue; }
+                if (mode == ShapeEditSelection.Offset) { Apply(other, h.Value, start, LocalDistance(h.Value, start), symmetric, incremental: incremental); continue; }
+                if (measure < 0) { Apply(other, h.Value, start, 0f, symmetric, incremental: incremental); continue; }
                 Undo.RecordObjects(new Object[] { other, other.transform }, "Изменить форму браша"); // before the trials change it
-                Apply(other, h.Value, start, DistanceTo(other, h.Value, start, symmetric, measure, target), symmetric, record: false);
+                Apply(other, h.Value, start, DistanceTo(other, h.Value, start, symmetric, measure, target), symmetric, record: false, incremental: incremental);
             }
         }
 
@@ -661,11 +689,24 @@ namespace CsgBrush.Editor
         static void OnSceneGUI(SceneView view)
         {
             if (!Showing()) { if (s_HotControl != 0) Release(); return; }
+            var e = Event.current;
+            if (s_HotControl != 0 && GUIUtility.hotControl == s_HotControl && e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
+            {
+                if (s_Dragging)
+                {
+                    Undo.FlushUndoRecordObjects();
+                    Undo.RevertAllDownToGroup(s_UndoGroup);
+                    s_Dragging = false;
+                }
+                Release();
+                e.Use();
+                SceneView.RepaintAll();
+                return;
+            }
             var brushes = new List<Brush>();
             foreach (var go in Selection.gameObjects)
                 if (go != null && go.TryGetComponent<Brush>(out var b) && !b.IsGenerated && b.shape != BrushShape.Custom) brushes.Add(b);
             if (brushes.Count == 0 || brushes.Count > 32) return;
-            var e = Event.current;
             Plane? near = NearPlane(view.camera);
             foreach (var b in brushes)
             {
@@ -722,7 +763,9 @@ namespace CsgBrush.Editor
                                 if (!s_Dragging && h.IsFace && (e.mousePosition - s_DownMouse).sqrMagnitude < DragThreshold * DragThreshold) { e.Use(); break; }
                                 if (!s_Dragging) Begin(brushes);
                                 float distance = HandleUtility.CalcLineTranslation(s_DownMouse, e.mousePosition, s_StartWorld, s_StartDirection);
-                                ApplyToSelection(brushes, s_HotBrush, s_HotId, distance, e.shift, BrushSettings.instance.shapeEditSelection, s_Start);
+                                var localAxis = s_Start[s_HotBrush].localToWorld.inverse.MultiplyVector(s_StartDirection);
+                                ApplyToSelection(brushes, s_HotBrush, s_HotId, distance, e.shift, BrushSettings.instance.shapeEditSelection,
+                                    s_Start, e.control, localAxis);
                                 e.Use();
                             }
                             break;
@@ -972,10 +1015,6 @@ namespace CsgBrush.Editor
             return x >= y && x >= z ? Handles.xAxisColor : y >= z ? Handles.yAxisColor : Handles.zAxisColor;
         }
 
-        static string Length(float metres)
-        {
-            var s = BrushSettings.instance;
-            return (metres * s.unitsPerMeter).ToString("0.###") + " " + s.unitLabel;
-        }
+        static string Length(float metres) => BrushSettings.FormatMeters(metres);
     }
 }

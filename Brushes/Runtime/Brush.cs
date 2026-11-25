@@ -62,7 +62,7 @@ namespace CsgBrush
     /// A convex level-building volume. Place and rotate it with the normal Unity tools; its size lives on
     /// this component and is centred on the transform, like a BoxCollider. Rendering and collision are
     /// generated automatically (CSG through the Manifold library, one convex collider per piece). Sizes are stored in
-    /// metres; the Inspector shows them in the world preset's units.
+    /// metres, the same as in the Inspector.
     /// </summary>
     [AddComponentMenu("Браш")]
     [Icon("Packages/digital.dream.csgbrush/Brushes/Editor/Icons/Brush.png")]
@@ -117,11 +117,19 @@ namespace CsgBrush
         public Vector3 pivot = new Vector3(0.5f, 0.5f, 0.5f);
         /// <summary>How <see cref="pivot"/> is measured.</summary>
         public PivotMode pivotMode = PivotMode.Normalized;
+
+        // Local metres from the transform to the construction axis of a round stair or the centre of an opening.
+        [SerializeField, HideInInspector] internal Vector3 shapeOriginOffsetMeters;
         [Tooltip("Привязывает к сетке крайние вершины или точку опоры при перемещении и масштабировании. Поворот не вызывает привязку.")]
         public GridSnap gridSnap = GridSnap.Shape;
 
         /// <summary>Box-like shapes whose geometry follows <see cref="pivot"/>.</summary>
         public bool HasPivot => shape != BrushShape.Custom && !HasParametricSize && !IsOpening;
+
+        internal bool UsesShapeOriginOffset => UsesShapeOriginOffsetFor(shape);
+
+        internal static bool UsesShapeOriginOffsetFor(BrushShape shape) =>
+            shape == BrushShape.CurvedStairs || shape == BrushShape.SpiralStairs || shape == BrushShape.Door || shape == BrushShape.Window;
 
         /// <summary>The pivot in metres from the box's left, bottom, back corner for a box of <paramref name="boxSize"/>, kept inside the box.</summary>
         public Vector3 PivotDistance(Vector3 boxSize)
@@ -131,7 +139,8 @@ namespace CsgBrush
         }
 
         /// <summary>How far a shape of <paramref name="boxSize"/> sits from the transform in local space: none at the centre.</summary>
-        public Vector3 PivotShiftFor(Vector3 boxSize) => HasPivot ? boxSize * 0.5f - PivotDistance(boxSize) : Vector3.zero;
+        public Vector3 PivotShiftFor(Vector3 boxSize) => HasPivot ? boxSize * 0.5f - PivotDistance(boxSize) :
+            UsesShapeOriginOffset ? shapeOriginOffsetMeters : Vector3.zero;
 
         /// <summary>How far the shape sits from the transform in local space: none at the centre.</summary>
         public Vector3 PivotShift => PivotShiftFor(ClampedSize);
@@ -386,13 +395,15 @@ namespace CsgBrush
             }
             if (HasParametricSize)
             {
-                // the axis is the transform: draw the steps and a mark on the axis
+                // Draw the steps and their construction axis at the actual geometry pose.
+                Gizmos.matrix = transform.localToWorldMatrix;
                 var poly = shape == BrushShape.CurvedStairs ? BrushPolyhedron.CurvedStairs(Stairs) : BrushPolyhedron.SpiralStairs(Stairs);
+                var shift = PivotShift;
                 foreach (var face in poly.faces)
                     for (int i = 0; i < face.indices.Length; i++)
-                        Gizmos.DrawLine(poly.vertices[face.indices[i]], poly.vertices[face.indices[(i + 1) % face.indices.Length]]);
+                        Gizmos.DrawLine(poly.vertices[face.indices[i]] + shift, poly.vertices[face.indices[(i + 1) % face.indices.Length]] + shift);
                 var b = poly.Bounds();
-                Gizmos.DrawLine(new Vector3(0f, b.min.y, 0f), new Vector3(0f, b.max.y, 0f));
+                Gizmos.DrawLine(shift + new Vector3(0f, b.min.y, 0f), shift + new Vector3(0f, b.max.y, 0f));
                 return;
             }
             Gizmos.DrawWireCube(Vector3.Scale(PivotShift, new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z))), shown);

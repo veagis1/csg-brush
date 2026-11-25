@@ -40,7 +40,7 @@ You can also create a brush in these ways:
 
 ## Place, size, and rotate a brush
 
-Use the **Move** and **Rotate** tools as for any GameObject. Set the brush's **Size** in the Inspector, in the units of the world preset; the size in metres is shown below it.
+Use the **Move** and **Rotate** tools as for any GameObject. Set the brush's **Size** in metres in the Inspector. One Unity world unit equals one metre.
 
 The **Scale** tool also resizes the brush. When you release it, the scale goes into the brush's **Size** and the transform's scale returns to one.
 
@@ -63,7 +63,7 @@ Only the sides turned towards you are handles. A side shows a faint outline, and
 | Spiral stairs | The inner and the outer face, as on curved stairs. The top step's tread and the last step's end: more steps, going round further. | | |
 | Door, window | The sides, the top, and the bottom. | | |
 
-Unity's own Move, Rotate, and Scale handles always come first: where one of them is under the pointer, it takes the drag. While you drag, the handle shows the new size. Hold **Shift** to move both sides at once, about the middle. Sizes snap to the grid when snapping is on and the brush's **Grid snap** isn't **Off**; step heights snap to centimetres and angles to the rotation snap. One drag is one step to undo.
+Unity's Move, Rotate, and Scale handles take priority when the pointer is over them. The handle shows the new size while you drag. Hold **Shift** to move both sides at once, about the middle. Hold **Ctrl** to move in increments of the current grid step from the start of the drag, including when grid snapping is off. With a 0.125 m step, a 1.03 m block grows to 1.155 m, then 1.28 m. **Ctrl+Shift** moves both sides by the selected step. With ordinary grid snapping, sizes snap to the grid, step heights snap in increments of 0.01 m, and angles follow the rotation snap. Escape cancels the drag. Each completed drag takes one step to undo.
 
 To turn the handles on or off, use **Shape Edit** in the **Brushes** overlay, or press **B** in the Scene view. While they're on, three buttons beside it set what a drag does to the other selected brushes:
 
@@ -99,18 +99,11 @@ Press **[** and **]** to change the grid step. Doors, windows, and brushes on a 
 
 Parent GameObjects may only organise brushes. If a brush's parent is rotated or scaled, the **Brushes** overlay lists it with a **Reset** button.
 
-### World presets
+### Grid steps
 
-**Project Settings** > **Brushes** selects the units, the grid steps, and the default sizes:
+**Project Settings** > **CSG Brush** sets the grid steps and the default box size in metres. Separate grid steps with spaces. The **CSG Brush** overlay shows the current grid step in metres.
 
-| **Preset** | **Units** |
-| :--- | :--- |
-| **Unity** | Metres. This is the default. |
-| **Quake** | 32 units per metre. |
-| **Source**, **Unreal** | The units of those editors. |
-| **Custom** | Your own units and grid steps. |
-
-The **Brushes** overlay shows the current preset and grid step.
+Existing project settings are converted on first use. The former units-per-metre ratio converts each saved length. For example, on a project that used 32 units per metre, a grid step of 16 becomes 0.5 m and a default box edge of 64 becomes 2 m. Existing brushes, scenes and prefabs already store lengths in metres.
 
 ## Set a brush's pivot
 
@@ -123,7 +116,7 @@ The pivot is where the brush's transform sits inside the brush. It's measured fr
 | **Pivot mode** | **Values** | **When you resize the brush** |
 | :--- | :--- | :--- |
 | **Normalized** | 0 to 1 of the brush's size on each axis. 0.5, 0.5, 0.5 is the centre, which is the default. | The pivot stays at the same fraction of the size. |
-| **Absolute** | A distance from the corner, in the units of the world preset. | The pivot stays at the same distance from the corner. |
+| **Absolute** | A distance from the corner in metres. | The pivot stays at the same distance from the corner. |
 
 Useful pivots:
 

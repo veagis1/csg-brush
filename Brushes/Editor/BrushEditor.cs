@@ -105,12 +105,14 @@ namespace CsgBrush.Editor
             int current = System.Array.IndexOf(s_ShapeOrder, (BrushShape?)(BrushShape)shapeProp.intValue);
             int picked = EditorGUI.Popup(rect, label, current, s_ShapeNames);
             EditorGUI.showMixedValue = false;
-            if (picked != current && picked >= 0 && s_ShapeOrder[picked].HasValue) shapeProp.intValue = (int)s_ShapeOrder[picked].Value;
             EditorGUI.EndProperty();
+            if (picked == current || picked < 0 || !s_ShapeOrder[picked].HasValue) return;
+            foreach (var item in targets) BrushApi.SetShape((Brush)item, s_ShapeOrder[picked].Value);
+            serializedObject.Update();
         }
 
         /// <summary>The pivot and how it is measured; setting it moves the transform, so the shape stays put.</summary>
-        void DrawPivot(BrushSettings settings)
+        void DrawPivot()
         {
             Vector3? first = null; bool mixed = false, mixedMode = false; var mode = ((Brush)target).pivotMode;
             foreach (var t in targets)
@@ -128,9 +130,9 @@ namespace CsgBrush.Editor
             if (EditorGUI.EndChangeCheck()) { foreach (var t in targets) BrushApi.SetPivotMode((Brush)t, pickedMode); return; }
             if (mixedMode) return;
             bool relative = mode == PivotMode.Normalized;
-            var shown = relative ? first.Value : settings.ToUnits(first.Value);
+            var shown = first.Value;
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.PrefixLabel(new GUIContent(relative ? "Точка опоры" : "Точка опоры (" + settings.unitLabel + ")", "Положение точки опоры относительно левого нижнего заднего угла браша. При Y = 0 она на нижней грани, при Z = 0 на задней."));
+            EditorGUILayout.PrefixLabel(new GUIContent(relative ? "Точка опоры" : "Точка опоры (м)", "Положение точки опоры относительно левого нижнего заднего угла браша. При Y = 0 она на нижней грани, при Z = 0 на задней."));
             float w = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth = 14f;
             EditorGUI.BeginChangeCheck();
@@ -143,8 +145,7 @@ namespace CsgBrush.Editor
                 foreach (var t in targets)
                 {
                     var b = (Brush)t; var own = BrushApi.PivotOf(b).Value;
-                    var value = Changed(relative ? own : settings.ToUnits(own), shown, picked);
-                    BrushApi.SetPivot(b, relative ? value : settings.ToMeters(value));
+                    BrushApi.SetPivot(b, Changed(own, shown, picked));
                 }
         }
 
@@ -153,7 +154,6 @@ namespace CsgBrush.Editor
 
         public override void OnInspectorGUI()
         {
-            var settings = BrushSettings.instance;
             serializedObject.Update();
 
             EditorGUI.BeginChangeCheck();
@@ -187,11 +187,25 @@ namespace CsgBrush.Editor
             }
             else if (shape == BrushShape.CurvedStairs || shape == BrushShape.SpiralStairs)
             {
-                var sz = settings.ToUnits(sizeProp.vector3Value);
-                EditorGUILayout.LabelField("Размер (" + settings.unitLabel + ")", sz.x.ToString("0.#") + " x " + sz.y.ToString("0.#") + " x " + sz.z.ToString("0.#") + "  (по параметрам)");
+                var sz = sizeProp.vector3Value;
+                EditorGUILayout.LabelField("Размер", $"{BrushSettings.FormatMeters(sz.x)} × {BrushSettings.FormatMeters(sz.y)} × {BrushSettings.FormatMeters(sz.z)} (по параметрам)");
             }
-            else DrawSize(settings, shape);
-            DrawPivot(settings);
+            else DrawSize(shape);
+            DrawPivot();
+            if (targets.Length == 1 && target is Brush single && BrushApi.CanPickPivot(single) && !EditorUtility.IsPersistent(single))
+            {
+                using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button(new GUIContent("Привязать к вершине", "Щёлкните по вершине в сцене. Esc отменяет выбор. Гизмо перемещения и вращения перейдёт в эту точку. При привязке к сетке по форме шаг будет отсчитываться от вершины.")))
+                        BrushPivotTool.Begin(single);
+                    if (GUILayout.Button(new GUIContent("Сбросить привязку", "Вернуть точку опоры в центр габарита детали. Геометрия останется на месте.")))
+                    {
+                        BrushApi.ResetPivot(single);
+                        BrushPivotTool.MoveFromPivot();
+                    }
+                }
+            }
             bool snaps = true; foreach (var t in targets) if (((Brush)t).IsOpening || ((Brush)t).IsGenerated) snaps = false; // placed by their wall or plan
             if (snaps) EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(Brush.gridSnap)), new GUIContent("Привязка к сетке", "При перемещении и изменении размеров привязывает к сетке крайние вершины или точку опоры. Поворот привязку не вызывает."));
 
@@ -205,7 +219,7 @@ namespace CsgBrush.Editor
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.PropertyField(hollowProp, new GUIContent("Полый", "Оставить только стенки. При отключении весь объём становится сплошным."), GUILayout.Width(EditorGUIUtility.labelWidth + 20f));
                 using (new EditorGUI.DisabledScope(!hollowProp.boolValue))
-                    DrawUnitsField(settings, wallProp, "Толщина стенок");
+                    DrawMetersField(wallProp, "Толщина стенок");
                 EditorGUILayout.EndHorizontal();
             }
             switch (shape)
@@ -218,36 +232,36 @@ namespace CsgBrush.Editor
                     EditorGUILayout.PropertyField(tessProp, new GUIContent("Детализация", tessProp.tooltip));
                     break;
                 case BrushShape.Arch:
-                    DrawUnitsField(settings, wallProp, "Толщина");
+                    DrawMetersField(wallProp, "Толщина");
                     EditorGUILayout.Slider(curveAngleProp, 1f, 180f, new GUIContent("Угол", "Размах арки в градусах. 180° даёт полную арку. Меньшее значение оставляет верхний сегмент."));
                     EditorGUILayout.PropertyField(sidesProp, new GUIContent("Сегменты", sidesProp.tooltip));
                     break;
                 case BrushShape.CurvedStairs:
-                    DrawUnitsField(settings, innerRadiusProp, "Внутренний радиус");
-                    DrawUnitsField(settings, stepWidthProp, "Ширина ступени");
-                    DrawStepsByHeight(settings);
+                    DrawMetersField(innerRadiusProp, "Внутренний радиус");
+                    DrawMetersField(stepWidthProp, "Ширина ступени");
+                    DrawStepsByHeight();
                     EditorGUILayout.PropertyField(curveAngleProp, new GUIContent("Угол поворота", curveAngleProp.tooltip));
-                    DrawUnitsField(settings, addToFirstStepProp, "Поправка первой ступени", true);
+                    DrawMetersField(addToFirstStepProp, "Поправка первой ступени", true);
                     EditorGUILayout.PropertyField(ccwProp, new GUIContent("Против часовой стрелки", ccwProp.tooltip));
-                    DrawSupportUnderSteps(settings);
+                    DrawSupportUnderSteps();
                     break;
                 case BrushShape.SpiralStairs:
-                    DrawUnitsField(settings, innerRadiusProp, "Внутренний радиус");
-                    DrawUnitsField(settings, stepWidthProp, "Ширина ступени");
-                    DrawStepsByHeight(settings);
-                    DrawUnitsField(settings, stepThicknessProp, "Толщина ступени");
+                    DrawMetersField(innerRadiusProp, "Внутренний радиус");
+                    DrawMetersField(stepWidthProp, "Ширина ступени");
+                    DrawStepsByHeight();
+                    DrawMetersField(stepThicknessProp, "Толщина ступени");
                     EditorGUILayout.PropertyField(stepsPer360Prop, new GUIContent("Ступеней на 360°", stepsPer360Prop.tooltip));
-                    DrawUnitsField(settings, addToFirstStepProp, "Поправка первой ступени", true);
+                    DrawMetersField(addToFirstStepProp, "Поправка первой ступени", true);
                     EditorGUILayout.PropertyField(slopedCeilingProp, new GUIContent("Наклонный низ", slopedCeilingProp.tooltip));
                     EditorGUILayout.PropertyField(slopedFloorProp, new GUIContent("Наклонный верх", slopedFloorProp.tooltip));
                     EditorGUILayout.PropertyField(ccwProp, new GUIContent("Против часовой стрелки", ccwProp.tooltip));
                     break;
                 case BrushShape.Stairs:
-                    DrawUnitsField(settings, stepHeightProp, "Высота ступени");
+                    DrawMetersField(stepHeightProp, "Высота ступени");
                     var sz = sizeProp.vector3Value;
                     int steps = Mathf.Max(1, Mathf.RoundToInt(sz.y / Mathf.Max(BrushPolyhedron.MinStepHeight, stepHeightProp.floatValue)));
-                    EditorGUILayout.LabelField(" ", $"Ступеней {steps} · длина {settings.FormatUnits(sz.z)} ({settings.FormatUnits(sz.z / steps)} на ступень)", EditorStyles.miniLabel);
-                    DrawSupportUnderSteps(settings);
+                    EditorGUILayout.LabelField(" ", $"Ступеней {steps} · длина {BrushSettings.FormatMeters(sz.z)} ({BrushSettings.FormatMeters(sz.z / steps)} на ступень)", EditorStyles.miniLabel);
+                    DrawSupportUnderSteps();
                     break;
             }
 
@@ -307,55 +321,53 @@ namespace CsgBrush.Editor
             }
         }
 
-        void DrawSize(BrushSettings settings, BrushShape shape)
+        void DrawSize(BrushShape shape)
         {
             var size = sizeProp.vector3Value;
-            var units = settings.ToUnits(size);
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.PrefixLabel(new GUIContent("Размер (" + settings.unitLabel + ")", shape == BrushShape.Wedge ? "X — ширина, Y — высота, Z — длина. Пандус поднимается по оси Z." : shape == BrushShape.Stairs ? "X — ширина, Y — общая высота, Z — длина. Лестница поднимается по оси Z." : "X — ширина, Y — высота, Z — глубина."));
+            EditorGUILayout.PrefixLabel(new GUIContent("Размер (м)", shape == BrushShape.Wedge ? "X — ширина, Y — высота, Z — длина. Пандус поднимается по оси Z." : shape == BrushShape.Stairs ? "X — ширина, Y — общая высота, Z — длина. Лестница поднимается по оси Z." : "X — ширина, Y — высота, Z — глубина."));
             float w = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth = 14f;
             EditorGUI.BeginChangeCheck();
-            float x = EditorGUILayout.FloatField("X", units.x);
-            float y = EditorGUILayout.FloatField("Y", units.y);
-            float z = EditorGUILayout.FloatField("Z", units.z);
+            float x = EditorGUILayout.FloatField("X", size.x);
+            float y = EditorGUILayout.FloatField("Y", size.y);
+            float z = EditorGUILayout.FloatField("Z", size.z);
             if (EditorGUI.EndChangeCheck())
-                sizeProp.vector3Value = settings.ToMeters(new Vector3(Mathf.Max(0f, x), Mathf.Max(0f, y), Mathf.Max(0f, z)));
+                sizeProp.vector3Value = new Vector3(Mathf.Max(0f, x), Mathf.Max(0f, y), Mathf.Max(0f, z));
             EditorGUIUtility.labelWidth = w;
             EditorGUILayout.EndHorizontal();
-            EditorGUILayout.LabelField(" ", size.x.ToString("0.00") + " x " + size.y.ToString("0.00") + " x " + size.z.ToString("0.00") + " м", EditorStyles.miniLabel);
         }
 
         /// <summary>
         /// Curved and spiral stairs: the step height and the height they climb. The number of steps follows from the two;
         /// a new step height keeps the height, a new height keeps the step height.
         /// </summary>
-        void DrawSupportUnderSteps(BrushSettings settings)
+        void DrawSupportUnderSteps()
         {
             EditorGUILayout.PropertyField(supportUnderStepsProp, new GUIContent("Опора под ступенями", "Заполнить объём под ступенями до пола. При отключении остаются отдельные плиты ступеней."));
-            if (!supportUnderStepsProp.boolValue) DrawUnitsField(settings, stepThicknessProp, "Толщина ступени");
+            if (!supportUnderStepsProp.boolValue) DrawMetersField(stepThicknessProp, "Толщина ступени");
         }
 
-        void DrawStepsByHeight(BrushSettings settings)
+        void DrawStepsByHeight()
         {
             float stepHeight = Mathf.Max(BrushPolyhedron.MinStepHeight, stepHeightProp.floatValue);
             float height = numStepsProp.intValue * stepHeight;
-            DrawUnitsField(settings, stepHeightProp, "Высота ступени");
+            DrawMetersField(stepHeightProp, "Высота ступени");
             float newStep = Mathf.Max(BrushPolyhedron.MinStepHeight, stepHeightProp.floatValue);
             if (!Mathf.Approximately(newStep, stepHeight)) numStepsProp.intValue = BrushPolyhedron.StepCount(height, newStep);
             EditorGUI.showMixedValue = numStepsProp.hasMultipleDifferentValues || stepHeightProp.hasMultipleDifferentValues;
             EditorGUI.BeginChangeCheck();
-            float shown = EditorGUILayout.FloatField(new GUIContent("Высота (" + settings.unitLabel + ")", "Высота лестницы в текущих единицах. Число ступеней округляется по отношению общей высоты к высоте ступени."), settings.ToUnits(numStepsProp.intValue * newStep));
+            float shown = EditorGUILayout.FloatField(new GUIContent("Высота (м)", "Высота лестницы в метрах. Число ступеней округляется по отношению общей высоты к высоте ступени."), numStepsProp.intValue * newStep);
             EditorGUI.showMixedValue = false;
-            if (EditorGUI.EndChangeCheck()) numStepsProp.intValue = BrushPolyhedron.StepCount(settings.ToMeters(shown), newStep);
+            if (EditorGUI.EndChangeCheck()) numStepsProp.intValue = BrushPolyhedron.StepCount(shown, newStep);
         }
 
-        static void DrawUnitsField(BrushSettings settings, SerializedProperty prop, string label, bool allowNegative = false)
+        static void DrawMetersField(SerializedProperty prop, string label, bool allowNegative = false)
         {
             EditorGUI.BeginChangeCheck();
-            float v = EditorGUILayout.FloatField(new GUIContent(label + " (" + settings.unitLabel + ")", prop.tooltip), settings.ToUnits(prop.floatValue));
+            float v = EditorGUILayout.FloatField(new GUIContent(label + " (м)", prop.tooltip), prop.floatValue);
             if (EditorGUI.EndChangeCheck())
-                prop.floatValue = settings.ToMeters(allowNegative ? v : Mathf.Max(0f, v));
+                prop.floatValue = allowNegative ? v : Mathf.Max(0f, v);
         }
     }
 }

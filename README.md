@@ -36,7 +36,7 @@ grid, and colliders are made of convex pieces.
   with the Create tool.
 - Additive and subtractive brushes, combined in Hierarchy order using the [Manifold](https://github.com/elalish/manifold)
   library.
-- Grid snapping of position, size and rotation, in metres or Quake units.
+- Grid snapping of position and size in metres, with rotation snapping in degrees.
 - Vertex, edge and face editing with move, rotate, scale and extrude.
 - A pivot per brush, as a fraction of its size or a distance from its corner.
 - Materials dragged onto a brush in the Scene view, with an outline of where they will go.

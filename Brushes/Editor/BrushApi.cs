@@ -62,8 +62,11 @@ namespace CsgBrush.Editor
         public static void SetShape(Brush brush, BrushShape shape)
         {
             if (brush.shape == shape) return;
+            if (shape == BrushShape.Custom) { ConvertToCustom(brush); return; }
             Undo.RecordObject(brush, "Изменить форму браша");
+            brush.shapeOriginOffsetMeters = Vector3.zero;
             brush.shape = shape;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(brush);
             BrushSync.Ensure(brush);
         }
 
@@ -224,6 +227,7 @@ namespace CsgBrush.Editor
             brush.polyhedron = BrushGeometry.Polyhedron(brush).Clone();
             brush.hollow = false;
             brush.shape = BrushShape.Custom;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(brush);
             BrushSync.Ensure(brush);
             return true;
         }
@@ -238,13 +242,14 @@ namespace CsgBrush.Editor
             if (custom.HasValue) brush.pivot = custom.Value; // the shape stays where it was
             brush.shape = brush.customFrom;
             brush.polyhedron = new BrushPolyhedron();
+            PrefabUtility.RecordPrefabInstancePropertyModifications(brush);
             BrushSync.Ensure(brush);
         }
 
         /// <summary>
         /// Where the transform sits in the brush's box, in its <see cref="Brush.pivotMode"/> (a fraction of the size, or
-        /// metres from the left, bottom, back corner); a Custom shape's comes from its vertices. Null for shapes that keep
-        /// their own: curved and spiral stairs, doors and windows.
+        /// metres from the left, bottom, back corner); a Custom shape's comes from its vertices. Curved and spiral stairs,
+        /// doors and windows have no numeric pivot field and use the vertex picker.
         /// </summary>
         public static Vector3? PivotOf(Brush brush)
         {
@@ -265,6 +270,44 @@ namespace CsgBrush.Editor
 
         static float Fraction(float distance, float size) => size > 1e-6f ? Mathf.Clamp01(distance / size) : 0.5f;
 
+        internal static bool CanPickPivot(Brush brush) => brush != null && !brush.IsGenerated &&
+            !brush.anchored && (brush.UsesShapeOriginOffset || PivotBox(brush, out _, out _));
+
+        /// <summary>Place the transform on an authored vertex without moving the solid or its children.</summary>
+        public static bool SetPivotToVertex(Brush brush, int vertexIndex)
+        {
+            if (!CanPickPivot(brush)) return false;
+            var vertices = BrushGeometry.Polyhedron(brush).vertices;
+            if (vertexIndex < 0 || vertexIndex >= vertices.Length) return false;
+            SetPivotAtLocalPoint(brush, vertices[vertexIndex]);
+            if (brush.gridSnap == GridSnap.Shape)
+            {
+                Undo.RecordObject(brush, "Привязать гизмо к вершине");
+                brush.gridSnap = GridSnap.Pivot;
+                PrefabUtility.RecordPrefabInstancePropertyModifications(brush);
+            }
+            return true;
+        }
+
+        /// <summary>Place the pivot at the centre of the authored geometry's local bounds.</summary>
+        public static void ResetPivot(Brush brush)
+        {
+            if (CanPickPivot(brush)) SetPivotAtLocalPoint(brush, BrushGeometry.Polyhedron(brush).Bounds().center);
+        }
+
+        static void SetPivotAtLocalPoint(Brush brush, Vector3 localPoint)
+        {
+            if (brush.UsesShapeOriginOffset)
+            {
+                if (localPoint.sqrMagnitude >= 1e-12f) MovePivot(brush, brush.pivot, localPoint);
+                return;
+            }
+            PivotBox(brush, out var size, out var current);
+            var d = current + localPoint;
+            SetPivot(brush, brush.pivotMode == PivotMode.Absolute ? d :
+                new Vector3(Fraction(d.x, size.x), Fraction(d.y, size.y), Fraction(d.z, size.z)));
+        }
+
         /// <summary>
         /// Move the brush's pivot (in its <see cref="Brush.pivotMode"/>) and its transform with it, so the shape stays where
         /// it is; on a Custom shape the vertices move instead. Children stay where they are too. Undoable.
@@ -278,6 +321,11 @@ namespace CsgBrush.Editor
             var target = relative ? Vector3.Scale(pivot, size) : pivot;
             var move = target - current; // the new pivot in the old local space, from the old one
             if (move.sqrMagnitude < 1e-12f && (!brush.HasPivot || (brush.pivot - pivot).sqrMagnitude < 1e-12f)) return; // no-op edits must not create undo entries
+            MovePivot(brush, pivot, move);
+        }
+
+        static void MovePivot(Brush brush, Vector3 pivot, Vector3 move)
+        {
             var t = brush.transform;
             Undo.RecordObject(brush, "Задать точку опоры браша");
             Undo.RecordObject(t, "Задать точку опоры браша");
@@ -286,15 +334,23 @@ namespace CsgBrush.Editor
                 if (!Brush.IsGeneratedChildName(c.name)) { Undo.RecordObject(c, "Задать точку опоры браша"); children.Add((c, c.position, c.rotation)); }
             var world = t.TransformPoint(move);
             if (brush.HasPivot) brush.pivot = pivot;
+            else if (brush.UsesShapeOriginOffset) brush.shapeOriginOffsetMeters -= move;
             else
             {
                 var poly = brush.polyhedron.Clone();
                 for (int i = 0; i < poly.vertices.Length; i++) poly.vertices[i] -= move;
                 brush.polyhedron = poly;
+                if (Brush.UsesShapeOriginOffsetFor(brush.customFrom)) brush.shapeOriginOffsetMeters -= move;
             }
             t.position = world;
             BrushSnap.Accept(brush); // the transform moved, the shape did not: nothing to snap
-            foreach (var (c, position, rotation) in children) c.SetPositionAndRotation(position, rotation);
+            foreach (var (c, position, rotation) in children)
+            {
+                c.SetPositionAndRotation(position, rotation);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(c);
+            }
+            PrefabUtility.RecordPrefabInstancePropertyModifications(brush);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(t);
             BrushSync.NotifyTransformChanged(brush);
             BrushSync.Ensure(brush);
         }

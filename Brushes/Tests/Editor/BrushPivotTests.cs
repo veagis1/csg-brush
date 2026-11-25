@@ -1,8 +1,11 @@
+using System;
+using System.Linq;
 using CsgBrush.Editor;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace CsgBrush.Tests
 {
@@ -58,7 +61,7 @@ namespace CsgBrush.Tests
             try
             {
                 s.snapToGrid = true;
-                for (int i = 0; i < s.gridSizes.Length; i++) if (s.ToMeters(s.gridSizes[i]) <= 0.5f) s.SetGridIndex(i);
+                for (int i = 0; i < s.gridSizes.Length; i++) if (s.gridSizes[i] <= 0.5f) s.SetGridIndex(i);
                 float g = s.GridMeters;
                 var box = BrushApi.Create(BrushShape.Box, Vector3.zero, new Vector3(2f, 1f, 2f) * (g / 0.5f), Quaternion.identity);
                 BrushApi.SetPivot(box, new Vector3(0.5f, 0f, 0.5f));
@@ -121,6 +124,181 @@ namespace CsgBrush.Tests
             var child = new GameObject("Lamp").transform; child.SetParent(box.transform, false); child.localPosition = new Vector3(0f, 1f, 0f);
             BrushApi.SetPivot(box, new Vector3(0.5f, 0f, 0.5f));
             Assert.That(Vector3.Distance(new Vector3(0f, 1f, 0f), child.position), Is.LessThan(1e-4f), child.position.ToString("F3"));
+        }
+
+        [TestCase(PivotMode.Normalized, false)]
+        [TestCase(PivotMode.Absolute, false)]
+        [TestCase(PivotMode.Normalized, true)]
+        [TestCase(PivotMode.Absolute, true)]
+        public void PickingAnActualVertexMovesThePivotAndKeepsTheShape(PivotMode mode, bool custom)
+        {
+            var settings = BrushSettings.instance;
+            bool previousSnap = settings.snapToGrid;
+            settings.snapToGrid = false;
+            try
+            {
+                var parent = new GameObject("Родитель").transform;
+                parent.SetPositionAndRotation(new Vector3(1.2f, -0.5f, 2.3f), Quaternion.Euler(5f, 27f, 11f));
+                parent.localScale = new Vector3(1.5f, 0.8f, 2f);
+                var brush = BrushApi.Create(BrushShape.Cylinder, new Vector3(2f, 0.5f, -1f),
+                    new Vector3(3f, 2f, 4f), Quaternion.Euler(18f, 37f, 6f), parent, snap: false);
+                if (custom)
+                    BrushApi.ConvertToCustom(brush);
+                BrushApi.SetPivotMode(brush, mode);
+                brush.gridSnap = GridSnap.Shape;
+                var child = new GameObject("Дочерний объект").transform;
+                child.SetParent(brush.transform, false);
+                child.localPosition = new Vector3(0.3f, -0.4f, 0.5f);
+                var childPosition = child.position;
+                var originalPivot = brush.transform.position;
+                var shape = BrushGeometry.Polyhedron(brush);
+                var bounds = shape.Bounds();
+                int index = Array.FindIndex(shape.vertices,
+                    vertex => vertex.x > bounds.min.x + 0.1f && vertex.x < bounds.max.x - 0.1f);
+                Assert.That(index, Is.GreaterThanOrEqualTo(0), "Цилиндр содержит вершину вне углов габарита.");
+                var originalVertices = WorldVertices(brush);
+
+                Undo.FlushUndoRecordObjects();
+                Undo.IncrementCurrentGroup();
+                Assert.That(BrushApi.SetPivotToVertex(brush, index), Is.True);
+                Undo.FlushUndoRecordObjects();
+
+                AssertPosition(originalVertices[index], brush.transform.position);
+                AssertPosition(childPosition, child.position);
+                AssertVertices(originalVertices, brush);
+                Assert.That(brush.shape, Is.EqualTo(custom ? BrushShape.Custom : BrushShape.Cylinder));
+                Assert.That(brush.pivotMode, Is.EqualTo(mode));
+                Assert.That(brush.gridSnap, Is.EqualTo(GridSnap.Pivot));
+
+                Undo.PerformUndo();
+                AssertPosition(originalPivot, brush.transform.position);
+                AssertVertices(originalVertices, brush);
+                Assert.That(brush.gridSnap, Is.EqualTo(GridSnap.Shape));
+                Undo.PerformRedo();
+                AssertPosition(originalVertices[index], brush.transform.position);
+                AssertVertices(originalVertices, brush);
+                Assert.That(brush.gridSnap, Is.EqualTo(GridSnap.Pivot));
+
+                brush.transform.rotation *= Quaternion.Euler(0f, 45f, 0f);
+                AssertPosition(originalVertices[index], WorldVertices(brush)[index]);
+                brush.transform.position += new Vector3(0.3f, 0.5f, -0.7f);
+                AssertPosition(brush.transform.position, WorldVertices(brush)[index]);
+                var displacedVertices = WorldVertices(brush);
+                var center = brush.transform.TransformPoint(BrushGeometry.Polyhedron(brush).Bounds().center);
+                BrushApi.ResetPivot(brush);
+                AssertPosition(center, brush.transform.position);
+                AssertVertices(displacedVertices, brush);
+            }
+            finally
+            {
+                settings.snapToGrid = previousSnap;
+            }
+        }
+
+        static Vector3[] WorldVertices(Brush brush) =>
+            BrushGeometry.Polyhedron(brush).vertices.Select(brush.transform.TransformPoint).ToArray();
+
+        static void AssertVertices(Vector3[] expected, Brush brush)
+        {
+            var actual = WorldVertices(brush);
+            Assert.That(actual.Length, Is.EqualTo(expected.Length));
+            for (int i = 0; i < expected.Length; i++)
+                AssertPosition(expected[i], actual[i]);
+        }
+
+        static void AssertPosition(Vector3 expected, Vector3 actual) =>
+            Assert.That(Vector3.Distance(expected, actual), Is.LessThan(0.0001f),
+                $"Ожидалось {expected:F5} м, получено {actual:F5} м.");
+
+        [TestCase(BrushShape.Door)]
+        [TestCase(BrushShape.Window)]
+        [TestCase(BrushShape.CurvedStairs)]
+        [TestCase(BrushShape.SpiralStairs)]
+        public void VertexPivotPreservesAnIndependentOpeningOrRadialStair(BrushShape shape)
+        {
+            var settings = BrushSettings.instance;
+            bool previousSnap = settings.snapToGrid;
+            settings.snapToGrid = false;
+            try
+            {
+                var brush = BrushApi.Create(shape, new Vector3(1.4f, 2.1f, 3.8f), new Vector3(2f, 2f, 1f),
+                    Quaternion.Euler(0f, 30f, 0f), snap: false);
+                var child = new GameObject("Дочерний объект").transform;
+                child.SetParent(brush.transform, false);
+                child.localPosition = new Vector3(0.2f, 0.3f, 0.4f);
+                var originalChildPosition = child.position;
+                var originalVertices = WorldVertices(brush);
+                var originalPivot = brush.transform.position;
+                var originalHandlePositions = RadialHandlePositions(brush);
+                Undo.FlushUndoRecordObjects();
+                Undo.IncrementCurrentGroup();
+
+                Assert.That(BrushApi.SetPivotToVertex(brush, 0), Is.True);
+                Undo.FlushUndoRecordObjects();
+                AssertPosition(originalVertices[0], brush.transform.position);
+                AssertPosition(originalChildPosition, child.position);
+                AssertVertices(originalVertices, brush);
+                Assert.That(brush.shape, Is.EqualTo(shape));
+                var positions = RadialHandlePositions(brush);
+                foreach (var pair in originalHandlePositions)
+                    AssertPosition(pair.Value, positions[pair.Key]);
+
+                Undo.PerformUndo();
+                AssertPosition(originalPivot, brush.transform.position);
+                AssertVertices(originalVertices, brush);
+                Undo.PerformRedo();
+                AssertPosition(originalVertices[0], brush.transform.position);
+                AssertVertices(originalVertices, brush);
+
+                var center = brush.transform.TransformPoint(BrushGeometry.Polyhedron(brush).Bounds().center);
+                BrushApi.ResetPivot(brush);
+                AssertPosition(center, brush.transform.position);
+                AssertPosition(originalChildPosition, child.position);
+                AssertVertices(originalVertices, brush);
+            }
+            finally
+            {
+                settings.snapToGrid = previousSnap;
+            }
+        }
+
+        static System.Collections.Generic.Dictionary<string, Vector3> RadialHandlePositions(Brush brush) =>
+            BrushShapeHandles.HandlesOf(brush)
+                .Where(handle => handle.id == "inner" || handle.id == "height")
+                .ToDictionary(handle => handle.id, handle => brush.transform.TransformPoint(handle.local));
+
+        [Test]
+        public void AWindowWithShiftedVertexPivotAttachesAtItsOpeningCenter()
+        {
+            var settings = BrushSettings.instance;
+            bool previousSnap = settings.snapToGrid;
+            settings.snapToGrid = false;
+            try
+            {
+                var plan = new GameObject("План стен").AddComponent<FloorPlan>();
+                plan.AddWall(plan.AddPoint(Vector3.zero), plan.AddPoint(Vector3.right * 6f), 0.3f);
+                var position = new Vector3(2.4f, 1.6f, -0.1f);
+                var size = new Vector3(1.2f, 1f, 0.5f);
+                var plain = BrushApi.Create(BrushShape.Window, position, size, Quaternion.identity, snap: false);
+                var shifted = BrushApi.Create(BrushShape.Window, position, size, Quaternion.identity, snap: false);
+                Assert.That(BrushApi.SetPivotToVertex(shifted, 0), Is.True);
+
+                var expected = WallAnchors.Attach(plain.gameObject, plan);
+                var actual = WallAnchors.Attach(shifted.gameObject, plan);
+                Assert.That(actual.onWall, Is.True);
+                Assert.That(actual.distance, Is.EqualTo(expected.distance).Within(0.0001f));
+                Assert.That(actual.height, Is.EqualTo(expected.height).Within(0.0001f));
+                AssertPosition(World(plain).center, World(shifted).center);
+                Assert.That(BrushApi.SetPivotToVertex(shifted, 1), Is.False);
+
+                plan.points[0] += Vector3.forward;
+                WallAnchors.Layout(plan);
+                AssertPosition(World(plain).center, World(shifted).center);
+            }
+            finally
+            {
+                settings.snapToGrid = previousSnap;
+            }
         }
 
         [Test]

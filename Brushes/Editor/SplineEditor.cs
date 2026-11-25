@@ -300,9 +300,11 @@ namespace CsgBrush.Editor
     public sealed class CreateSplineTool : EditorTool
     {
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Spline"), "Сплайн");
+        [MenuItem("CSG Brush/Создать/Сплайн", false, 13)]
         [MenuItem("Tools/CSG Brush/Создать/Сплайн", false, 13)] static void Menu() => ToolManager.SetActiveTool<CreateSplineTool>();
 
         Vector3 m_Hover; bool m_HoverValid;
+        BrushSurfaceGrid.Frame m_Grid;
         /// <summary>The spline a click continues, and where: one of its points (index) or links (index and spot).</summary>
         Spline m_Spline; int m_Point = -1, m_Link = -1; Vector3 m_Local;
         /// <summary>The scene's splines, found again only when the hierarchy changes.</summary>
@@ -347,7 +349,7 @@ namespace CsgBrush.Editor
             {
                 FindSpline(e.mousePosition);
                 if (m_Spline != null) { m_HoverValid = true; m_Hover = FloorPlanTools.World(m_Spline, m_Point >= 0 ? m_Spline.points[m_Point] : m_Local); }
-                else m_HoverValid = StartPoint(HandleUtility.GUIPointToWorldRay(e.mousePosition), out m_Hover);
+                else m_HoverValid = StartPoint(HandleUtility.GUIPointToWorldRay(e.mousePosition), out m_Hover, out m_Grid);
                 if (e.type == EventType.MouseMove) SceneView.RepaintAll();
             }
             if (e.type == EventType.MouseDown && e.button == 0 && m_HoverValid && HandleUtility.nearestControl == id)
@@ -368,6 +370,7 @@ namespace CsgBrush.Editor
             if (e.type == EventType.Repaint && m_HoverValid)
             {
                 bool joining = m_Spline != null; // white and larger on a spline's point or link, as when drawing
+                if (!joining) BrushSurfaceGrid.Draw(m_Grid);
                 Handles.color = joining ? Color.white : FloorPlanTools.Line;
                 Handles.DotHandleCap(-1, m_Hover, Quaternion.identity, HandleUtility.GetHandleSize(m_Hover) * (joining ? 0.09f : 0.06f), EventType.Repaint);
             }
@@ -377,18 +380,23 @@ namespace CsgBrush.Editor
         /// Where a new spline starts: on the surface under the mouse, raised so a new spline's profile rests on it, else on
         /// the ground (y = 0); on the grid across the surface.
         /// </summary>
-        static bool StartPoint(Ray ray, out Vector3 world)
+        static bool StartPoint(Ray ray, out Vector3 world, out BrushSurfaceGrid.Frame grid)
         {
             float g = BrushSettings.instance.snapToGrid ? BrushSettings.instance.GridMeters : 0f;
             float rest = Spline.DefaultSize.x * 0.5f; // a new spline's circle
-            if (BrushHooks.PickBrushSurface(ray, out var point, out var normal) != null)
+            var surface = BrushHooks.PickBrushSurface(ray, out var point, out var normal);
+            if (surface == null)
             {
-                world = SplineDrawTool.SnapAcross(point, normal, g) + normal * rest;
-                return true;
+                normal = Vector3.up;
+                if (!new Plane(normal, Vector3.zero).Raycast(ray, out float t) || t <= 0f)
+                {
+                    grid = default; world = default; return false;
+                }
+                point = ray.GetPoint(t);
             }
-            var ground = new Plane(Vector3.up, Vector3.zero);
-            if (!ground.Raycast(ray, out float t) || t <= 0f) { world = default; return false; }
-            world = SplineDrawTool.SnapAcross(ray.GetPoint(t), Vector3.up, g) + Vector3.up * rest;
+            grid = surface != null && BrushSurfaceGrid.Local ? BrushSurfaceGrid.ForSurface(surface, point, normal)
+                : BrushSurfaceGrid.Frame.OnPlane(point, normal);
+            world = BrushDraw.SnapInPlane(point, grid.Origin, grid.Rotation, g) + normal * rest;
             return true;
         }
     }

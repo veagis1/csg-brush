@@ -23,6 +23,7 @@ namespace CsgBrush.Editor
         public struct Placement
         {
             public Vector3 position; public Quaternion rotation; public Vector3 size;
+            internal BrushSurfaceGrid.Frame grid;
             /// <summary>The plan whose wall it is on, or null.</summary>
             public FloorPlan plan;
             public FloorPlan.Wall wall; public float distance, sill;
@@ -43,12 +44,16 @@ namespace CsgBrush.Editor
             var opening = s.NewOpeningSize(shape); float sill = s.NewOpeningSill(shape);
             p = default;
             var hit = BrushHooks.PickBrushSurface(ray, out var point, out var normal);
+            p.grid = hit != null
+                ? BrushSurfaceGrid.Frame.OnPlane(point, normal)
+                : BrushSurfaceGrid.Frame.OnPlane(Vector3.zero, Vector3.up);
             if (hit != null && hit.generatedBy is FloorPlan plan && Mathf.Abs(normal.y) < 0.5f)
             {
                 var local = plan.transform.InverseTransformPoint(point);
                 if (NearestWall(plan, new Vector2(local.x, local.z), out var wall, out float along, out _))
                 {
                     p.plan = plan; p.wall = wall; p.sill = sill;
+                    p.grid = BrushSurfaceGrid.ForSurface(hit, point, normal);
                     p.distance = ClampOpening(Snap(along), wall.Length, opening.x);
                     OpeningPose(plan, wall, p.distance, sill, opening, out p.position, out p.rotation, out p.size);
                     return true;
@@ -127,13 +132,14 @@ namespace CsgBrush.Editor
         public static WallAnchor Attach(GameObject go, FloorPlan plan, bool keepRotation)
         {
             if (go == null) return null;
-            if (plan == null) plan = NearestPlan(go.transform.position);
+            go.TryGetComponent<Brush>(out var brush);
+            if (plan == null) plan = NearestPlan(ReferencePosition(go.transform, brush));
             if (plan == null || go.GetComponent<FloorPlan>() != null) return null;
             if (go.transform.parent != plan.transform) Undo.SetTransformParent(go.transform, plan.transform, "Привязать к стене");
             if (!go.TryGetComponent<WallAnchor>(out var a)) a = Undo.AddComponent<WallAnchor>(go);
             Undo.RecordObject(a, "Привязать к стене");
             a.startId = a.endId = WallAnchor.Unplaced;
-            if (go.TryGetComponent<Brush>(out var b) && b.IsOpening) a.face = WallFace.Centered;
+            if (brush != null && brush.IsOpening) a.face = WallFace.Centered;
             else if (a.face == WallFace.Centered) a.face = WallFace.Inside; // the side it is on decides
             a.MarkBrushes(true);
             if (keepRotation) s_KeepPose.Add(a);
@@ -205,7 +211,7 @@ namespace CsgBrush.Editor
                 else if (s_Moved.Remove(a)) Reanchor(plan, a, opening, false);
                 // the anchor's saved values are only changed by the user (move, Pick Wall), never here: an undo of a plan edit
                 // must find the object's wall again from the same values
-                if (!Resolve(a, s_Walls, out var wall, out float distance, Local(plan, child))) { a.onWall = false; continue; }
+                if (!Resolve(a, s_Walls, out var wall, out float distance, Local(plan, ReferencePosition(child, brush)))) { a.onWall = false; continue; }
                 a.onWall = true;
                 // its wall is whole: points added from now on are new (derived from the plan, so kept out of Undo)
                 bool whole = (wall.startId == a.startId && wall.endId == a.endId) || (wall.startId == a.endId && wall.endId == a.startId);
@@ -215,6 +221,7 @@ namespace CsgBrush.Editor
                 {
                     OpeningPose(plan, wall, ClampOpening(distance, wall.Length, brush.size.x), a.height, new Vector2(brush.size.x, brush.size.y), out position, out rotation, out var size);
                     if (Mathf.Abs(brush.size.z - size.z) > 1e-5f) { brush.size = new Vector3(brush.size.x, brush.size.y, size.z); BrushSync.Ensure(brush); }
+                    position -= OpeningOffset(child, rotation, brush.PivotShift);
                 }
                 else ObjectPose(plan, wall, a, Mathf.Clamp(distance, 0f, wall.Length), out position, out rotation);
                 var t = child;
@@ -230,7 +237,26 @@ namespace CsgBrush.Editor
         /// it is on); or, when one end is gone, the wall that kept the other. False when its wall is gone.
         /// </summary>
         /// <summary>An object's place on its plan's floor.</summary>
-        public static Vector2 Local(FloorPlan plan, Transform t) { var l = plan.transform.InverseTransformPoint(t.position); return new Vector2(l.x, l.z); }
+        // Openings attach by the centre of the cut. A pivot picked before attaching is a transform offset.
+        static Vector3 ReferencePosition(Transform t, Brush brush) =>
+            brush != null && brush.IsOpening ? t.TransformPoint(brush.PivotShift) : t.position;
+
+        static Vector3 OpeningOffset(Transform t, Quaternion worldRotation, Vector3 localOffset)
+        {
+            var scaled = Vector3.Scale(t.localScale, localOffset);
+            var parent = t.parent;
+            if (parent == null) return worldRotation * scaled;
+            var localRotation = Quaternion.Inverse(parent.rotation) * worldRotation;
+            return parent.TransformVector(localRotation * scaled);
+        }
+
+        public static Vector2 Local(FloorPlan plan, Transform t) => Local(plan, ReferencePosition(t, t.GetComponent<Brush>()));
+
+        static Vector2 Local(FloorPlan plan, Vector3 world)
+        {
+            var point = plan.transform.InverseTransformPoint(world);
+            return new Vector2(point.x, point.z);
+        }
 
         /// <summary>Does a point lie on a wall (within its thickness and a little more)?</summary>
         static bool OnWall(FloorPlan.Wall w, Vector2 p, float reach)
@@ -315,12 +341,12 @@ namespace CsgBrush.Editor
         static void Reanchor(FloorPlan plan, WallAnchor a, bool opening, bool force)
         {
             var t = a.transform;
-            var local = plan.transform.InverseTransformPoint(t.position);
+            var brush = opening ? a.GetComponent<Brush>() : null;
+            var local = plan.transform.InverseTransformPoint(ReferencePosition(t, brush));
             var p2 = new Vector2(local.x, local.z);
             if (!NearestWall(plan, p2, out var wall, out float along, out float across)) return;
             if (opening)
             {
-                var brush = a.GetComponent<Brush>();
                 if (!force && across > (wall.outer - wall.inner) * 0.5f + CatchMeters) { SetFree(a); return; } // off every wall: a free cut
                 float sill = Mathf.Max(0f, local.y - brush.size.y * 0.5f);
                 Set(a, wall, WallFace.Centered, Snap(along), sill, 0f, Quaternion.identity);

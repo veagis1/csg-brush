@@ -49,6 +49,72 @@ namespace CsgBrush.Tests
             Assert.AreEqual(before.max.y, WorldBox(box).max.y, 1e-4f, "the top stayed");
         }
 
+        [TestCase(0.19f, 0.25f, true, false, false)]
+        [TestCase(-0.19f, -0.25f, true, false, false)]
+        [TestCase(0.05f, 0f, true, false, false)]
+        [TestCase(-0.05f, 0f, true, false, false)]
+        [TestCase(0.12f, 0.125f, true, true, false)]
+        [TestCase(0.19f, 0.25f, true, false, true)]
+        [TestCase(0.19f, 0.19f, false, false, false)]
+        public void FaceDragUsesSignedWorldStepsFromItsStartingShape(float distance, float appliedDistance,
+            bool incremental, bool symmetric, bool continuousSnap)
+        {
+            var settings = BrushSettings.instance;
+            bool previousSnap = settings.snapToGrid;
+            int previousGridIndex = settings.gridIndex;
+            float previousRotationStep = settings.rotationSnapDegrees;
+            var previousGrid = settings.gridSizes;
+            try
+            {
+                settings.snapToGrid = continuousSnap;
+                settings.gridSizes = new[] { 0.125f };
+                settings.gridIndex = 0;
+                settings.rotationSnapDegrees = 15f;
+
+                var parent = new GameObject("Родитель").transform;
+                parent.rotation = Quaternion.Euler(0f, 30f, 0f);
+                float scale = incremental && !continuousSnap ? 2f : 1f;
+                parent.localScale = new Vector3(scale, 0.8f, 1.2f);
+                var brush = BrushApi.Create(BrushShape.Box, new Vector3(0.31f, 0.47f, -0.22f),
+                    new Vector3(1.03f / scale, 1.2f, 1.6f), parent.rotation, parent, snap: false);
+                if (scale != 1f)
+                    brush.transform.localScale = Vector3.one;
+                brush.gridSnap = GridSnap.Shape;
+                BrushSnap.Accept(brush);
+
+                var transform = brush.transform;
+                Vector3 axis = transform.TransformVector(Vector3.right).normalized;
+                Vector3 Face(bool positive)
+                {
+                    var bounds = BrushGeometry.Polyhedron(brush).Bounds();
+                    var point = bounds.center;
+                    point.x = positive ? bounds.max.x : bounds.min.x;
+                    return transform.TransformPoint(point);
+                }
+
+                var fixedEnd = Face(false);
+                var draggedEnd = Face(true);
+                Assert.That(Vector3.Distance(fixedEnd, draggedEnd), Is.EqualTo(1.03f).Within(0.0001f));
+                var brushes = new List<Brush> { brush };
+                var starts = new Dictionary<Brush, BrushShapeHandles.State> { [brush] = BrushShapeHandles.State.Of(brush) };
+
+                BrushShapeHandles.ApplyToSelection(brushes, brush, "+x", distance, symmetric,
+                    ShapeEditSelection.Single, starts, incremental: incremental);
+                BrushSnap.Snap(brush);
+                BrushApi.ForceUpdate();
+
+                Near(draggedEnd + axis * appliedDistance, Face(true), "Сдвиг выбранной грани");
+                Near(fixedEnd - axis * (symmetric ? appliedDistance : 0f), Face(false), "Сдвиг противоположной грани");
+            }
+            finally
+            {
+                settings.snapToGrid = previousSnap;
+                settings.gridSizes = previousGrid;
+                settings.gridIndex = previousGridIndex;
+                settings.rotationSnapDegrees = previousRotationStep;
+            }
+        }
+
         /// <summary>Two cylinders of different heights and a box, all selected; the first cylinder's top is dragged up 1 m.</summary>
         static (Brush dragged, Brush other, Brush box) DragTopOfSelection(ShapeEditSelection mode)
         {

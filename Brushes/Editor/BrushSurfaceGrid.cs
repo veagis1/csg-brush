@@ -11,17 +11,26 @@ namespace CsgBrush.Editor
             internal readonly Transform Owner;
             readonly Vector3 localOrigin;
             readonly Quaternion localRotation;
+            readonly bool worldPlane;
 
-            internal Frame(Transform owner, Vector3 localOrigin, Quaternion localRotation)
+            internal Frame(Transform owner, Vector3 localOrigin, Quaternion localRotation, bool worldPlane = false)
             {
                 Owner = owner;
                 this.localOrigin = localOrigin;
                 this.localRotation = localRotation;
+                this.worldPlane = worldPlane;
             }
 
-            internal bool Valid => Owner != null && Owner.gameObject.activeInHierarchy;
-            internal Vector3 Origin => Owner.TransformPoint(localOrigin);
-            internal Quaternion Rotation => Owner.rotation * localRotation;
+            internal static Frame OnPlane(Vector3 point, Vector3 normal)
+            {
+                if (normal.sqrMagnitude < 1e-8f) return default;
+                return new Frame(null, BrushDraw.OntoSurface(Vector3.zero, point, normal),
+                    BrushDraw.SurfaceRotation(normal), true);
+            }
+
+            internal bool Valid => worldPlane || (Owner != null && Owner.gameObject.activeInHierarchy);
+            internal Vector3 Origin => worldPlane ? localOrigin : Owner.TransformPoint(localOrigin);
+            internal Quaternion Rotation => worldPlane ? localRotation : Owner.rotation * localRotation;
             internal Vector3 Normal => Rotation * Vector3.up;
             internal Plane Plane => new Plane(Normal, Origin);
 
@@ -40,7 +49,7 @@ namespace CsgBrush.Editor
 
         internal static bool Local
         {
-            get => SessionState.GetBool("CsgBrush.SurfaceGrid.Local", false);
+            get => SessionState.GetBool("CsgBrush.SurfaceGrid.Local", true);
             set => SessionState.SetBool("CsgBrush.SurfaceGrid.Local", value);
         }
 
@@ -140,6 +149,9 @@ namespace CsgBrush.Editor
             if (pickingView != view)
             {
                 if (HasHeld) Draw(held);
+                else if (Tools.current == Tool.Move && GUIUtility.hotControl != 0 &&
+                    Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<Brush>(out var brush) &&
+                    TryMoveFrame(brush, out var frame)) Draw(frame);
                 return false;
             }
             if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
@@ -176,23 +188,32 @@ namespace CsgBrush.Editor
         {
             if (!frame.Valid || Event.current.type != EventType.Repaint) return;
             var step = BrushSettings.instance.GridMeters;
-            if (step <= 0f) return;
-            const int radius = 6;
+            if (!(step > 0f) || float.IsInfinity(step)) return;
+            const int radius = 12;
             var ray = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
-            var center = frame.Plane.Raycast(ray, out float t)
-                ? BrushDraw.SnapInPlane(ray.GetPoint(t), frame.Origin, frame.Rotation, step) : frame.Origin;
+            var point = frame.Plane.Raycast(ray, out float t) ? ray.GetPoint(t) : frame.Origin;
+            // Keep visible lines on real grid nodes as the camera pulls away.
+            float minSpacing = HandleUtility.GetHandleSize(point) * 0.1f;
+            while (step < minSpacing) step *= 2f;
+            var center = BrushDraw.SnapInPlane(point, frame.Origin, frame.Rotation, step);
+            var local = Quaternion.Inverse(frame.Rotation) * (center - frame.Origin);
+            int column = Mathf.RoundToInt(local.x / step), row = Mathf.RoundToInt(local.z / step);
+            var minor = new Color(0.38f, 0.88f, 0.83f, 0.34f);
+            var major = new Color(0.55f, 0.96f, 0.91f, 0.70f);
             var previous = Handles.zTest;
             try
             {
                 Handles.zTest = CompareFunction.LessEqual;
-                using (new Handles.DrawingScope(new Color(0.38f, 0.88f, 0.83f, 0.4f),
+                using (new Handles.DrawingScope(minor,
                     Matrix4x4.TRS(center + frame.Normal * 0.001f, frame.Rotation, Vector3.one)))
                 {
                     float edge = radius * step;
                     for (int i = -radius; i <= radius; i++)
                     {
                         float offset = i * step;
+                        Handles.color = (column + i) % 4 == 0 ? major : minor;
                         Handles.DrawLine(new Vector3(offset, 0f, -edge), new Vector3(offset, 0f, edge));
+                        Handles.color = (row + i) % 4 == 0 ? major : minor;
                         Handles.DrawLine(new Vector3(-edge, 0f, offset), new Vector3(edge, 0f, offset));
                     }
                 }

@@ -20,7 +20,12 @@ namespace CsgBrush.Editor
             /// <summary>Moves the shape off the transform (see <see cref="Brush.PivotShift"/>).</summary>
             public Vector3 shift;
 
-            public static ShapeParams From(Brush b) => new ShapeParams { size = b.ClampedSize, sides = b.sides, tessellation = b.tessellation, stepHeight = b.stepHeight, wallThickness = b.wallThickness, stairs = b.Stairs, shift = b.PivotShift };
+            public static ShapeParams From(Brush b)
+            {
+                var shift = b.shape == BrushShape.Custom && Brush.UsesShapeOriginOffsetFor(b.customFrom)
+                    ? b.shapeOriginOffsetMeters : b.PivotShift;
+                return new ShapeParams { size = b.ClampedSize, sides = b.sides, tessellation = b.tessellation, stepHeight = b.stepHeight, wallThickness = b.wallThickness, stairs = b.Stairs, shift = shift };
+            }
 
             /// <summary>Defaults for a shape of a given size (menus, conversions).</summary>
             public static ShapeParams Default(Vector3 size, int sides = 16)

@@ -197,7 +197,7 @@ namespace CsgBrush.Tests
         [Test]
         public void TheGridTextureIsARulerInMetres()
         {
-            var tex = BrushGridMaterial.Generate(512, 32f, new[] { 4f, 8f, 16f, 32f, 64f }); // 2 m at 256 px per metre; sizes 1/8, 1/4, 1/2, 1 m (2 m does not fit a metre)
+            var tex = BrushGridMaterial.Generate(512, new[] { 0.125f, 0.25f, 0.5f, 1f, 2f }); // 2 m at 256 px per metre; sizes 1/8, 1/4, 1/2, 1 m (2 m does not fit a metre)
             try
             {
                 Color32 At(int x, int y) => tex.GetPixel(x, y);

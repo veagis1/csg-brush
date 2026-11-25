@@ -87,8 +87,7 @@ namespace CsgBrush.Editor
         {
             if (brush.shape == BrushShape.Custom) return brush.polyhedron;
             if (!BrushApi.CanConvertToCustom(brush.shape)) return null;
-            var poly = BrushApi.PolyhedronFor(brush.shape, brush.ClampedSize, brush.sides);
-            return brush.PivotShift == Vector3.zero ? poly : poly.Transformed(Matrix4x4.Translate(brush.PivotShift));
+            return BrushGeometry.Polyhedron(brush);
         }
 
         public static void OnSceneGUI(EditorToolContext context)

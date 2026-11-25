@@ -66,7 +66,7 @@ namespace CsgBrush.Editor
         /// <summary>
         /// A brush's snapped position by its <see cref="Brush.gridSnap"/>: Shape puts the lowest corner of its world bounds (its
         /// outermost vertices) on the grid at any rotation, so axis-aligned faces lie on grid lines as in Hammer or TrenchBroom;
-        /// Pivot puts its pivot on the grid. Curved and spiral stairs snap their axis, which is their pivot.
+        /// Pivot puts its pivot on the grid. Curved and spiral stairs also snap their pivot.
         /// </summary>
         public static Vector3 SnapBrushPosition(Brush brush, Vector3 worldPosition, Vector3 size, Quaternion worldRotation, float grid)
         {
@@ -211,7 +211,7 @@ namespace CsgBrush.Editor
             return new Vector3(Mathf.Abs(ps.x) > 1e-6f ? 1f / ps.x : 1f, Mathf.Abs(ps.y) > 1e-6f ? 1f / ps.y : 1f, Mathf.Abs(ps.z) > 1e-6f ? 1f / ps.z : 1f);
         }
 
-        /// <summary>Shapes built around an axis (curved and spiral stairs): the transform is the axis, so the pivot, rotation and scale snap; the parameters stay.</summary>
+        /// <summary>Curved and spiral stairs snap their pivot, rotation and scale without changing their parameters.</summary>
         static bool SnapPivot(Brush brush, float grid, float rotationStep, bool force)
         {
             var t = brush.transform;

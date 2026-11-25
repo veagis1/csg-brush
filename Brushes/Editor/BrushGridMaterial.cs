@@ -58,7 +58,7 @@ namespace CsgBrush.Editor
         static Texture2D WriteTexture()
         {
             var s = BrushSettings.instance;
-            var pixels = Generate(Mathf.RoundToInt(Metres * PixelsPerMetre), s.unitsPerMeter, s.gridSizes);
+            var pixels = Generate(Mathf.RoundToInt(Metres * PixelsPerMetre), s.gridSizes);
             Directory.CreateDirectory(Folder);
             File.WriteAllBytes(TexturePath, pixels.EncodeToPNG());
             Object.DestroyImmediate(pixels);
@@ -73,14 +73,16 @@ namespace CsgBrush.Editor
         }
 
         /// <summary>
-        /// The ruler: a square texture of <see cref="Metres"/> metres. Grid sizes are in units; those at or below a
+        /// The ruler: a square texture of <see cref="Metres"/> metres. Grid sizes are in metres; those at or below a
         /// metre draw lines, the finest faint and the metre strong; the checker alternates every metre.
         /// </summary>
-        public static Texture2D Generate(int size, float unitsPerMeter, float[] gridSizesUnits)
+        public static Texture2D Generate(int size, float[] gridSizesMeters)
         {
             float pxPerMetre = size / Metres;
             var steps = new System.Collections.Generic.List<float>();
-            if (gridSizesUnits != null) foreach (var g in gridSizesUnits) { float m = g / Mathf.Max(1e-6f, unitsPerMeter); if (m > 0f && m <= 1f + 1e-6f && !steps.Contains(m)) steps.Add(m); }
+            if (gridSizesMeters != null)
+                foreach (var step in gridSizesMeters)
+                    if (step > 0f && step <= 1f + 1e-6f && !steps.Contains(step)) steps.Add(step);
             if (!steps.Contains(1f)) steps.Add(1f);
             steps.Sort();
             var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "BrushGrid", wrapMode = TextureWrapMode.Repeat };
@@ -105,6 +107,14 @@ namespace CsgBrush.Editor
                 }
             tex.SetPixels32(pixels); tex.Apply();
             return tex;
+        }
+
+        [System.Obsolete("Pass grid steps in metres to Generate(int, float[]).")]
+        public static Texture2D Generate(int size, float unitsPerMeter, float[] gridSizesUnits)
+        {
+            float scale = Mathf.Max(1e-6f, unitsPerMeter);
+            var gridSizesMeters = gridSizesUnits == null ? null : System.Array.ConvertAll(gridSizesUnits, step => step / scale);
+            return Generate(size, gridSizesMeters);
         }
 
         static bool OnLine(int p, float stepPx, int half)

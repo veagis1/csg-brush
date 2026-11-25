@@ -208,7 +208,7 @@ namespace CsgBrush.Editor
                 foreach (var w in sel.edges) { float t = plan.links[w].thickness; if (first < 0f) first = t; else if (!Mathf.Approximately(first, t)) mixed = true; }
                 EditorGUI.showMixedValue = mixed;
                 EditorGUI.BeginChangeCheck();
-                float value = EditorGUILayout.FloatField(new GUIContent("Толщина", "Толщина выбранных стен в метрах. При 0 используется толщина наружных или внутренних стен из плана."), first);
+                float value = EditorGUILayout.FloatField(new GUIContent("Толщина (м)", "Толщина выбранных стен в метрах. При 0 используется толщина наружных или внутренних стен из плана."), first);
                 EditorGUI.showMixedValue = false;
                 if (EditorGUI.EndChangeCheck())
                 {
@@ -403,7 +403,7 @@ namespace CsgBrush.Editor
             Handles.color = FloorPlanTools.Line;
             Handles.DrawAAPolyLine(3f, from, hover);
             float length = new Vector2(m_Hover.x - plan.points[last].x, m_Hover.z - plan.points[last].z).magnitude;
-            if (BrushSettings.instance.showDimensions) Handles.Label((from + hover) * 0.5f, BrushSettings.instance.FormatUnits(length), EditorStyles.whiteMiniLabel);
+            if (BrushSettings.instance.showDimensions) Handles.Label((from + hover) * 0.5f, BrushSettings.FormatMeters(length), EditorStyles.whiteMiniLabel);
         }
 
         void Finish() => ToolManager.RestorePreviousPersistentTool();
@@ -446,6 +446,7 @@ namespace CsgBrush.Editor
     public sealed class CreateFloorPlanTool : EditorTool
     {
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("FloorPlan"), "План стен");
+        [MenuItem("CSG Brush/Создать/План стен", false, 12)]
         [MenuItem("Tools/CSG Brush/Создать/План стен", false, 12)] static void Menu() => ToolManager.SetActiveTool<CreateFloorPlanTool>();
 
         Vector3 m_Hover; bool m_HoverValid;
@@ -534,6 +535,8 @@ namespace CsgBrush.Editor
             if (e.type == EventType.Repaint && m_HoverValid)
             {
                 bool joining = m_Plan != null && (m_PlanPoint >= 0 || m_PlanWall >= 0); // white and larger on a plan's point or wall, as when drawing
+                BrushSurfaceGrid.Draw(m_Plan != null ? new BrushSurfaceGrid.Frame(m_Plan.transform, Vector3.zero, Quaternion.identity)
+                    : BrushSurfaceGrid.Frame.OnPlane(m_Hover, Vector3.up));
                 Handles.color = joining ? Color.white : FloorPlanTools.Line;
                 Handles.DotHandleCap(-1, m_Hover, Quaternion.identity, HandleUtility.GetHandleSize(m_Hover) * (joining ? 0.09f : 0.06f), EventType.Repaint);
             }

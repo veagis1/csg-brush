@@ -16,7 +16,7 @@ namespace CsgBrush
         /// <summary>
         /// Pieces below this volume (cubic metres) are dropped: they are numerical slivers from nearly coplanar split
         /// faces, and CSG against a sliver is unstable (whole brushes
-        /// vanished). About three Quake units cubed.
+        /// vanished).
         /// </summary>
         public static float MinPieceVolume = 1e-4f;
 

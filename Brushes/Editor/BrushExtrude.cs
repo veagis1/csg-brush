@@ -31,7 +31,7 @@ namespace CsgBrush.Editor
         static float Meters()
         {
             var s = BrushSettings.instance;
-            float meters = s.ToMeters(s.extrudeDistance != 0f ? s.extrudeDistance : s.ToUnits(s.GridMeters));
+            float meters = s.extrudeDistance != 0f ? s.extrudeDistance : s.GridMeters;
             return s.snapToGrid ? BrushSnap.Round(meters, s.GridMeters) : meters;
         }
 
@@ -54,7 +54,7 @@ namespace CsgBrush.Editor
 
             float labelWidth = EditorGUIUtility.labelWidth; EditorGUIUtility.labelWidth = 96;
             EditorGUI.BeginChangeCheck();
-            float d = EditorGUILayout.FloatField(new GUIContent("Расстояние (" + s.unitLabel + ")", "Расстояние выдавливания. Отрицательное значение создаёт углубление, ноль соответствует шагу сетки."), s.extrudeDistance != 0f ? s.extrudeDistance : s.ToUnits(s.GridMeters));
+            float d = EditorGUILayout.FloatField(new GUIContent("Расстояние (м)", "Расстояние выдавливания в метрах. Отрицательное значение создаёт углубление, ноль соответствует шагу сетки."), s.extrudeDistance != 0f ? s.extrudeDistance : s.GridMeters);
             int mode = EditorGUILayout.Popup(new GUIContent("Грани", "Выдавить всё выделение одним блоком или каждую грань отдельно."), s.extrudeIndividual ? 1 : 0, new[] { "Всё выделение", "По отдельности" });
             if (EditorGUI.EndChangeCheck()) { s.extrudeDistance = d; s.extrudeIndividual = mode == 1; SceneView.RepaintAll(); }
             EditorGUIUtility.labelWidth = labelWidth;
