@@ -1,0 +1,9 @@
+[first-error]
+source = 'registry:first-error@0.1.0'
+version = '0.1.0'
+hash = '31dea9e8a785'
+
+[json-peek]
+source = 'registry:json-peek@0.1.0'
+version = '0.1.0'
+hash = '6a6aa0c6a5d1'

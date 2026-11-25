@@ -1,0 +1,8 @@
+{
+  "name": "csg-brush-plus-caveman-tools",
+  "private": true,
+  "engines": { "node": ">=22.13" },
+  "dependencies": {
+    "@caveman-ai/cli": "4.1.0"
+  }
+}

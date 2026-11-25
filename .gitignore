@@ -1,3 +1,16 @@
 .DS_Store
 Tools~/**/.venv/
 __pycache__/
+
+# Local development tools and Unity sandbox output
+/.codex/config.toml
+/Development~/Tools/Caveman/.runtime/
+/Development~/Tools/Caveman/.state/
+/Development~/Tools/Caveman/node_modules/
+/Development~/Tools/Firefox/.state/
+/Development~/Tools/Firefox/node_modules/
+/Development~/Sandbox/Library/
+/Development~/Sandbox/Temp/
+/Development~/Sandbox/Logs/
+/Development~/Sandbox/obj/
+/Development~/Sandbox/UserSettings/
