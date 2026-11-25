@@ -1,44 +1,55 @@
 # CSG Brush 0.6.1
 
-This fork builds on [Jaroslav Stehlik's CSG Brush 0.6.0](https://github.com/jaroslavstehlik/csg-brush/tree/71ab1dd51140fa07030dfbe36012047289aa233f). It adds surface-aligned drawing, exact dimensions in the Scene view and geometry-based placement. It also makes large edits with many cuts faster.
+CSG Brush lets you block out a level directly in Unity. A *brush* is a shape you can add to the level or use to cut a hole in another shape. Jaroslav Stehlik’s original editor already did both. The changes in this fork are easiest to see while building a small loading bay. How do you land a crate on a raised platform, cut a recess in the wall behind it, and build on a ramp that slopes away from the world grid? [Original CSG Brush 0.6.0](https://github.com/jaroslavstehlik/csg-brush/tree/71ab1dd51140fa07030dfbe36012047289aa233f)
 
-## In the Scene view
+## Land a crate on a platform
 
-![An orange subtract brush moves a rectangular opening back and forth through a blue slab in Unity.](images/0.6.1/moving-cut.gif)
+Start with a box created from the **GameObject** menu. Its pivot, the point the Move and Rotate tools act on, starts at the centre. To place the bottom edge precisely, open **WCS** (working coordinate system) and choose **Snap WCS to Vertex**. Move the pointer along the bottom edge. Its corners and midpoint light up in turn. Click the midpoint. The gizmo moves there while the crate stays put.
 
-*Move a 1.25 × 1.6 m cut across the slab. CSG rebuilds the opening at each position.*
+Now click **Move to**. Pick a vertex or an edge midpoint on the platform and click again to land the crate there. For an offset, move along the edge before the second click. The outline shows where the crate will land, and **Ctrl** measures the offset from the picked point in grid steps, even with the magnet off. The crate keeps its rotation and scale. The target can be another brush, an imported mesh, a posed skinned mesh, or a mesh or box collider. Flat triangulated faces expose their perimeter, so a hidden diagonal cannot catch the cursor.
+
+A box drawn in the Scene view already starts with its pivot at the first point you clicked. You can pick a new origin or reset it to the centre later. This also works for floor plans, splines and wall-mounted windows. For a floor plan or spline, the pickable points include graph nodes, link midpoints and edges of the generated shape. **Reset WCS** returns the pivot to the centre of its local bounds. Changing the origin keeps the geometry and child objects in place. Moving the object afterwards carries its children with it.
+
+## Change a size where you see it
+
+Switch on **Dimensions**. The coloured X, Y and Z letters identify which way each measurement runs. Click a number on a selected editable brush and type the size in metres. The outline previews the result as you type. **Enter** applies it and **Esc** cancels. Exact input can fall between grid steps and accepts a decimal point or comma. Groups and ordinary mesh objects show their overall dimensions for reference. When dragging a face in **Shape Edit**, hold **Ctrl** to grow from its current size in steps, or **Ctrl+Shift** to move both sides symmetrically.
+
+The same idea works on a floor plan. Type **9.37 m** on a straight wall and the end nearest the plan’s WCS stays fixed. The other end moves, taking its adjoining walls along. Curved walls show the length of their path. In floor-plan edit mode, a selected wall also exposes height and thickness, and a selected room exposes its height.
 
 <table>
 <tr>
-<td width="50%"><img src="images/0.6.1/surface-grid.png" alt="A surface grid fading out around the snap point on a sloped face."><br>The drawing grid follows the face and fades around the snap point.</td>
-<td width="50%"><img src="images/0.6.1/brush-dimensions.png" alt="A box with colour-coded dimensions of 4 m on X, 3 m on Y and 2 m on Z."><br>Click a brush dimension to enter an exact size.</td>
-</tr>
-<tr>
-<td width="50%"><img src="images/0.6.1/floor-plan-dimensions.png" alt="A floor plan wall with a 9.37 m length in the edit field and a cyan preview of the shared corner moving."><br>Type a wall length and preview the change to the shared corner.</td>
-<td width="50%"><img src="images/0.6.1/editor-language.gif" alt="Two Unity Project Settings captures alternate between English and Russian."><br>Switch between English and Russian in Project Settings.</td>
+<td width="50%"><img src="images/0.6.1/brush-dimensions.png" alt="A box with dimensions of 4 m on X, 3 m on Y and 2 m on Z."><br>Each dimension belongs to a local axis.</td>
+<td width="50%"><img src="images/0.6.1/floor-plan-dimensions.png" alt="Entering 9.37 m on a wall previews the new position of its shared corner."><br>The cyan outline previews the wall edit before Enter.</td>
 </tr>
 </table>
 
-## Features
+## Cut into a wall or build out from it
 
-- **Draw on a surface grid.** Start a brush on a floor, wall or slope. The white dot marks the drawing start and the grid fades around it. Use **Snapping** to choose the world grid or lock the local grid to a face and draw past its edge. Brushes drawn on a local grid can keep snapping along its axes when moved or duplicated.
-- **Draw a cut into a face.** Start on a brush or a floor plan wall and draw the depth inward. The orange preview shows the cut on that target. The **+ add** and **- subtract** buttons override the automatic choice. Click the active button again to return to automatic operation.
-- **Enter exact dimensions.** Enable **Dimensions** in the Scene overlay to see measurements while drawing or with an object selected. Click an editable brush dimension, type its size in metres and press Enter. The outline previews the change, Esc cancels it, and Undo restores the original size. An entered value can fall between grid steps. In **Shape Edit**, hold Ctrl to resize an eligible handle in grid increments from its starting size, even with the snap magnet off.
-- **Set the working coordinate system (WCS).** A drawn brush uses its first point as its origin. For an existing brush, floor plan or spline, choose **WCS > Snap WCS to Vertex** and pick a vertex or edge midpoint. Move and Rotate use that origin. Choosing or resetting it preserves the world pose of the geometry and child objects. A window attached to a floor plan wall can also have its own WCS origin.
-- **Move to a vertex or edge.** Select an object and choose **Move to**. Pick a vertex or edge midpoint on another object, then click again at that point or along an adjoining edge. Hold Ctrl for a grid-stepped offset measured from the first point. A window can switch floor plan walls while keeping its sill height above the destination floor.
-- **Edit a wall length.** Click the length of a straight floor plan wall and enter a value in metres. The end closest to the plan's WCS stays fixed, and neighbouring walls follow the shared corner. Curved walls show their length along the curve.
-- **Choose the editor language.** The CSG Brush overlay, custom Inspectors and settings support English and Russian. Choose **Edit > Project Settings > CSG Brush > Language**. English is the default, and the choice is saved per editor user.
+Start a rectangle on a solid brush and give it depth. Push into the face and the orange preview cuts that brush. Pull outwards and the preview switches to an addition. A neighbouring solid can stay intact even if it overlaps the cutter. You can also target one wall of a floor plan. The new cut belongs to its target and follows it when it moves. For manual control, click **+ add** or **− subtract**. Click the active button again to return to automatic selection.
 
-## Changes and fixes
+![An orange subtract brush carries its opening across a blue slab in a Unity scene.](images/0.6.1/moving-cut.gif)
 
-- The Scene overlay groups **Snapping** and **WCS** separately and gives **Move to** and **Dimensions** their own controls. Choosing a creation tool finishes the current edit mode and cancels any unfinished drag or preview.
-- Creation respects the Hierarchy's **Default Parent**. The **GameObject > CSG Brush** menu groups brush creation and related commands.
-- The grid and size fields use metres. One Unity world unit is one metre. Legacy grid and creation defaults are converted using their stored units-per-metre setting.
-- Moving a brush with cuts far from the origin updates its mesh and colliders. Geometry cache keys retain distinct representable positions, and collider clipping runs in coordinates close to the geometry.
-- Editing a cut reuses matching convex collider pieces and skips clipping pairs whose bounds are apart. Large meshes with suitable axis-aligned faces use a planar lightmap UV pass. Other meshes use Unity's unwrap. In a test scene with 1,152 cuts, moving one cut took 0.22–0.27 s of combined CSG and UV2 processing, down from 4.78–4.79 s on the preceding build. Both ranges exclude the delay before automatic unwrapping.
-- Trigger relay components can be saved with their generated collider pieces and restored when the scene is reopened.
+*Here the cut already exists. Moving it shifts the opening in both the visible slab and its collider.*
 
-## Development
+## Draw a box on a ramp
 
-- Editor scripts can set a brush origin with `BrushApi.SetPivotToVertex(brush, vertexIndex)` or `BrushApi.SetPivotToEdge(brush, a, b)`, and reset it with `BrushApi.ResetPivot(brush)`.
-- Store grid and creation defaults directly in metres. The legacy `BrushSettings` preset API has been removed, and `ToMeters` and `ToUnits` now return their input. Pass metre-based grid sizes to `BrushGridMaterial.Generate(int, float[])`. The overload that takes a units-per-metre scale is obsolete.
+Hover over a sloping face. A small grid lies flat against the slope, with a white dot at the snapped point and lines that fade towards the edge of the preview. Draw the base there, then pull out from the slope to give the box height. With **Snapping → Lock grid to a face**, you can keep working on the same plane even beyond the ramp’s edge. Brushes drawn on that grid can also follow its axes when moved or duplicated.
+
+![Unity Scene view showing the local drawing grid and snap point on an inclined face.](images/0.6.1/surface-grid.png)
+
+## Keep building in the Scene view
+
+- **Start the next object without leaving edit mode by hand.** Choose a creation tool while editing a brush’s vertices, a floor plan or a spline. The current edit tool closes, any unfinished drag is cancelled, and drawing can begin. Wall segments and spline links you already confirmed stay in the level.
+- **Group new objects as you draw.** Choose a GameObject in the Hierarchy and use Unity’s **Set as Default Parent**. New brushes, floor plans and splines are created beneath it. For example, set the loading bay as the parent and the boxes you draw for that bay appear together in the Hierarchy. A targeted cut stays with the brush or plan it cuts.
+- **Move a window to another wall.** Pick a corner as the window’s WCS, then use **Move to** on a wall in the same or another floor plan. The opening turns to match the wall, fits its thickness and keeps its sill height above the destination floor.
+- **Switch the editor language.** English is the default. Choose Russian in **Edit → Project Settings → CSG Brush** to switch the package’s overlay, settings and custom Inspectors. Unity remembers the choice for that editor user.
+
+![The CSG Brush settings page switches between English and Russian.](images/0.6.1/editor-language.gif)
+
+## Larger builds and existing projects
+
+Moving brushes far from the world origin now keeps their visible meshes, cut faces and colliders together. When one opening moves in a heavily cut solid, the builder reuses unchanged collider pieces. Large, suitable axis-aligned meshes also get a faster second UV layout for baked lighting. In one Unity scene with **1,152 cuts**, moving a single cut took **0.22–0.27 s** of CSG and lightmap UV processing, down from **4.78–4.79 s** in the preceding Plus build. Both measurements exclude the wait before automatic unwrapping.
+
+A world unit is one metre throughout the fork. Existing project settings convert their saved lengths on first use. For example, a grid step of 16 at 32 units per metre becomes 0.5 m. Existing scene geometry stays the same physical size. Trigger relays now survive saving and reopening a scene. Rebuilding an older prefab also reconnects its generated trigger collider to the owning brush if 0.6.0 saved the relay with an empty script reference.
+
+Editor scripts can set a brush origin with `BrushApi.SetPivotToVertex`, `BrushApi.SetPivotToEdge` and `BrushApi.ResetPivot`. The former unit-preset API has been removed. Pass lengths in metres to `BrushGridMaterial.Generate(int, float[])`. The legacy `ToMeters` and `ToUnits` methods now return their input.

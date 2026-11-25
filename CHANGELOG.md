@@ -2,6 +2,8 @@
 
 ## 0.6.1
 
+- Rebuilding a 0.6.0 prefab repairs a missing script reference on its generated trigger collider. Existing scene
+  instances keep their overrides.
 - The Scene view can use the surface under the pointer as a drawing grid. Lock the grid to a face to keep drawing past
   its edge. The grid fades around the starting point. Drawing into a solid or a floor plan wall makes a cut there.
   Use **+ add** or **- subtract** to choose the operation for the current editor session.
