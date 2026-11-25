@@ -20,7 +20,13 @@ namespace CsgBrush
             public int start, end;
             /// <summary>Metres; 0 uses the generator's own (a floor plan's wall thickness).</summary>
             public float thickness;
-            public Link(int start, int end, float thickness = 0f) { this.start = start; this.end = end; this.thickness = thickness; }
+            /// <summary>Metres; 0 uses the adjoining room or the plan's default.</summary>
+            public float height;
+            public Link(int start, int end, float thickness = 0f) : this(start, end, thickness, 0f) { }
+            public Link(int start, int end, float thickness, float height)
+            {
+                this.start = start; this.end = end; this.thickness = thickness; this.height = height;
+            }
         }
 
         /// <summary>The points, in this object's space. Edit through the point and link methods, which keep the ids in step.</summary>
@@ -97,15 +103,18 @@ namespace CsgBrush
 
         /// <summary>A link between two points; returns its index, or -1 when they are one point or already joined.</summary>
         public int AddLink(int startId, int endId, float thickness = 0f)
+            => AddLink(startId, endId, thickness, 0f);
+
+        public int AddLink(int startId, int endId, float thickness, float height)
         {
             if (startId == endId || PointIndex(startId) < 0 || PointIndex(endId) < 0) return -1;
             foreach (var l in links) if ((l.start == startId && l.end == endId) || (l.start == endId && l.end == startId)) return -1;
-            links.Add(new Link(startId, endId, thickness));
+            links.Add(new Link(startId, endId, thickness, height));
             return links.Count - 1;
         }
 
         /// <summary>
-        /// Split a link with a new point; both halves keep its thickness. On a curved link (a Smooth end) the new point is
+        /// Split a link with a new point; both halves keep its dimensions. On a curved link (a Smooth end) the new point is
         /// Smooth, so the path keeps its shape. Returns the new point's id.
         /// </summary>
         public int SplitLink(int link, Vector3 p)
@@ -113,8 +122,8 @@ namespace CsgBrush
             var l = links[link];
             int id = AddPoint(p);
             if (IsSmooth(l.start) || IsSmooth(l.end)) SetSmooth(id, true);
-            links[link] = new Link(l.start, id, l.thickness);
-            links.Insert(link + 1, new Link(id, l.end, l.thickness));
+            links[link] = new Link(l.start, id, l.thickness, l.height);
+            links.Insert(link + 1, new Link(id, l.end, l.thickness, l.height));
             return id;
         }
 
@@ -158,7 +167,11 @@ namespace CsgBrush
                     if (!Flat) h = h * 31 + Mathf.RoundToInt(points[i].y * 1e5f);
                     h = h * 31 + Mathf.RoundToInt(points[i].z * 1e5f);
                 }
-                foreach (var l in links) { h = h * 31 + l.start; h = h * 31 + l.end; h = h * 31 + Mathf.RoundToInt(l.thickness * 1e5f); }
+                foreach (var l in links)
+                {
+                    h = h * 31 + l.start; h = h * 31 + l.end; h = h * 31 + Mathf.RoundToInt(l.thickness * 1e5f);
+                    if (l.height != 0f) h = h * 31 + Mathf.RoundToInt(l.height * 1e5f);
+                }
                 if (smoothPoints != null && smoothPoints.Count > 0) // nothing curves without them: older keys stay as they were
                 {
                     var ids = new List<int>(smoothPoints); ids.Sort();

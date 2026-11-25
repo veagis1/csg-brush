@@ -100,6 +100,15 @@ namespace CsgBrush
         [Tooltip("Габариты по осям X, Y и Z, в метрах.")]
         public Vector3 size = new Vector3(2f, 2f, 2f);
 
+        [SerializeField, HideInInspector] internal Vector3 exactSizeMeters;
+        [SerializeField, HideInInspector] internal Transform workGridOwner;
+        [SerializeField, HideInInspector] internal Vector3 workGridOrigin;
+        [SerializeField, HideInInspector] internal Quaternion workGridRotation = Quaternion.identity;
+        [SerializeField, HideInInspector] internal bool compoundPart, addressedCut;
+        [SerializeField, HideInInspector] internal Brush cutTarget;
+        [SerializeField, HideInInspector] internal FloorPlan cutPlan;
+        [SerializeField, HideInInspector] internal int cutWallStartId, cutWallEndId, generatedWallStartId, generatedWallEndId;
+
         /// <summary>
         /// Where the transform sits in the shape's box, per axis, measured from its left, bottom, back corner (the back is
         /// the side away from where the brush faces): a fraction of the size, or metres (see <see cref="pivotMode"/>).

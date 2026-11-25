@@ -142,6 +142,22 @@ namespace CsgBrush.Editor
             return a;
         }
 
+        internal static void AttachCutToWall(Brush brush, BrushCutTarget target)
+        {
+            if (!target.TryWall(out var wall)) return;
+            var plan = target.Plan;
+            var t = brush.transform;
+            wall.Project(Local(plan, t), out float distance, out float across);
+            var face = across < (wall.inner + wall.outer) * 0.5f ? WallFace.Inside : WallFace.Outside;
+            Frame(plan, wall, face, distance, out var origin, out var rotation);
+            var inverse = Quaternion.Inverse(rotation);
+            var offset = inverse * (t.position - origin);
+            var anchor = Undo.AddComponent<WallAnchor>(brush.gameObject);
+            Set(anchor, wall, face, distance, offset.y, offset.z, inverse * t.rotation);
+            anchor.MarkBrushes(true);
+            Layout(plan);
+        }
+
         /// <summary>Take an object off its wall: it leaves the plan where it is, and stays there. Undoable.</summary>
         public static void Detach(GameObject go)
         {

@@ -16,33 +16,64 @@ namespace CsgBrush.Editor
     {
         public static readonly Color EdgeColor = new Color(0.3f, 0.8f, 1f, 0.9f);
 
-        internal static void DrawDimensions(Bounds bounds, Matrix4x4 toWorld, bool withHeight = true)
+        internal static void DrawDimensions(Bounds bounds, Matrix4x4 toWorld, bool withHeight = true, Brush editable = null)
         {
-            void Label(Vector3 position, Vector3 edge)
+            void Label(Vector3 position, Vector3 edge, int axis)
             {
                 float meters = toWorld.MultiplyVector(edge).magnitude;
-                if (meters > 1e-4f)
-                    Handles.Label(toWorld.MultiplyPoint3x4(position), BrushSettings.instance.FormatUnits(meters), EditorStyles.whiteMiniLabel);
+                if (meters <= 1e-4f) return;
+                var world = toWorld.MultiplyPoint3x4(position);
+                if (BrushDimensionFields.CanResize(editable, axis)) BrushDimensionFields.DrawBrushField(editable, axis, world, meters);
+                else BrushDimensionFields.Readout(world, meters);
             }
             var min = bounds.min;
             var center = bounds.center;
-            Label(new Vector3(center.x, min.y, min.z), Vector3.right * bounds.size.x);
-            Label(new Vector3(bounds.max.x, min.y, center.z), Vector3.forward * bounds.size.z);
-            if (withHeight) Label(new Vector3(min.x, center.y, min.z), Vector3.up * bounds.size.y);
+            Label(new Vector3(center.x, min.y, min.z), Vector3.right * bounds.size.x, 0);
+            Label(new Vector3(bounds.max.x, min.y, center.z), Vector3.forward * bounds.size.z, 2);
+            if (withHeight) Label(new Vector3(min.x, center.y, min.z), Vector3.up * bounds.size.y, 1);
         }
 
         internal static void DrawSelectionDimensions()
         {
             var stage = StageUtility.GetCurrentStageHandle();
-            foreach (var go in Selection.gameObjects)
+            var selected = Selection.gameObjects;
+            if (selected.Length > 1 && System.Array.TrueForAll(selected, go => go.TryGetComponent<Brush>(out _)))
+            {
+                if (Event.current.type != EventType.Repaint) return;
+                var frame = Matrix4x4.TRS(Selection.activeTransform.position, Tools.handleRotation, Vector3.one);
+                var inverse = frame.inverse;
+                Bounds? combined = null;
+                foreach (var go in selected)
+                {
+                    if (!stage.Contains(go) || SceneVisibilityManager.instance.IsHidden(go)) continue;
+                    var brush = go.GetComponent<Brush>();
+                    var shape = BrushHooks.LocalShape(brush, out _);
+                    if (shape == null) continue;
+                    var local = inverse * BrushGeometry.LocalToWorld(brush);
+                    foreach (var vertex in shape.vertices)
+                    {
+                        var point = local.MultiplyPoint3x4(vertex);
+                        if (combined is Bounds bounds) { bounds.Encapsulate(point); combined = bounds; }
+                        else combined = new Bounds(point, Vector3.zero);
+                    }
+                }
+                if (combined is Bounds size) DrawDimensions(size, frame);
+                return;
+            }
+            bool interactive = selected.Length == 1 && BrushCreateTool.Active == null &&
+                !BrushEditContext.IsActive && !PointGraphEditContext.IsActive && BrushShapeHandles.WorksWith(Tools.current);
+            foreach (var go in selected)
             {
                 if (!go.scene.IsValid() || !stage.Contains(go) || SceneVisibilityManager.instance.IsHidden(go)) continue;
                 if (go.TryGetComponent<Brush>(out var brush))
                 {
                     if (BrushHooks.LocalShape(brush, out var bounds) != null)
-                        DrawDimensions(bounds, BrushGeometry.LocalToWorld(brush));
+                        DrawDimensions(bounds, BrushGeometry.LocalToWorld(brush), true, interactive ? brush : null);
                     continue;
                 }
+                if (selected.Length == 1 && go.TryGetComponent<FloorPlan>(out var plan) && BrushPlanDimensionFields.Draw(plan))
+                    continue;
+                if (Event.current.type != EventType.Repaint) continue;
                 if (go.TryGetComponent<PointGraph>(out var graph))
                     DrawPathLengths(graph);
                 DrawObjectBounds(go);

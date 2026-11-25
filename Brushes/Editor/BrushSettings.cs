@@ -71,7 +71,7 @@ namespace CsgBrush.Editor
         public bool showGenerated = false;
         [Tooltip("Показывает вычитающие браши полупрозрачным красным объёмом. Так их можно выбрать, даже если они полностью вырезали геометрию.")]
         public bool showCuts = false;
-        internal const string DimensionsTooltip = "Показывает размеры при построении и у каждого выделенного объекта в окне Scene. Значения приведены в единицах проекта с учётом масштаба. Отключите, чтобы скрыть подписи.";
+        internal const string DimensionsTooltip = "Размеры в метрах в окне сцены. Щёлкните по размеру выделенного браша, введите число и нажмите Enter. Esc отменяет ввод.";
         [Tooltip(DimensionsTooltip)]
         public bool showDimensions = true;
         [Tooltip("Позволяет менять форму выделенного браша перетаскиванием его сторон.")]

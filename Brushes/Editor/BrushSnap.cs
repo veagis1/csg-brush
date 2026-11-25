@@ -53,7 +53,15 @@ namespace CsgBrush.Editor
         }
 
         /// <summary>A brush's snapped size: grid multiples, except a door's or window's, which is its own.</summary>
-        public static Vector3 SnapBrushSize(Brush brush, Vector3 size, float grid) => brush.IsOpening ? size : SnapSize(size, grid);
+        public static Vector3 SnapBrushSize(Brush brush, Vector3 size, float grid)
+        {
+            if (brush.IsOpening) return size;
+            var snapped = SnapSize(size, grid);
+            for (int axis = 0; axis < 3; axis++)
+                if (brush.exactSizeMeters[axis] > 0f && Mathf.Approximately(size[axis], brush.exactSizeMeters[axis]))
+                    snapped[axis] = size[axis];
+            return snapped;
+        }
 
         /// <summary>
         /// A brush's snapped position by its <see cref="Brush.gridSnap"/>: Shape puts the lowest corner of its world bounds (its
@@ -63,9 +71,22 @@ namespace CsgBrush.Editor
         public static Vector3 SnapBrushPosition(Brush brush, Vector3 worldPosition, Vector3 size, Quaternion worldRotation, float grid)
         {
             if (grid <= 0f) return worldPosition;
-            if (brush.gridSnap == GridSnap.Pivot || brush.HasParametricSize) return Round(worldPosition, grid);
-            var min = ShapeMin(brush, size, worldRotation);
-            return Round(worldPosition + min, grid) - min;
+            bool local = BrushSurfaceGrid.TryMoveFrame(brush, out var frame);
+            Quaternion basis = local ? frame.Rotation : Quaternion.identity;
+            Vector3 origin = local ? frame.Origin : Vector3.zero;
+            var inverse = Quaternion.Inverse(basis);
+            var position = inverse * (worldPosition - origin);
+            var rotation = inverse * worldRotation;
+            var offset = brush.gridSnap == GridSnap.Pivot || brush.HasParametricSize
+                ? Vector3.zero : ShapeMin(brush, size, rotation);
+            return origin + basis * (Round(position + offset, grid) - offset);
+        }
+
+        static Quaternion SnapBrushRotation(Brush brush, Quaternion rotation, float step)
+        {
+            if (!BrushSurfaceGrid.TryMoveFrame(brush, out var frame)) return SnapRotation(rotation, step);
+            var basis = frame.Rotation;
+            return basis * SnapRotation(Quaternion.Inverse(basis) * rotation, step);
         }
 
         /// <summary>The lowest corner of the shape's world bounds relative to its transform, for a size and a rotation.</summary>
@@ -159,7 +180,7 @@ namespace CsgBrush.Editor
             size = SnapBrushSize(brush, size, grid);
             if ((size - brush.size).sqrMagnitude > kEpsilon * kEpsilon) { brush.size = size; changed = true; }
 
-            var rotation = SnapRotation(t.rotation, s.rotationSnapDegrees);
+            var rotation = SnapBrushRotation(brush, t.rotation, s.rotationSnapDegrees);
             if (Quaternion.Angle(rotation, t.rotation) > 1e-3f) { t.rotation = rotation; changed = true; }
 
             if (ShouldSnapPosition(brush, size, force)) // a rotation alone never moves the brush
@@ -196,11 +217,11 @@ namespace CsgBrush.Editor
             var t = brush.transform;
             bool changed = false;
             bool snapPosition = ShouldSnapPosition(brush, brush.size, force);
-            var rotation = SnapRotation(t.rotation, rotationStep);
+            var rotation = SnapBrushRotation(brush, t.rotation, rotationStep);
             if (Quaternion.Angle(rotation, t.rotation) > 1e-3f) { t.rotation = rotation; changed = true; }
             var desiredScale = CounterScale(t);
             if ((t.localScale - desiredScale).sqrMagnitude > kEpsilon * kEpsilon) { t.localScale = desiredScale; changed = true; }
-            var position = Round(t.position, grid);
+            var position = SnapBrushPosition(brush, t.position, brush.size, rotation, grid);
             if (snapPosition && (position - t.position).sqrMagnitude > kEpsilon * kEpsilon) { t.position = position; changed = true; }
             if (changed) BrushSync.NotifyTransformChanged(brush);
             ClearChanged(brush, t);
@@ -219,7 +240,7 @@ namespace CsgBrush.Editor
             var poly = brush.polyhedron;
             bool valid = poly != null && poly.IsValid;
             bool changed = false, scaled = false;
-            var rotation = SnapRotation(t.rotation, rotationStep);
+            var rotation = SnapBrushRotation(brush, t.rotation, rotationStep);
             if (Quaternion.Angle(rotation, t.rotation) > 1e-3f) { t.rotation = rotation; changed = true; }
             var desiredScale = CounterScale(t);
             if ((t.localScale - desiredScale).sqrMagnitude > kEpsilon * kEpsilon)
@@ -231,7 +252,8 @@ namespace CsgBrush.Editor
             if (!ShouldSnapPosition(brush, brush.size, force || scaled)) { FinishCustom(brush, t, changed); return changed; } // a rotation alone never moves it
             var position = SnapBrushPosition(brush, t.position, brush.size, rotation, grid);
             if ((position - t.position).sqrMagnitude > kEpsilon * kEpsilon) { t.position = position; changed = true; }
-            if (valid && brush.gridSnap == GridSnap.Shape && IsAxisAligned(rotation))
+            if (valid && brush.exactSizeMeters == Vector3.zero && brush.gridSnap == GridSnap.Shape && IsAxisAligned(rotation) &&
+                !BrushSurfaceGrid.TryMoveFrame(brush, out _))
             {
                 bool moved = false;
                 for (int i = 0; i < poly.vertices.Length; i++)
@@ -320,12 +342,12 @@ namespace CsgBrush.Editor
             var t = brush.transform;
             if (brush.IsPlaced) { BrushSync.NotifyTransformChanged(brush); t.hasChanged = false; return; } // no snapped preview: placed by its generator, or a door on its wall
             var R = t.rotation; var T = t.position; var lossy = t.lossyScale;
-            var Rs = SnapRotation(R, s.rotationSnapDegrees);
+            var Rs = SnapBrushRotation(brush, R, s.rotationSnapDegrees);
             bool known = s_Accepted.TryGetValue(brush, out var last);
             bool moved = !known || (T - last.position).sqrMagnitude > kEpsilon * kEpsilon; // a rotation alone is shown in place
             if (brush.HasParametricSize)
             {
-                s_Preview[brush] = (Matrix4x4.TRS(moved ? Round(T, grid) : T, Rs, Vector3.one), Vector3.one);
+                s_Preview[brush] = (Matrix4x4.TRS(moved ? SnapBrushPosition(brush, T, brush.size, Rs, grid) : T, Rs, Vector3.one), Vector3.one);
                 BrushSync.NotifyTransformChanged(brush);
                 t.hasChanged = false;
                 return;
@@ -416,17 +438,18 @@ namespace CsgBrush.Editor
             if (brush.IsPlaced) return false;
             if (brush.shape == BrushShape.Custom || brush.HasParametricSize)
             {
-                if (Quaternion.Angle(SnapRotation(t.rotation, s.rotationSnapDegrees), t.rotation) > 1e-3f) return true;
+                if (Quaternion.Angle(SnapBrushRotation(brush, t.rotation, s.rotationSnapDegrees), t.rotation) > 1e-3f) return true;
                 if ((t.lossyScale - Vector3.one).sqrMagnitude > 1e-4f) return true;
                 if ((SnapBrushPosition(brush, t.position, brush.size, t.rotation, grid) - t.position).sqrMagnitude > kEpsilon * kEpsilon) return true;
-                if (brush.HasParametricSize || brush.gridSnap != GridSnap.Shape || !IsAxisAligned(t.rotation)) return false;
+                if (brush.HasParametricSize || brush.exactSizeMeters != Vector3.zero || brush.gridSnap != GridSnap.Shape ||
+                    !IsAxisAligned(t.rotation) || BrushSurfaceGrid.TryMoveFrame(brush, out _)) return false;
                 var poly = brush.polyhedron;
                 if (poly == null || !poly.IsValid) return false;
                 foreach (var v in poly.vertices) { var w = t.TransformPoint(v); if ((Round(w, grid) - w).sqrMagnitude > kEpsilon * kEpsilon) return true; }
                 return false;
             }
             if ((SnapBrushSize(brush, brush.size, grid) - brush.size).sqrMagnitude > kEpsilon * kEpsilon) return true;
-            if (Quaternion.Angle(SnapRotation(t.rotation, s.rotationSnapDegrees), t.rotation) > 1e-3f) return true;
+            if (Quaternion.Angle(SnapBrushRotation(brush, t.rotation, s.rotationSnapDegrees), t.rotation) > 1e-3f) return true;
             if ((t.lossyScale - Vector3.one).sqrMagnitude > 1e-4f) return true;
             return (SnapBrushPosition(brush, t.position, brush.size, t.rotation, grid) - t.position).sqrMagnitude > kEpsilon * kEpsilon;
         }

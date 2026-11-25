@@ -41,6 +41,8 @@ namespace CsgBrush.Colliders.Editor
             public List<ConvexPolytope> remove;
             /// <summary>What the pieces belong to (the brush): its pieces are kept between builds while its key holds.</summary>
             public object owner;
+            /// <summary>Recipients of an addressed cutter. Null uses the input order.</summary>
+            public HashSet<object> addressedRecipients;
             /// <summary>Identity of <see cref="add"/> and <see cref="remove"/> (shape and pose): equal keys mean equal parts.</summary>
             public int key;
         }
@@ -202,8 +204,11 @@ namespace CsgBrush.Colliders.Editor
                     if (!trigger)
                         foreach (int j in cutters)
                         {
-                            if (j <= i || inputs[j].layer != input.layer || !BoundsOf(j).Intersects(BoundsOf(i))) continue; // a subtract carves only what is above it
-                            mine.Add(j); key = key * 1000003 + inputs[j].key;
+                            var cutter = inputs[j];
+                            if (cutter.addressedRecipients != null ? !cutter.addressedRecipients.Contains(input.owner ?? input) : j <= i)
+                                continue;
+                            if (cutter.layer != input.layer || !BoundsOf(j).Intersects(BoundsOf(i))) continue;
+                            mine.Add(j); key = key * 1000003 + cutter.key;
                         }
                 }
                 var owner = input.owner ?? input;

@@ -41,6 +41,8 @@ namespace CsgBrush
             public bool ceiling;
             [InspectorName("Материал потолка")]
             public Material ceilingMaterial;
+            [InspectorName("Своя высота, м")]
+            public float height;
         }
 
         /// <summary>The walls, by the ids of their two points (the graph's links).</summary>
@@ -52,9 +54,9 @@ namespace CsgBrush
         [HideInInspector] public bool closed;
 
         [Header("Стены")]
-        [InspectorName("Толщина наружных стен, м"), Tooltip("Толщина наружных стен здания в метрах. При увеличении стены занимают больше места.")] public float wallThickness = 0.2f;
-        [InspectorName("Толщина внутренних стен, м"), Tooltip("Толщина внутренних и отдельно стоящих стен в метрах. При увеличении стена шире по обе стороны линии.")] public float interiorWallThickness = 0.1f;
-        [InspectorName("Высота стен, м"), Tooltip("Высота стены от уровня плана, в метрах.")] public float wallHeight = 3f;
+        [InspectorName("Открытые и внутренние, м"), Tooltip("Толщина отдельной стены, открытой ломаной и перегородки в метрах. Половина толщины по каждую сторону линии. Минимум 0,001 м. Своя толщина участка имеет приоритет.")] public float interiorWallThickness = 0.1f;
+        [InspectorName("Наружный контур, м"), Tooltip("Толщина наружной стены замкнутой комнаты в метрах. Минимум 0,001 м. Положение относительно линии задаётся ниже. Своя толщина участка имеет приоритет.")] public float wallThickness = 0.2f;
+        [InspectorName("Высота по умолчанию, м"), Tooltip("Высота комнат и открытых стен от уровня плана, в метрах. Её можно переопределить у комнаты и участка стены. Минимум 0,001 м.")] public float wallHeight = 3f;
         [InspectorName("Положение наружной стены"), Tooltip("Положение наружных стен относительно начерченной линии. Внутренние стены всегда центрируются на линии.")] public Side side = Side.Outside;
         [InspectorName("Материал стен"), Tooltip("Пустое поле использует материал проекта по умолчанию.")] public Material wallMaterial;
 
@@ -110,6 +112,8 @@ namespace CsgBrush
             public float Length => path != null ? length : (b - a).magnitude;
             public float Thickness => outer - inner;
             public bool Curved => path != null && path.Length > 2;
+            public float height;
+            public float sharedRoomHeight;
 
             /// <summary>A place on the wall's line a distance from a (clamped), its direction there and its outward normal there.</summary>
             public void At(float distance, out Vector2 point, out Vector2 dir, out Vector2 normal)
@@ -167,6 +171,10 @@ namespace CsgBrush
             public int settings;
             public bool floor, ceiling;
             public Material floorMaterial, ceilingMaterial;
+            public float height;
+            public float ownHeight;
+            /// <summary>Area inside the wall axes in square metres.</summary>
+            public float area;
         }
 
         public override int Key()
@@ -174,7 +182,7 @@ namespace CsgBrush
             EnsureGraph();
             unchecked
             {
-                int h = 17;
+                int h = 18; // Refresh previously generated walls with their source link ids.
                 h = GraphKey(h);
                 foreach (var r in rooms)
                 {
@@ -182,6 +190,7 @@ namespace CsgBrush
                     h = h * 31 + (r.floor ? 1 : 2) + (r.ceiling ? 4 : 8);
                     h = h * 31 + (r.floorMaterial != null ? r.floorMaterial.GetHashCode() : 0);
                     h = h * 31 + (r.ceilingMaterial != null ? r.ceilingMaterial.GetHashCode() : 0);
+                    if (r.height != 0f) h = h * 31 + Mathf.RoundToInt(r.height * 1e5f);
                 }
                 h = h * 31 + Mathf.RoundToInt(wallThickness * 1e5f);
                 h = h * 31 + Mathf.RoundToInt(interiorWallThickness * 1e5f);
@@ -209,6 +218,18 @@ namespace CsgBrush
         /// <summary>The walls, in the order of <see cref="walls"/>.</summary>
         public void Walls(List<Wall> into) { into.Clear(); into.AddRange(Analyze().walls); }
 
+        [Flags]
+        public enum WallKind { None = 0, Open = 1, Interior = 2, Exterior = 4 }
+
+        /// <summary>A drawn link can cross a room boundary and contain pieces of more than one kind.</summary>
+        public WallKind WallKinds(int link)
+        {
+            var kind = WallKind.None;
+            foreach (var piece in Analyze().pieces)
+                if (piece.wall == link) kind |= piece.kind;
+            return kind;
+        }
+
         /// <summary>The rooms: every area the walls enclose.</summary>
         public void Rooms(List<Room> into) { into.Clear(); into.AddRange(Analyze().rooms); }
 
@@ -220,7 +241,7 @@ namespace CsgBrush
                 var s = rooms[room.settings];
                 // a room split off another one gets settings of its own
                 if (new HashSet<int>(s.boundary).SetEquals(room.boundary)) return s;
-                var copy = new RoomSettings { boundary = new List<int>(room.boundary), floor = s.floor, floorMaterial = s.floorMaterial, ceiling = s.ceiling, ceilingMaterial = s.ceilingMaterial };
+                var copy = new RoomSettings { boundary = new List<int>(room.boundary), floor = s.floor, floorMaterial = s.floorMaterial, ceiling = s.ceiling, ceilingMaterial = s.ceilingMaterial, height = s.height };
                 rooms.Add(copy);
                 return copy;
             }
@@ -232,29 +253,7 @@ namespace CsgBrush
         public override void Describe(List<BrushSpec> into)
         {
             var an = Analyze();
-            float h = wallHeight;
-            // wall pieces: their ends meet at the points, cut where they meet another wall
-            var corners = EndCorners(an, out var caps);
-            for (int p = 0; p < an.pieces.Count; p++)
-            {
-                var pc = an.pieces[p];
-                var ea = corners[2 * p]; var eb = corners[2 * p + 1];
-                var poly = Slab(new[] { ea.left, eb.right, eb.left, ea.right }, 0f, h);
-                if (poly == null) // a cut corner folded the wall: plain square ends
-                {
-                    var n = Normal(pc.b - pc.a);
-                    poly = Slab(new[] { pc.a + n * pc.lo, pc.b + n * pc.lo, pc.b + n * pc.hi, pc.a + n * pc.hi }, 0f, h);
-                }
-                if (poly == null) continue;
-                string name = "Wall " + (pc.wall + 1) + (an.piecesOfWall[pc.wall] > 1 ? "." + (pc.part + 1) : "");
-                into.Add(new BrushSpec { name = name, operation = BrushOperation.Add, polyhedron = poly, material = wallMaterial });
-            }
-            int junction = 0;
-            foreach (var cap in caps)
-            {
-                var poly = Slab(cap, 0f, h);
-                if (poly != null) into.Add(new BrushSpec { name = "Junction " + (++junction), operation = BrushOperation.Add, polyhedron = poly, material = wallMaterial });
-            }
+            DescribeWalls(an, into);
             // floors and ceilings: per room, out to the outer face of outside walls and to the middle of the others
             for (int r = 0; r < an.rooms.Count; r++)
             {
@@ -268,11 +267,83 @@ namespace CsgBrush
                 }
                 if (room.ceiling)
                 {
+                    float h = room.height;
                     var slab = Slab(outline, h, h + ceilingThickness) ?? Slab(room.polygon, h, h + ceilingThickness);
                     if (slab != null) into.Add(new BrushSpec { name = "Ceiling " + (r + 1), operation = BrushOperation.Add, polyhedron = slab, material = room.ceilingMaterial });
                 }
             }
         }
+
+        void DescribeWalls(Analysis an, List<BrushSpec> into)
+        {
+            var corners = new List<(float bottom, EndCorner corner)>[an.pieces.Count * 2];
+            for (int i = 0; i < corners.Length; i++) corners[i] = new List<(float, EndCorner)>();
+            var caps = new List<(Vector2[] outline, float bottom, float top)>();
+            foreach (var node in an.nodes)
+            {
+                var heights = new SortedSet<float>();
+                foreach (var end in node.ends) heights.Add(an.pieces[end.piece].height);
+                float bottom = 0f;
+                foreach (var top in heights)
+                {
+                    var ends = node.ends.FindAll(end => an.pieces[end.piece].height >= top);
+                    var profile = EndCorners(an, node, ends, out var cap);
+                    for (int i = 0; i < ends.Count; i++)
+                    {
+                        var end = ends[i];
+                        var list = corners[2 * end.piece + (end.atStart ? 0 : 1)];
+                        var current = profile[i];
+                        if (list.Count == 0 || !SameCorner(list[list.Count - 1].corner, current))
+                            list.Add((bottom, current));
+                    }
+                    if (cap != null) caps.Add((cap, bottom, top));
+                    bottom = top;
+                }
+            }
+            for (int p = 0; p < an.pieces.Count; p++)
+            {
+                var pc = an.pieces[p];
+                var start = corners[2 * p];
+                var end = corners[2 * p + 1];
+                int a = 0, b = 0, layer = 0;
+                float bottom = 0f;
+                string name = "Wall " + (pc.wall + 1) + (an.piecesOfWall[pc.wall] > 1 ? "." + (pc.part + 1) : "");
+                var link = walls[pc.wall];
+                while (bottom < pc.height)
+                {
+                    float nextA = a + 1 < start.Count ? start[a + 1].bottom : pc.height;
+                    float nextB = b + 1 < end.Count ? end[b + 1].bottom : pc.height;
+                    float top = Mathf.Min(nextA, nextB);
+                    var ea = start[a].corner;
+                    var eb = end[b].corner;
+                    var poly = Slab(new[] { ea.left, eb.right, eb.left, ea.right }, bottom, top);
+                    if (poly == null) // a cut corner folded the wall: plain square ends
+                    {
+                        var n = Normal(pc.b - pc.a);
+                        poly = Slab(new[] { pc.a + n * pc.lo, pc.b + n * pc.lo, pc.b + n * pc.hi, pc.a + n * pc.hi }, bottom, top);
+                    }
+                    if (poly != null)
+                        into.Add(new BrushSpec
+                        {
+                            name = layer == 0 ? name : name + " (" + (layer + 1) + ")",
+                            operation = BrushOperation.Add, polyhedron = poly, material = wallMaterial,
+                            wallStartId = link.start, wallEndId = link.end
+                        });
+                    if (nextA == top) a++;
+                    if (nextB == top) b++;
+                    layer++;
+                    bottom = top;
+                }
+            }
+            int junction = 0;
+            foreach (var cap in caps)
+            {
+                var poly = Slab(cap.outline, cap.bottom, cap.top);
+                if (poly != null) into.Add(new BrushSpec { name = "Junction " + (++junction), operation = BrushOperation.Add, polyhedron = poly, material = wallMaterial });
+            }
+        }
+
+        static bool SameCorner(EndCorner a, EndCorner b) => a.left == b.left && a.right == b.right;
 
         // ------------------------------------------------------------------ analysis
 
@@ -285,7 +356,9 @@ namespace CsgBrush
             public Vector2 a, b;
             /// <summary>Offsets of its two faces from the line along its right normal (lo below hi).</summary>
             public float lo, hi;
+            public float height, sharedRoomHeight;
             public bool exterior;
+            public WallKind kind;
             /// <summary>For an outside wall: the outside of the building is on the right of a to b.</summary>
             public bool outsideRight;
         }
@@ -396,9 +469,16 @@ namespace CsgBrush
             {
                 var pc = an.pieces[p];
                 var n = Normal(pc.b - pc.a); var mid = (pc.a + pc.b) * 0.5f;
-                bool right = InRoom(an, mid + n * 1e-3f), left = InRoom(an, mid - n * 1e-3f);
+                int rightRoom = RoomAt(an, mid + n * 1e-3f), leftRoom = RoomAt(an, mid - n * 1e-3f);
+                bool right = rightRoom >= 0, left = leftRoom >= 0;
                 pc.exterior = right != left;
+                pc.kind = pc.exterior ? WallKind.Exterior : right ? WallKind.Interior : WallKind.Open;
                 pc.outsideRight = !right;
+                float roomHeight = Mathf.Max(right ? an.rooms[rightRoom].height : 0f, left ? an.rooms[leftRoom].height : 0f);
+                if (right && left && rightRoom != leftRoom) pc.sharedRoomHeight = roomHeight;
+                float ownHeight = walls[pc.wall].height;
+                if (ownHeight > 0f) ownHeight = Mathf.Max(ownHeight, pc.sharedRoomHeight);
+                pc.height = Mathf.Max(0.001f, ownHeight > 0f ? ownHeight : roomHeight > 0f ? roomHeight : wallHeight);
                 float t = walls[pc.wall].thickness > 0f ? walls[pc.wall].thickness : pc.exterior ? wallThickness : interiorWallThickness;
                 if (!pc.exterior || side == Side.Centered) { pc.lo = -0.5f * t; pc.hi = 0.5f * t; }
                 else
@@ -414,7 +494,14 @@ namespace CsgBrush
                 int ia = PointIndex(walls[i].start), ib = PointIndex(walls[i].end);
                 var a = P2(points[ia]); var b = P2(points[ib]);
                 Piece longest = null;
-                foreach (var pc in an.pieces) if (pc.wall == i && (longest == null || (pc.b - pc.a).sqrMagnitude > (longest.b - longest.a).sqrMagnitude)) longest = pc;
+                float height = 0f, sharedRoomHeight = 0f;
+                foreach (var pc in an.pieces)
+                {
+                    if (pc.wall != i) continue;
+                    if (longest == null || (pc.b - pc.a).sqrMagnitude > (longest.b - longest.a).sqrMagnitude) longest = pc;
+                    height = Mathf.Max(height, pc.height);
+                    sharedRoomHeight = Mathf.Max(sharedRoomHeight, pc.sharedRoomHeight);
+                }
                 var dir = (b - a).sqrMagnitude > 0f ? (b - a).normalized : Vector2.right;
                 var n = new Vector2(dir.y, -dir.x);
                 float t0 = walls[i].thickness > 0f ? walls[i].thickness : interiorWallThickness;
@@ -441,7 +528,7 @@ namespace CsgBrush
                 var curve = Curve(i); var path2 = new Vector2[curve.Length];
                 float length = 0f;
                 for (int k = 0; k < curve.Length; k++) { path2[k] = P2(curve[k]); if (k > 0) length += (path2[k] - path2[k - 1]).magnitude; }
-                an.walls.Add(new Wall { index = i, startId = walls[i].start, endId = walls[i].end, a = a, b = b, direction = dir, outward = outward, inner = inner, outer = outer, exterior = exterior, path = path2, length = length, outwardLeft = flip });
+                an.walls.Add(new Wall { index = i, startId = walls[i].start, endId = walls[i].end, a = a, b = b, direction = dir, outward = outward, inner = inner, outer = outer, exterior = exterior, path = path2, length = length, outwardLeft = flip, height = height, sharedRoomHeight = sharedRoomHeight });
             }
             return an;
         }
@@ -486,7 +573,8 @@ namespace CsgBrush
                             removed = true;
                         }
                 }
-                if (loop.Count < 3 || Area(an, loop, From) < 1e-6f) continue;
+                float area = Area(an, loop, From);
+                if (loop.Count < 3 || area < 1e-6f) continue;
                 var poly = new Vector2[loop.Count]; var ids = new List<int>(); var edges = new List<(int, bool)>();
                 for (int i = 0; i < loop.Count; i++)
                 {
@@ -495,7 +583,7 @@ namespace CsgBrush
                     if (node.id >= 0) ids.Add(node.id);
                     edges.Add((loop[i] >> 1, (loop[i] & 1) == 0));
                 }
-                an.rooms.Add(new Room { polygon = poly, boundary = ids.ToArray(), settings = -1 });
+                an.rooms.Add(new Room { polygon = poly, boundary = ids.ToArray(), settings = -1, area = area });
                 an.roomEdges.Add(edges);
             }
             AssignSettings(an);
@@ -537,8 +625,10 @@ namespace CsgBrush
                 {
                     var st = rooms[room.settings];
                     room.floor = st.floor; room.floorMaterial = st.floorMaterial; room.ceiling = st.ceiling; room.ceilingMaterial = st.ceilingMaterial;
+                    room.ownHeight = st.height;
                 }
                 else { room.floor = floor; room.floorMaterial = floorMaterial; room.ceiling = ceiling; room.ceilingMaterial = ceilingMaterial; }
+                room.height = Mathf.Max(0.001f, room.ownHeight > 0f ? room.ownHeight : wallHeight);
                 an.rooms[r] = room;
             }
         }
@@ -550,10 +640,18 @@ namespace CsgBrush
             return a * 0.5f;
         }
 
-        static bool InRoom(Analysis an, Vector2 p)
+        static int RoomAt(Analysis an, Vector2 p)
         {
-            foreach (var r in an.rooms) if (Contains(r.polygon, p)) return true;
-            return false;
+            int found = -1;
+            float smallest = float.PositiveInfinity;
+            for (int i = 0; i < an.rooms.Count; i++)
+            {
+                var room = an.rooms[i];
+                if (room.area >= smallest || !Contains(room.polygon, p)) continue;
+                found = i;
+                smallest = room.area;
+            }
+            return found;
         }
 
         /// <summary>Is a point inside a polygon (even-odd rule)?</summary>
@@ -575,48 +673,42 @@ namespace CsgBrush
         /// sharp), the faces end square. Every node joining three or more walls, or with a square end among two, gets a cap
         /// filling the space between the ends.
         /// </summary>
-        EndCorner[] EndCorners(Analysis an, out List<Vector2[]> caps)
+        static EndCorner[] EndCorners(Analysis an, Node node, List<(int piece, bool atStart, float angle)> ends, out Vector2[] cap)
         {
-            var result = new EndCorner[an.pieces.Count * 2];
-            caps = new List<Vector2[]>();
-            foreach (var node in an.nodes)
+            int k = ends.Count;
+            var result = new EndCorner[k];
+            cap = null;
+            var dir = new Vector2[k]; var offL = new float[k]; var offR = new float[k];
+            for (int i = 0; i < k; i++)
             {
-                int k = node.ends.Count;
-                if (k == 0) continue;
-                var dir = new Vector2[k]; var offL = new float[k]; var offR = new float[k];
+                var (piece, atStart, _) = ends[i];
+                var pc = an.pieces[piece];
+                var d = (pc.b - pc.a).normalized;
+                if (atStart) { dir[i] = d; offR[i] = pc.hi; offL[i] = -pc.lo; }
+                else { dir[i] = -d; offR[i] = -pc.lo; offL[i] = pc.hi; }
+            }
+            var left = new Vector2[k]; var right = new Vector2[k];
+            for (int i = 0; i < k; i++) { var n = new Vector2(dir[i].y, -dir[i].x); right[i] = node.p + n * offR[i]; left[i] = node.p - n * offL[i]; }
+            bool square = false;
+            if (k >= 2)
                 for (int i = 0; i < k; i++)
                 {
-                    var (piece, atStart, _) = node.ends[i];
-                    var pc = an.pieces[piece];
-                    var d = (pc.b - pc.a).normalized;
-                    if (atStart) { dir[i] = d; offR[i] = pc.hi; offL[i] = -pc.lo; } else { dir[i] = -d; offR[i] = -pc.lo; offL[i] = pc.hi; }
+                    int j = (i + 1) % k;
+                    var c = Cross(left[i], dir[i], right[j], dir[j], out bool ok);
+                    float limit = 4f * Mathf.Max(Mathf.Abs(offL[i]), Mathf.Abs(offR[j]), 1e-3f);
+                    if (ok && (c - node.p).magnitude <= limit + Eps) { left[i] = c; right[j] = c; }
+                    else square = true;
                 }
-                var left = new Vector2[k]; var right = new Vector2[k];
-                for (int i = 0; i < k; i++) { var n = new Vector2(dir[i].y, -dir[i].x); right[i] = node.p + n * offR[i]; left[i] = node.p - n * offL[i]; }
-                bool square = false;
-                if (k >= 2)
-                    for (int i = 0; i < k; i++)
-                    {
-                        int j = (i + 1) % k;
-                        var c = Cross(left[i], dir[i], right[j], dir[j], out bool ok);
-                        float limit = 4f * Mathf.Max(Mathf.Abs(offL[i]), Mathf.Abs(offR[j]), 1e-3f);
-                        if (ok && (c - node.p).magnitude <= limit + Eps) { left[i] = c; right[j] = c; }
-                        else square = true;
-                    }
+            for (int i = 0; i < k; i++)
+                result[i] = new EndCorner { left = left[i], right = right[i] };
+            if (k >= 3 || (k == 2 && square))
+            {
+                var polygon = new List<Vector2>();
                 for (int i = 0; i < k; i++)
-                {
-                    var (piece, atStart, _) = node.ends[i];
-                    result[2 * piece + (atStart ? 0 : 1)] = new EndCorner { left = left[i], right = right[i] };
-                }
-                if (k >= 3 || (k == 2 && square))
-                {
-                    var cap = new List<Vector2>();
-                    for (int i = 0; i < k; i++)
-                        foreach (var q in new[] { right[i], left[i] })
-                            if (cap.Count == 0 || (cap[cap.Count - 1] - q).sqrMagnitude > Eps * Eps) cap.Add(q);
-                    if (cap.Count > 1 && (cap[0] - cap[cap.Count - 1]).sqrMagnitude <= Eps * Eps) cap.RemoveAt(cap.Count - 1);
-                    if (cap.Count >= 3) caps.Add(cap.ToArray());
-                }
+                    foreach (var q in new[] { right[i], left[i] })
+                        if (polygon.Count == 0 || (polygon[polygon.Count - 1] - q).sqrMagnitude > Eps * Eps) polygon.Add(q);
+                if (polygon.Count > 1 && (polygon[0] - polygon[polygon.Count - 1]).sqrMagnitude <= Eps * Eps) polygon.RemoveAt(polygon.Count - 1);
+                if (polygon.Count >= 3) cap = polygon.ToArray();
             }
             return result;
         }
@@ -647,15 +739,24 @@ namespace CsgBrush
                 // the room is on the left; the far face of an outside wall is on the right
                 off[i] = pc.exterior ? (forward ? pc.hi : -pc.lo) : 0f;
             }
-            var outline = new Vector2[n];
+            var outline = new List<Vector2>(n);
             for (int i = 0; i < n; i++)
             {
                 int prev = (i - 1 + n) % n;
                 var np = new Vector2(dir[prev].y, -dir[prev].x); var ni = new Vector2(dir[i].y, -dir[i].x);
                 var c = Cross(from[prev] + np * off[prev], dir[prev], from[i] + ni * off[i], dir[i], out bool ok);
-                outline[i] = ok && (c - from[i]).magnitude <= 4f * Mathf.Max(Mathf.Abs(off[prev]), Mathf.Abs(off[i]), 1e-3f) + Eps ? c : from[i] + ni * off[i];
+                if (ok && (c - from[i]).magnitude <= 4f * Mathf.Max(Mathf.Abs(off[prev]), Mathf.Abs(off[i]), 1e-3f) + Eps)
+                    outline.Add(c);
+                else
+                {
+                    var incoming = from[i] + np * off[prev];
+                    var outgoing = from[i] + ni * off[i];
+                    if (!ok && Vector2.Dot(dir[prev], dir[i]) > 0f && (incoming - outgoing).sqrMagnitude > Eps * Eps)
+                        outline.Add(incoming);
+                    outline.Add(outgoing);
+                }
             }
-            return outline;
+            return outline.ToArray();
         }
 
         /// <summary>A slab over a floor outline (x, z; convex or not) from one height to another; null when the outline crosses itself.</summary>

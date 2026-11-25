@@ -214,7 +214,9 @@ namespace CsgBrush.Editor
         /// scenes costs milliseconds in a large level, so the answer is kept until a brush joins or leaves, the hierarchy
         /// or a group changes (<see cref="InvalidateGrouping"/>), or one of its groups is destroyed. Do not modify it.
         /// </summary>
-        public static Dictionary<BrushGroup, List<Brush>> BrushesByModel()
+        public static Dictionary<BrushGroup, List<Brush>> BrushesByModel() => BrushesByModel(true);
+
+        internal static Dictionary<BrushGroup, List<Brush>> BrushesByModel(bool createDefaultGroups)
         {
             if (s_ByModel != null && s_ByModelVersion == Brush.ActiveVersion)
             {
@@ -230,7 +232,8 @@ namespace CsgBrush.Editor
                 if (t.TryGetComponent<Brush>(out var b) && b.enabled && t.gameObject.activeInHierarchy)
                 {
                     var target = current;
-                    if (target == null && !prefab) target = sceneDefault ??= DefaultModel(scene, true); // each scene's own automatic group
+                    if (target == null && !prefab && createDefaultGroups) target = sceneDefault ??= DefaultModel(scene, true);
+                    if (target == null && !prefab) target = sceneDefault;
                     if (target != null)
                     {
                         if (!result.TryGetValue(target, out var list)) result[target] = list = new List<Brush>();
@@ -249,7 +252,7 @@ namespace CsgBrush.Editor
             }
             var stage = PrefabStageUtility.GetCurrentPrefabStage();
             if (stage != null && stage.prefabContentsRoot != null) Walk(stage.prefabContentsRoot.transform, null, stage.scene, true);
-            s_ByModel = result; s_ByModelVersion = Brush.ActiveVersion;
+            if (createDefaultGroups) { s_ByModel = result; s_ByModelVersion = Brush.ActiveVersion; }
             return result;
         }
 
@@ -260,7 +263,7 @@ namespace CsgBrush.Editor
         public static List<Brush> UncutBelow(Brush cutter)
         {
             var result = new List<Brush>();
-            if (cutter == null || cutter.operation != BrushOperation.Subtract) return result;
+            if (cutter == null || cutter.operation != BrushOperation.Subtract || cutter.addressedCut) return result;
             var byModel = BrushesByModel();
             var cutterModel = ModelOf(cutter);
             if (cutterModel == null || !byModel.TryGetValue(cutterModel, out var list)) return result;
@@ -299,6 +302,7 @@ namespace CsgBrush.Editor
             public List<int> pieceRecord = new List<int>();          // per additive piece: record index
             public List<string> pieceKeys = new List<string>();
             public List<List<int>> pieceCutters = new List<List<int>>(); // record indices of the cutters
+            public Dictionary<Brush, HashSet<object>> addressedRecipients = new Dictionary<Brush, HashSet<object>>();
             public List<PieceEntry> pieceEntries = new List<PieceEntry>(); // cached or built
             public List<bool> pieceBuilt = new List<bool>();
             public bool needMesh;
@@ -441,6 +445,17 @@ namespace CsgBrush.Editor
             // pieces: which cutters apply, and which pieces are already cached
             var subtracts = new List<int>();
             for (int i = 0; i < job.records.Count; i++) if (job.records[i].subtract) subtracts.Add(i);
+            foreach (int j in subtracts)
+            {
+                var cutter = job.records[j].brush;
+                if (!cutter.addressedCut) continue;
+                var scope = BrushCutTarget.Scope(cutter);
+                var recipients = new HashSet<object>();
+                foreach (var record in job.records)
+                    if (!record.subtract && scope.Contains(record.brush))
+                        recipients.Add(record.brush);
+                job.addressedRecipients.Add(cutter, recipients);
+            }
             var keyBuilder = new System.Text.StringBuilder();
             for (int i = 0; i < job.records.Count; i++)
             {
@@ -450,10 +465,12 @@ namespace CsgBrush.Editor
                 var cutters = new List<int>();
                 foreach (int j in subtracts)
                 {
-                    if (j <= i) continue; // a subtract cuts only the brushes above it
                     var c = job.records[j];
+                    bool addressed = job.addressedRecipients.TryGetValue(c.brush, out var recipients);
+                    if (addressed ? !recipients.Contains(r.brush) : j <= i) continue;
                     if (c.layer != r.layer || !Overlap(job, i, j)) continue; // each layer is combined on its own
                     cutters.Add(j); keyBuilder.Append('-').Append(c.key);
+                    if (addressed) keyBuilder.Append('@').Append(j);
                 }
                 string pieceKey = keyBuilder.ToString();
                 s_Pieces.TryGetValue(r.brush, out var pe);
@@ -794,7 +811,8 @@ namespace CsgBrush.Editor
                 }
                 if (r.solid.partsProblem != null && r.brush.problem == null) r.brush.problem = r.solid.partsProblem;
                 var info = Info(r.brush);
-                inputs.Add(new ConvexColliderBuilder.Input { name = info.name, subtract = r.subtract, kind = info.kind, fingerprint = info.fingerprint, layer = r.layer, add = r.solid.partsAdd, remove = r.solid.partsRemove, onPiece = info.onPiece, owner = r.brush, key = r.key });
+                job.addressedRecipients.TryGetValue(r.brush, out var recipients);
+                inputs.Add(new ConvexColliderBuilder.Input { name = info.name, subtract = r.subtract, kind = info.kind, fingerprint = info.fingerprint, layer = r.layer, add = r.solid.partsAdd, remove = r.solid.partsRemove, onPiece = info.onPiece, owner = r.brush, key = r.key, addressedRecipients = recipients });
             }
             var settings = model.GetComponent<ConvexColliderSettings>();
             if (settings == null) settings = model.gameObject.AddComponent<ConvexColliderSettings>();

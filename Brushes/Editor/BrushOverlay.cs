@@ -1,6 +1,8 @@
 using UnityEditor;
+using UnityEditor.EditorTools;
 using UnityEditor.Overlays;
 using UnityEditor.ShortcutManagement;
+using UnityEditor.Toolbars;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -9,12 +11,42 @@ namespace CsgBrush.Editor
     /// <summary>Scene view overlay: grid size and snap, the new brush's parameters while a Create tool is active, the edit mode toggle, lint.</summary>
     [Icon(BrushIcons.Folder + "Brush.png")]
     [Overlay(typeof(SceneView), "Brushes", "CSG Brush", "Brushes", true)]
-    public sealed class BrushOverlay : Overlay
+    public sealed class BrushOverlay : Overlay, ICreateHorizontalToolbar, ICreateVerticalToolbar
     {
         const float PreferredWidth = 315f, Gap = 4f;
 
         /// <summary>The panel's width: rows of buttons wrap to fit it.</summary>
         static float s_Width = PreferredWidth;
+
+        public OverlayToolbar CreateHorizontalToolbarContent() => CreateOperationToolbar();
+        public OverlayToolbar CreateVerticalToolbarContent() => CreateOperationToolbar();
+
+        static OverlayToolbar CreateOperationToolbar()
+        {
+            var toolbar = new OverlayToolbar();
+            toolbar.Add(new EditorToolbarButton("Блок", () => ToolManager.SetActiveTool<CreateBoxBrushTool>()));
+            foreach (var operation in new[] { BrushOperation.Add, BrushOperation.Subtract })
+            {
+                var button = new EditorToolbarButton(operation == BrushOperation.Add ? "+ добавить" : "- вычесть", () =>
+                {
+                    BrushCreateTool.ManualOperation = BrushCreateTool.ManualOperation == operation ? null : operation;
+                    SceneView.RepaintAll();
+                });
+                toolbar.Add(button);
+                button.schedule.Execute(() =>
+                {
+                    var tool = BrushCreateTool.Active;
+                    bool visible = tool != null && !BrushCreateTool.IsOpening(tool.Shape);
+                    button.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+                    button.SetEnabled(visible && !tool.Drawing);
+                    bool chosen = BrushCreateTool.ManualOperation == operation;
+                    button.style.borderBottomWidth = chosen ? 2f : StyleKeyword.Null;
+                    button.style.borderBottomColor = chosen ? new Color(0.20f, 0.75f, 0.82f) : StyleKeyword.Null;
+                }).Every(150);
+            }
+            toolbar.SetupChildrenAsButtonStrip();
+            return toolbar;
+        }
 
         public override VisualElement CreatePanelContent()
         {
@@ -112,6 +144,7 @@ namespace CsgBrush.Editor
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
 
+            BrushSurfaceGrid.DrawMenu();
             if (BrushCreateTool.Active != null) DrawNewBrush(s, BrushCreateTool.Active);
 
             // edit mode: one row, Edit brush toggle then Vertex / Edge / Face
@@ -206,7 +239,7 @@ namespace CsgBrush.Editor
             EditorGUI.BeginChangeCheck();
             if (!BrushCreateTool.IsOpening(shape)) // a door or window is always a cut
             {
-                s.newOperation = (BrushOperation)EditorGUILayout.EnumPopup(new GUIContent("Операция", "«Добавить» заполняет объём. «Вычесть» вырезает объём из брашей выше в иерархии."), s.newOperation);
+                tool.DrawOperationPanel();
                 s.newGridSnap = (GridSnap)EditorGUILayout.EnumPopup(new GUIContent("Привязка к сетке", "К сетке привязываются крайние вершины формы либо точка опоры. Привязку можно отключить."), s.newGridSnap);
             }
             var moduleTypes = BrushApi.ModuleTypes();

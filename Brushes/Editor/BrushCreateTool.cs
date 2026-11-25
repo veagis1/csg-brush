@@ -4,6 +4,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEditor.Overlays;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace CsgBrush.Editor
@@ -161,7 +162,24 @@ namespace CsgBrush.Editor
     public abstract class BrushCreateTool : EditorTool
     {
         /// <summary>Operation of the brushes drawn next (Project Settings > Brushes).</summary>
-        public static BrushOperation Operation { get => BrushSettings.instance.newOperation; set => BrushSettings.instance.newOperation = value; }
+        public static BrushOperation Operation
+        {
+            get => BrushSettings.instance.newOperation;
+            set { BrushSettings.instance.newOperation = value; ManualOperation = value; }
+        }
+
+        internal static BrushOperation? ManualOperation
+        {
+            get
+            {
+                int value = SessionState.GetInt("CsgBrush.Create.ManualOperation", -1);
+                return value < 0 ? null : (BrushOperation)value;
+            }
+            set => SessionState.SetInt("CsgBrush.Create.ManualOperation", value.HasValue ? (int)value.Value : -1);
+        }
+
+        internal static BrushOperation ResolveOperation(BrushOperation? manual, bool target, float inwardAxisDepth) =>
+            manual ?? (target && inwardAxisDepth < -0.0001f ? BrushOperation.Subtract : BrushOperation.Add);
 
         /// <summary>The Create tool that is active, if any.</summary>
         public static BrushCreateTool Active { get; private set; }
@@ -174,14 +192,118 @@ namespace CsgBrush.Editor
         State state;
         Vector3 origin, opposite, normal; Quaternion planeRotation; float height;
         float side; bool centred;
-        Vector3 hoverPoint; bool hoverValid;
-        FloorPlan wallPlan;
+        Vector3 hoverPoint, hoverNormal, surfaceNormal;
+        bool hoverValid, pickingTarget, hadDrawTarget, drawOnSurface;
+        BrushSurfaceGrid.Frame hoverGrid, drawGrid;
+        BrushCutTarget hoverTarget, drawTarget, selectedTarget;
+        BrushOperation? drawManual;
+        readonly BrushCutPreview cutPreview = new BrushCutPreview();
         int controlId;
         // Not cached: Unity keeps tool instances across domain reloads, and a cached GUIContent would keep an old tooltip.
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get(Shape.ToString()), Title);
 
-        public override void OnActivated() { state = State.Idle; Active = this; m_OpeningValid = false; }
-        public override void OnWillBeDeactivated() { state = State.Idle; if (Active == this) Active = null; }
+        public override void OnActivated() { ResetGesture(); Active = this; m_OpeningValid = false; }
+        public override void OnWillBeDeactivated() { ResetGesture(); if (Active == this) Active = null; }
+
+        internal bool Drawing => state != State.Idle;
+        BrushOperation DrawOperation => ResolveOperation(drawManual, hadDrawTarget,
+            height * Vector3.Dot(normal, surfaceNormal));
+
+        void ResetGesture()
+        {
+            if (controlId != 0 && GUIUtility.hotControl == controlId) GUIUtility.hotControl = 0;
+            state = State.Idle;
+            pickingTarget = hoverValid = false;
+            hoverTarget = drawTarget = default;
+            hoverGrid = drawGrid = default;
+        }
+
+        internal void DrawOperationPanel()
+        {
+            using (new EditorGUI.DisabledScope(Drawing))
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                var manual = ManualOperation;
+                if (GUILayout.Toggle(manual == BrushOperation.Add, new GUIContent("+ добавить",
+                        "Обычный объём. Повторный щелчок возвращает определение операции по направлению."),
+                        EditorStyles.miniButtonLeft) != (manual == BrushOperation.Add))
+                    ManualOperation = manual == BrushOperation.Add ? null : BrushOperation.Add;
+                if (GUILayout.Toggle(manual == BrushOperation.Subtract, new GUIContent("- вычесть",
+                        "Вырез в указанном объекте. Повторный щелчок возвращает определение операции по направлению."),
+                        EditorStyles.miniButtonRight) != (manual == BrushOperation.Subtract))
+                    ManualOperation = manual == BrushOperation.Subtract ? null : BrushOperation.Subtract;
+                if (manual != ManualOperation)
+                {
+                    pickingTarget = false;
+                    hoverValid = false;
+                    SceneView.RepaintAll();
+                }
+            }
+            if (ManualOperation != BrushOperation.Subtract || Drawing) return;
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                string title = selectedTarget.Valid ? "Цель: " + selectedTarget.Parent.name : "Выбрать цель";
+                if (GUILayout.Button(new GUIContent(title, "Укажите браш или стену. Без выбора цель берётся с грани начала жеста."),
+                        EditorStyles.miniButton))
+                {
+                    pickingTarget = true;
+                    hoverTarget = default;
+                    SceneView.RepaintAll();
+                }
+                if (selectedTarget.Valid && GUILayout.Button("Сбросить", EditorStyles.miniButton, GUILayout.ExpandWidth(false)))
+                {
+                    selectedTarget = default;
+                    pickingTarget = false;
+                    SceneView.RepaintAll();
+                }
+            }
+        }
+
+        void PickTarget(Event e)
+        {
+            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
+            {
+                pickingTarget = false;
+                e.Use();
+                SceneView.RepaintAll();
+                return;
+            }
+            if (e.type == EventType.Repaint) hoverTarget.Draw();
+            if (e.type != EventType.MouseMove && !(e.type == EventType.MouseDown && e.button == 0)) return;
+            var ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
+            hoverTarget = BrushCutTarget.FromBrush(BrushHooks.PickConstructionSurface(ray, out _, out _));
+            if (e.type == EventType.MouseDown && HandleUtility.nearestControl == controlId)
+            {
+                if (hoverTarget.Valid)
+                {
+                    selectedTarget = hoverTarget;
+                    pickingTarget = false;
+                }
+                e.Use();
+            }
+            SceneView.RepaintAll();
+        }
+
+        void UpdateHover(Vector2 mouse)
+        {
+            var ray = HandleUtility.GUIPointToWorldRay(mouse);
+            var surface = BrushHooks.PickConstructionSurface(ray, out var point, out var faceNormal);
+            var hit = point;
+            var workingNormal = faceNormal;
+            hoverValid = BrushSurfaceGrid.TryDrawingFrame(ray, surface, ref point, ref workingNormal, out hoverGrid) ||
+                (!BrushSurfaceGrid.HasHeld && (surface != null || FindGridPlane(ray, out point, out workingNormal)));
+            bool onSurface = surface != null && Mathf.Abs(Vector3.Dot(point - hit, faceNormal)) < 0.001f &&
+                Mathf.Abs(Vector3.Dot(workingNormal, faceNormal)) > 0.999f;
+            var selected = ManualOperation == BrushOperation.Subtract && selectedTarget.Valid &&
+                StageUtility.GetCurrentStageHandle().Contains(selectedTarget.Parent.gameObject);
+            hoverTarget = selected ? selectedTarget : onSurface ? BrushCutTarget.FromBrush(surface) : default;
+            if (ManualOperation == BrushOperation.Subtract && !hoverTarget.Valid) hoverValid = false;
+            if (!hoverValid) return;
+            surfaceNormal = onSurface ? faceNormal : Vector3.zero;
+            hoverNormal = hoverGrid.Valid || AlignsToSurface || onSurface ? workingNormal : BrushDraw.Cardinal(workingNormal);
+            hoverPoint = hoverGrid.Valid ? BrushDraw.SnapInPlane(point, hoverGrid.Origin, hoverGrid.Rotation, Grid) :
+                BrushDraw.OntoSurface(BrushDraw.SnapOnPlane(point, workingNormal, Grid), point, workingNormal);
+        }
 
         /// <summary>Step sizes and wall thickness for new brushes: the settings, or grid-derived defaults when left at 0.</summary>
         public static void NewBrushParameters(out float stepHeight, out float wallThickness)
@@ -260,17 +382,18 @@ namespace CsgBrush.Editor
 
         public override void OnToolGUI(EditorWindow window)
         {
-            if (!(window is SceneView)) return;
+            if (!(window is SceneView) || BrushSurfaceGrid.Picking) return;
             var e = Event.current;
             controlId = GUIUtility.GetControlID(FocusType.Passive);
             HandleUtility.AddDefaultControl(controlId);
             if (e.alt || Tools.viewToolActive) return;
             if (IsOpening(Shape)) { OpeningGUI(e); return; }
+            if (pickingTarget) { PickTarget(e); return; }
 
             if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
             {
                 if (state == State.Idle) ToolManager.RestorePreviousPersistentTool();
-                state = State.Idle; hoverValid = false; e.Use(); SceneView.RepaintAll(); return;
+                ResetGesture(); e.Use(); SceneView.RepaintAll(); return;
             }
             if (state == State.Height && e.type == EventType.KeyDown && (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter || e.keyCode == KeyCode.Space))
             {
@@ -282,25 +405,28 @@ namespace CsgBrush.Editor
                 case State.Idle:
                     if (e.type == EventType.MouseMove || e.type == EventType.MouseDown)
                     {
-                        hoverValid = FindPlane(e.mousePosition, out var p, out var n);
-                        if (hoverValid) { hoverPoint = BrushDraw.SnapOnPlane(p, n, Grid); if (AlignsToSurface) hoverPoint = BrushDraw.OntoSurface(hoverPoint, p, n); }
+                        UpdateHover(e.mousePosition);
                         if (e.type == EventType.MouseMove) SceneView.RepaintAll();
                     }
                     if (e.type == EventType.MouseDown && e.button == 0 && hoverValid && HandleUtility.nearestControl == controlId)
                     {
                         EditModeMouse.Take(controlId);
-                        FindPlane(e.mousePosition, out _, out normal);
-                        var pressed = BrushHooks.PickBrushSurface(e.mousePosition, out _, out _);
-                        wallPlan = pressed != null && Mathf.Abs(normal.y) < 0.5f ? pressed.generatedBy as FloorPlan : null; // drawn on a plan's wall: rides on it
-                        normal = AlignsToSurface ? normal.normalized : BrushDraw.Cardinal(normal); // on the grid, a brush stays square to the world
-                        planeRotation = BrushDraw.SurfaceRotation(normal);
+                        normal = hoverNormal;
+                        drawGrid = hoverGrid;
+                        drawTarget = hoverTarget;
+                        hadDrawTarget = hoverTarget.Valid;
+                        drawOnSurface = surfaceNormal != Vector3.zero;
+                        drawManual = ManualOperation;
+                        planeRotation = drawGrid.Valid ? drawGrid.Rotation : BrushDraw.SurfaceRotation(normal);
                         origin = hoverPoint; opposite = origin; height = 0f; side = 0f; centred = false; // a new brush starts at the default width, not the last one
                         state = State.Base; e.Use();
                     }
                     if (e.type == EventType.Repaint && hoverValid)
                     {
-                        Handles.color = Color.white;
-                        Handles.DotHandleCap(-1, hoverPoint, Quaternion.identity, HandleUtility.GetHandleSize(hoverPoint) * 0.04f, EventType.Repaint);
+                        if (!BrushSurfaceGrid.HasHeld) BrushSurfaceGrid.Draw(hoverGrid);
+                        if (ManualOperation == BrushOperation.Subtract) hoverTarget.Draw();
+                        using (new Handles.DrawingScope(Color.white))
+                            Handles.DotHandleCap(-1, hoverPoint, Quaternion.identity, HandleUtility.GetHandleSize(hoverPoint) * 0.04f, EventType.Repaint);
                     }
                     break;
 
@@ -309,7 +435,8 @@ namespace CsgBrush.Editor
                     {
                         var ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
                         var plane = new Plane(normal, origin);
-                        if (plane.Raycast(ray, out float t)) opposite = BrushDraw.SnapInPlane(ray.GetPoint(t), origin, planeRotation, Grid);
+                        if (plane.Raycast(ray, out float t))
+                            opposite = BrushDraw.SnapInPlane(ray.GetPoint(t), drawGrid.Valid ? drawGrid.Origin : origin, planeRotation, Grid);
                         e.Use(); SceneView.RepaintAll();
                     }
                     if (e.type == EventType.MouseUp && e.button == 0)
@@ -318,7 +445,7 @@ namespace CsgBrush.Editor
                         var local = Quaternion.Inverse(planeRotation) * (opposite - origin);
                         float min = Grid > 0f ? Grid * 0.5f : 0.05f;
                         bool tooSmall = IsRadial(Shape) || IsCentred(Shape) ? new Vector2(local.x, local.z).magnitude < min : Mathf.Abs(local.x) < min && Mathf.Abs(local.z) < min;
-                        if (tooSmall) { state = State.Idle; break; } // a click, not a drag
+                        if (tooSmall) { ResetGesture(); break; } // a click, not a drag
                         if (IsDirected(Shape)) { state = State.Width; side = 0f; centred = false; break; }
                         state = State.Height; height = 0f;
                     }
@@ -397,10 +524,18 @@ namespace CsgBrush.Editor
         /// <summary>The surface under the mouse: a brush face, else the Scene view grid (see <see cref="GridPlane"/>). Nothing past the grid's horizon.</summary>
         internal static bool FindPlane(Vector2 mouse, out Vector3 point, out Vector3 normal)
         {
-            if (BrushHooks.PickBrushSurface(mouse, out point, out normal) != null) return true;
+            var ray = HandleUtility.GUIPointToWorldRay(mouse);
+            var surface = BrushHooks.PickConstructionSurface(ray, out point, out normal);
+            if (BrushSurfaceGrid.TryDrawingFrame(ray, surface, ref point, ref normal, out _)) return true;
+            if (BrushSurfaceGrid.HasHeld) return false;
+            if (surface != null) return true;
+            return FindGridPlane(ray, out point, out normal);
+        }
+
+        static bool FindGridPlane(Ray ray, out Vector3 point, out Vector3 normal)
+        {
             var view = SceneView.lastActiveSceneView;
             if (view == null) { point = Vector3.zero; normal = Vector3.up; return false; }
-            var ray = HandleUtility.GUIPointToWorldRay(mouse);
             var plane = GridPlane(view);
             normal = plane.normal;
             if (plane.Raycast(ray, out float t) && t > 0f) { point = ray.GetPoint(t); return true; }
@@ -461,7 +596,7 @@ namespace CsgBrush.Editor
                 float yaw = -Mathf.Atan2(local.z, local.x) * Mathf.Rad2Deg;
                 if (radius < 1e-4f) yaw = 0f;
                 yaw = BrushSnap.Round(yaw, BrushSettings.instance.rotationSnapDegrees);
-                centre = origin;
+                centre = origin + normal * Mathf.Min(0f, height);
                 size = new Vector3(Mathf.Max(Grid, BrushSnap.Round(radius, Grid)), Mathf.Abs(height), 0f);
                 rotation = planeRotation * Quaternion.Euler(0f, yaw, 0f);
                 return;
@@ -476,24 +611,54 @@ namespace CsgBrush.Editor
 
         void DrawPreview()
         {
+            if (!BrushSurfaceGrid.HasHeld) BrushSurfaceGrid.Draw(drawGrid);
             CurrentPose(out var centre, out var size, out var rotation);
             var poly = BrushGeometry.ShapePolyhedron(Shape, CurrentParameters(size));
             var m = Matrix4x4.TRS(centre, rotation, Vector3.one);
-            Handles.color = Operation == BrushOperation.Subtract ? new Color(1f, 0.4f, 0.2f, 0.9f) : new Color(0.3f, 0.8f, 1f, 0.9f);
+            bool cut = DrawOperation == BrushOperation.Subtract;
+            Handles.color = cut ? new Color(1f, 0.4f, 0.2f, 0.9f) : new Color(0.3f, 0.8f, 1f, 0.9f);
+            var previousDepth = Handles.zTest;
             Handles.zTest = UnityEngine.Rendering.CompareFunction.Always;
             foreach (var face in poly.faces)
                 for (int i = 0; i < face.indices.Length; i++)
                     Handles.DrawLine(m.MultiplyPoint3x4(poly.vertices[face.indices[i]]), m.MultiplyPoint3x4(poly.vertices[face.indices[(i + 1) % face.indices.Length]]), 2f);
+            Handles.zTest = previousDepth;
+            if (cut && drawTarget.Valid)
+            {
+                drawTarget.Draw();
+                if (Mathf.Abs(height) >= 0.001f)
+                {
+                    BrushPolyhedron inner = null;
+                    var settings = BrushSettings.instance;
+                    if (settings.newHollow && (Shape == BrushShape.Box || Shape == BrushShape.Cylinder))
+                    {
+                        NewBrushParameters(out _, out float wall);
+                        if (Shape == BrushShape.Box) inner = BrushPolyhedron.Box(Vector3.Max(size - Vector3.one * (2f * wall), Vector3.one * 0.001f));
+                        else inner = BrushPolyhedron.Prism(new Vector3(Mathf.Max(size.x - 2f * wall, 0.001f), size.y * 1.001f, Mathf.Max(size.z - 2f * wall, 0.001f)), CurrentParameters(size).sides, 1f);
+                    }
+                    cutPreview.Draw(drawTarget, poly, m, inner: inner);
+                }
+            }
             if (BrushSettings.instance.showDimensions)
                 BrushShapeDrawing.DrawDimensions(poly.Bounds(), m, state == State.Height);
         }
 
         void Finish()
         {
+            if (Mathf.Abs(height) < 0.001f) return;
+            bool cut = DrawOperation == BrushOperation.Subtract;
+            if (cut && (!drawTarget.Valid || (drawTarget.Plan != null && !drawTarget.TryWall(out _))))
+            {
+                ResetGesture();
+                SceneView.lastActiveSceneView?.ShowNotification(new GUIContent("Укажите цель вычета заново."));
+                return;
+            }
             CurrentPose(out var centre, out var size, out var rotation);
             var s = BrushSettings.instance;
             int group = Undo.GetCurrentGroup();
-            var brush = BrushApi.Create(Shape, centre, size, rotation, BrushMenu.CreationParent());
+            bool exact = cut || drawGrid.Valid || drawOnSurface;
+            var parent = cut ? drawTarget.Parent : BrushMenu.CreationParent();
+            var brush = BrushApi.Create(Shape, centre, size, rotation, parent, snap: !exact);
             NewBrushParameters(out _, out float wall);
             var p = CurrentParameters(size);
             Undo.RecordObject(brush, "Создать браш");
@@ -504,13 +669,20 @@ namespace CsgBrush.Editor
             brush.counterClockwise = p.stairs.counterClockwise; brush.slopedFloor = p.stairs.slopedFloor; brush.slopedCeiling = p.stairs.slopedCeiling;
             brush.supportUnderSteps = !p.stairs.open;
             if (brush.SupportsHollow && s.newHollow) { brush.hollow = true; brush.wallThickness = wall; }
-            if (Operation != BrushOperation.Add) BrushApi.SetOperation(brush, Operation);
+            if (exact)
+            {
+                brush.gridSnap = s.newGridSnap;
+                brush.exactSizeMeters = size;
+            }
+            if (drawGrid.Valid) drawGrid.Store(brush);
+            if (cut) drawTarget.Assign(brush);
+            BrushSnap.Accept(brush);
             BrushSync.Ensure(brush);
-            if (wallPlan != null) WallAnchors.Attach(brush.gameObject, wallPlan, true); // as drawn: its height out of the wall
+            if (cut && drawTarget.Plan != null) WallAnchors.AttachCutToWall(brush, drawTarget);
             Undo.CollapseUndoOperations(group);
             BrushApi.ForceUpdate();
             Selection.activeGameObject = brush.gameObject;
-            state = State.Idle; hoverValid = false; wallPlan = null;
+            ResetGesture();
             SceneView.RepaintAll();
         }
     }

@@ -234,8 +234,10 @@ namespace CsgBrush.Editor
             var e = Event.current;
             EditModeMouse.ReleaseStaleAfter(e); // once every edit mode and tool has had the event
             if (Application.isPlaying) return;
-            if (e.type == EventType.Repaint && BrushSettings.instance.showDimensions)
+            if (BrushSurfaceGrid.OnSceneGUI(view)) { s_MouseDownValid = false; return; }
+            if (BrushSettings.instance.showDimensions && !e.alt)
                 BrushShapeDrawing.DrawSelectionDimensions();
+            if (e.type == EventType.Used) { s_MouseDownValid = false; return; }
             if (BrushEditContext.IsActive) return;
             if (e.type == EventType.Repaint)
             {
@@ -441,7 +443,13 @@ namespace CsgBrush.Editor
         /// Nearest brush along a world ray by its shape; with <paramref name="cutsOnly"/> only what is drawn over the scene:
         /// subtract brushes while Cuts are shown, and doors and windows.
         /// </summary>
-        public static Brush PickBrushSurface(Ray ray, out Vector3 point, out Vector3 normal, bool cutsOnly)
+        public static Brush PickBrushSurface(Ray ray, out Vector3 point, out Vector3 normal, bool cutsOnly) =>
+            PickBrushSurface(ray, out point, out normal, cutsOnly, false);
+
+        internal static Brush PickConstructionSurface(Ray ray, out Vector3 point, out Vector3 normal) =>
+            PickBrushSurface(ray, out point, out normal, false, true);
+
+        static Brush PickBrushSurface(Ray ray, out Vector3 point, out Vector3 normal, bool cutsOnly, bool construction)
         {
             bool cuts = BrushSettings.instance.showCuts;
             Brush bestAdd = null, bestSub = null; float tAdd = float.MaxValue, tSub = float.MaxValue, sizeAdd = 0f, sizeSub = 0f;
@@ -454,6 +462,8 @@ namespace CsgBrush.Editor
             for (int i = 0; i < active.Count; i++)
             {
                 var brush = active[i]; // registered brushes are alive: OnDisable always runs before a brush is destroyed
+                if (construction && (brush.operation != BrushOperation.Add ||
+                    SceneVisibilityManager.instance.IsHidden(brush.IsGenerated ? brush.generatedBy.gameObject : brush.gameObject))) continue;
                 if (brush.operation == BrushOperation.Subtract && !cuts && !brush.IsOpening) continue; // an invisible cut is not clickable; a door or window always is
                 if (cutsOnly && brush.operation != BrushOperation.Subtract) continue;
                 var e = BrushCache.Of(brush);
@@ -473,7 +483,7 @@ namespace CsgBrush.Editor
                     if (!PointInFace(poly, f, lo + ld * tt)) continue;
                     var worldPoint = e.toWorld.MultiplyPoint3x4(lo + ld * tt);
                     float world = (worldPoint - ray.origin).magnitude;
-                    var worldNormal = (e.rotation * n).normalized;
+                    var worldNormal = construction ? e.toLocal.transpose.MultiplyVector(n).normalized : (e.rotation * n).normalized;
                     float size = (e.max - e.min).sqrMagnitude;
                     if (brush.operation == BrushOperation.Subtract) { if (Nearer(world, brush, size, tSub, bestSub, sizeSub)) { tSub = world; bestSub = brush; sizeSub = size; pSub = worldPoint; nSub = worldNormal; } }
                     else if (Nearer(world, brush, size, tAdd, bestAdd, sizeAdd)) { tAdd = world; bestAdd = brush; sizeAdd = size; pAdd = worldPoint; nAdd = worldNormal; }

@@ -117,6 +117,12 @@ namespace CsgBrush.Editor
             var go = brush.gameObject;
             bool changed = false;
             if (go.name != spec.name) { go.name = spec.name; changed = true; }
+            if (brush.generatedWallStartId != spec.wallStartId || brush.generatedWallEndId != spec.wallEndId)
+            {
+                brush.generatedWallStartId = spec.wallStartId;
+                brush.generatedWallEndId = spec.wallEndId;
+                changed = true;
+            }
             if (brush.transform.GetSiblingIndex() != index) brush.transform.SetSiblingIndex(index); // CSG order
             var t = brush.transform;
             if (t.localPosition != Vector3.zero) { t.localPosition = Vector3.zero; changed = true; }
