@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEngine;
@@ -9,10 +10,10 @@ namespace CsgBrush.Editor
     {
         const float PickRadius = 12f; // GUI points
         internal const string PickLabel = "Привязать WCS к вершине";
-        internal static readonly GUIContent PickCommand = new GUIContent(PickLabel,
-            "Укажите вершину или середину ребра в сцене. Туда переместится начало рабочей системы координат объекта. При привязке по форме сетка переключится на начало WCS. Esc отменяет выбор.");
-        internal static readonly GUIContent ResetCommand = new GUIContent("Сбросить WCS",
-            "Вернуть начало рабочей системы координат объекта в центр его габарита. Геометрия останется на месте.");
+        internal static GUIContent PickCommand => new GUIContent(Tr(PickLabel),
+            Tr("Укажите вершину или середину ребра в сцене. Туда переместится начало рабочей системы координат объекта. При привязке по форме сетка переключится на начало WCS. Esc отменяет выбор."));
+        internal static GUIContent ResetCommand => new GUIContent(Tr("Сбросить WCS"),
+            Tr("Вернуть начало рабочей системы координат объекта в центр его габарита. Геометрия останется на месте."));
         internal static bool Active => ToolManager.activeToolType == typeof(BrushPivotTool);
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), PickCommand.tooltip);
         public override bool IsAvailable() => IsSelectedBrush(target as Brush);
@@ -23,7 +24,7 @@ namespace CsgBrush.Editor
 
         internal static void DrawMenu()
         {
-            if (!GUILayout.Button(new GUIContent("WCS ▾", "WCS — рабочая система координат объекта. Выберите один редактируемый браш, чтобы задать или сбросить начало WCS."),
+            if (!GUILayout.Button(new GUIContent("WCS ▾", Tr("WCS — рабочая система координат объекта. Выберите один редактируемый браш, чтобы задать или сбросить начало WCS.")),
                     EditorStyles.miniButton, GUILayout.ExpandWidth(false), GUILayout.Height(18))) return;
             var brush = Selection.activeGameObject?.GetComponent<Brush>();
             var menu = new GenericMenu();
@@ -129,7 +130,7 @@ namespace CsgBrush.Editor
             {
                 using (new Handles.DrawingScope(Color.yellow))
                     Handles.SphereHandleCap(0, pickedWorld, Quaternion.identity, HandleUtility.GetHandleSize(pickedWorld) * 0.12f, EventType.Repaint);
-                Handles.Label(pickedWorld, edgeEnd < 0 ? "  Вершина" : "  Середина ребра");
+                Handles.Label(pickedWorld, edgeEnd < 0 ? Tr("  Вершина") : Tr("  Середина ребра"));
             }
             if (e.type == EventType.MouseDown && HandleUtility.nearestControl == control)
             {

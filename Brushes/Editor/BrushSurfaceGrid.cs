@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEngine;
@@ -114,28 +115,28 @@ namespace CsgBrush.Editor
 
         internal static void DrawMenu()
         {
-            if (!GUILayout.Button(new GUIContent("Привязки ▾", "Выберите мировую сетку или сетку поверхности."),
+            if (!GUILayout.Button(new GUIContent(Tr("Привязки ▾"), Tr("Выберите мировую сетку или сетку поверхности.")),
                     EditorStyles.miniButton, GUILayout.ExpandWidth(false), GUILayout.Height(18))) return;
             var menu = new GenericMenu();
-            menu.AddItem(new GUIContent("Мировая сетка"), !Local, () =>
+            menu.AddItem(new GUIContent(Tr("Мировая сетка")), !Local, () =>
             {
                 Local = false;
                 held = default;
                 SceneView.RepaintAll();
             });
-            menu.AddItem(new GUIContent("Локальная сетка поверхности"), Local, () =>
+            menu.AddItem(new GUIContent(Tr("Локальная сетка поверхности")), Local, () =>
             {
                 Local = true;
                 SceneView.RepaintAll();
             });
-            menu.AddItem(new GUIContent("Закрепить сетку по выбранной грани"), false, () =>
+            menu.AddItem(new GUIContent(Tr("Закрепить сетку по выбранной грани")), false, () =>
             {
                 pickingView = SceneView.lastActiveSceneView;
                 candidate = default;
                 SceneView.RepaintAll();
             });
             if (HasHeld)
-                menu.AddItem(new GUIContent("Освободить рабочую сетку"), false, () =>
+                menu.AddItem(new GUIContent(Tr("Освободить рабочую сетку")), false, () =>
                 {
                     held = default;
                     SceneView.RepaintAll();

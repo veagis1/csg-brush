@@ -12,6 +12,7 @@ namespace CsgBrush.Tests
         [TestCase(2, "19,75 м (<color=#78AAFF>Z</color>)")]
         public void OnlyTheLocalAxisLetterUsesItsAxisColor(int axis, string expected)
         {
+            if (BrushLanguage.English) expected = expected.Replace("19,75 м", "19.75 m");
             Assert.AreEqual(expected, BrushDimensionFields.FormatDimension(19.75f, axis));
         }
 

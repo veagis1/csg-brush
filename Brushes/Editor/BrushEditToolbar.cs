@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.Overlays;
@@ -35,12 +36,15 @@ namespace CsgBrush.Editor
         public BrushSelectModeToggle(BrushEditMode mode)
         {
             this.mode = mode;
-            switch (mode)
+            BrushLanguage.Bind(this, () =>
             {
-                case BrushEditMode.Vertex: icon = BrushIcons.Get("Mode_Vertex"); tooltip = "Выбор вершин (1)"; break;
-                case BrushEditMode.Edge: icon = BrushIcons.Get("Mode_Edge"); tooltip = "Выбор рёбер (2)"; break;
-                default: icon = BrushIcons.Get("Mode_Face"); tooltip = "Выбор граней (3)"; break;
-            }
+                switch (mode)
+                {
+                    case BrushEditMode.Vertex: icon = BrushIcons.Get("Mode_Vertex"); tooltip = Tr("Выбор вершин (1)"); break;
+                    case BrushEditMode.Edge: icon = BrushIcons.Get("Mode_Edge"); tooltip = Tr("Выбор рёбер (2)"); break;
+                    default: icon = BrushIcons.Get("Mode_Face"); tooltip = Tr("Выбор граней (3)"); break;
+                }
+            });
             RegisterCallback<AttachToPanelEvent>(evt => { BrushEditState.Changed += Refresh; Refresh(); });
             RegisterCallback<DetachFromPanelEvent>(evt => BrushEditState.Changed -= Refresh);
             this.RegisterValueChangedCallback(evt => { if (evt.newValue) BrushEditState.Mode = mode; else SetValueWithoutNotify(true); });
@@ -68,7 +72,7 @@ namespace CsgBrush.Editor
         public BrushSelectHiddenToggle()
         {
             icon = BrushIcons.Get("SelectHidden");
-            tooltip = "Выбирать скрытые элементы. Включите, чтобы выбирать вершины, рёбра и грани, отвёрнутые от камеры.";
+            BrushLanguage.Bind(this, () => tooltip = Tr("Выбирать скрытые элементы. Включите, чтобы выбирать вершины, рёбра и грани, отвёрнутые от камеры."));
             RegisterCallback<AttachToPanelEvent>(evt => { BrushEditState.Changed += Refresh; Refresh(); });
             RegisterCallback<DetachFromPanelEvent>(evt => BrushEditState.Changed -= Refresh);
             this.RegisterValueChangedCallback(evt => BrushEditState.SelectHidden = evt.newValue);
@@ -84,7 +88,7 @@ namespace CsgBrush.Editor
         public BrushDragRectModeToggle()
         {
             icon = BrushIcons.Get("DragRect");
-            tooltip = "Выбор рамкой. Включено — только элементы целиком внутри рамки. Выключено — все элементы, которых касается рамка.";
+            BrushLanguage.Bind(this, () => tooltip = Tr("Выбор рамкой. Включено — только элементы целиком внутри рамки. Выключено — все элементы, которых касается рамка."));
             RegisterCallback<AttachToPanelEvent>(evt => { BrushEditState.Changed += Refresh; Refresh(); });
             RegisterCallback<DetachFromPanelEvent>(evt => BrushEditState.Changed -= Refresh);
             this.RegisterValueChangedCallback(evt => BrushEditState.RectComplete = evt.newValue);
@@ -103,9 +107,13 @@ namespace CsgBrush.Editor
         public BrushHandleOrientationDropdown()
         {
             name = "Handle Rotation";
-            options[0] = new GUIContent("Мир", EditorGUIUtility.IconContent("ToolHandleGlobal").image, "Манипулятор ориентирован по осям сцены.");
-            options[1] = new GUIContent("Браш", EditorGUIUtility.IconContent("ToolHandleLocal").image, "Манипулятор ориентирован по осям браша.");
-            options[2] = new GUIContent("Элемент", BrushIcons.Get("ToolHandleElement"), "Манипулятор ориентирован по выбранной грани, ребру или вершине. Синяя ось направлена по нормали.");
+            BrushLanguage.Bind(this, () =>
+            {
+                options[0] = new GUIContent(Tr("Мир"), EditorGUIUtility.IconContent("ToolHandleGlobal").image, Tr("Манипулятор ориентирован по осям сцены."));
+                options[1] = new GUIContent(Tr("Браш"), EditorGUIUtility.IconContent("ToolHandleLocal").image, Tr("Манипулятор ориентирован по осям браша."));
+                options[2] = new GUIContent(Tr("Элемент"), BrushIcons.Get("ToolHandleElement"), Tr("Манипулятор ориентирован по выбранной грани, ребру или вершине. Синяя ось направлена по нормали."));
+                Refresh();
+            });
             clicked += () =>
             {
                 var menu = new GenericMenu();

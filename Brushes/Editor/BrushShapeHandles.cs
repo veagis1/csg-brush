@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.ShortcutManagement;
@@ -216,7 +217,7 @@ namespace CsgBrush.Editor
                         id = "thickness", local = new Vector3(c.x, max.y - b.wallThickness, c.z), direction = Vector3.down,
                         faces = innerFaces, faceNormals = innerNormals,
                         apply = (br, st, d, sym, snap) => { br.wallThickness = Mathf.Clamp(SnapLength(br, st.wallThickness + d, snap), 0.01f, Mathf.Min(br.ClampedSize.x * 0.5f, br.ClampedSize.y) - 0.01f); },
-                        label = br => "Толщина " + Length(br.wallThickness),
+                        label = br => Tr("Толщина ") + Length(br.wallThickness),
                     });
                     break;
                 case BrushShape.CurvedStairs:
@@ -275,13 +276,13 @@ namespace CsgBrush.Editor
                     br.innerRadius = Mathf.Clamp(SnapLength(br, st.innerRadius + d, snap), 0f, outer - 0.05f);
                     br.stepWidth = outer - br.innerRadius;
                 },
-                label = br => $"Радиус опоры {Length(br.innerRadius)}, ширина ступени {Length(br.stepWidth)}",
+                label = br => BrushLanguage.Format("Радиус опоры {0}, ширина ступени {1}", Length(br.innerRadius), Length(br.stepWidth)),
             });
             list.Add(new Handle
             {
                 id = "outer", local = origin, direction = At(1f, stepAngle * 0.5f, 0f), faces = outerFaces, faceNormals = outerNormals, radial = true,
                 apply = (br, st, d, sym, snap) => { br.stepWidth = Mathf.Max(0.05f, SnapLength(br, st.stepWidth + d, snap)); },
-                label = br => $"Ширина ступени {Length(br.stepWidth)}",
+                label = br => BrushLanguage.Format("Ширина ступени {0}", Length(br.stepWidth)),
             });
 
             // the top step's tread: the height
@@ -298,7 +299,7 @@ namespace CsgBrush.Editor
                 apply = spiral
                     ? (System.Action<Brush, State, float, bool, bool>)((br, st, d, sym, snap) => { br.numSteps = Mathf.Max(1, Mathf.RoundToInt((st.numSteps * st.stepHeight + d) / Mathf.Max(BrushPolyhedron.MinStepHeight, st.stepHeight))); })
                     : (br, st, d, sym, snap) => { br.stepHeight = Mathf.Max(BrushPolyhedron.MinStepHeight, SnapStep(st.stepHeight + d / Mathf.Max(1, st.numSteps), snap)); },
-                label = br => spiral ? $"Ступеней {br.numSteps}, общая высота {Length(br.numSteps * br.stepHeight)}" : $"Ступень {Length(br.stepHeight)}, общая высота {Length(br.numSteps * br.stepHeight)}",
+                label = br => spiral ? BrushLanguage.Format("Ступеней {0}, общая высота {1}", br.numSteps, Length(br.numSteps * br.stepHeight)) : BrushLanguage.Format("Ступень {0}, общая высота {1}", Length(br.stepHeight), Length(br.numSteps * br.stepHeight)),
             });
 
             // the last step's end face: further round (curved), or more steps (spiral)
@@ -321,7 +322,7 @@ namespace CsgBrush.Editor
                     if (snap && stepDegrees > 0f) degrees = Mathf.Round(degrees / stepDegrees) * stepDegrees;
                     br.curveAngle = Mathf.Clamp(degrees, 1f, 3600f);
                 },
-                label = br => spiral ? $"Ступеней {br.numSteps}" : br.curveAngle.ToString("0.#") + "\u00b0",
+                label = br => spiral ? BrushLanguage.Format("Ступеней {0}", br.numSteps) : br.curveAngle.ToString("0.#") + "\u00b0",
             });
         }
 
@@ -560,7 +561,7 @@ namespace CsgBrush.Editor
 
         static void Apply(Brush b, Handle h, State start, float distance, bool symmetric, bool record = true, bool incremental = false)
         {
-            if (record) Undo.RecordObjects(new Object[] { b, b.transform }, "Изменить форму браша");
+            if (record) Undo.RecordObjects(new Object[] { b, b.transform }, Tr("Изменить форму браша"));
             h.apply(b, start, distance, symmetric, !incremental && Snaps(b));
             b.exactSizeMeters = start.exactSizeMeters;
             if (incremental && !b.HasParametricSize)
@@ -611,7 +612,7 @@ namespace CsgBrush.Editor
                 if (h == null) continue;
                 if (mode == ShapeEditSelection.Offset) { Apply(other, h.Value, start, LocalDistance(h.Value, start), symmetric, incremental: incremental); continue; }
                 if (measure < 0) { Apply(other, h.Value, start, 0f, symmetric, incremental: incremental); continue; }
-                Undo.RecordObjects(new Object[] { other, other.transform }, "Изменить форму браша"); // before the trials change it
+                Undo.RecordObjects(new Object[] { other, other.transform }, Tr("Изменить форму браша")); // before the trials change it
                 Apply(other, h.Value, start, DistanceTo(other, h.Value, start, symmetric, measure, target), symmetric, record: false, incremental: incremental);
             }
         }
@@ -992,7 +993,7 @@ namespace CsgBrush.Editor
             s_Measured = default; // a new drag: the same handle may change something else now
             foreach (var b in brushes) s_Start[b] = State.Of(b);
             Undo.IncrementCurrentGroup();
-            Undo.SetCurrentGroupName("Изменить форму браша");
+            Undo.SetCurrentGroupName(Tr("Изменить форму браша"));
             s_UndoGroup = Undo.GetCurrentGroup();
         }
 

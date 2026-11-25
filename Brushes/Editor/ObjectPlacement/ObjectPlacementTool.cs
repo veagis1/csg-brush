@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEngine;
@@ -21,7 +22,7 @@ namespace CsgBrush.Editor
         int held;
 
         internal static bool Active => ToolManager.activeToolType == typeof(ObjectPlacementTool);
-        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), Tip);
+        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), Tr(Tip));
         public override bool IsAvailable() => Available();
 
         [MenuItem(Menu, true)]
@@ -39,7 +40,7 @@ namespace CsgBrush.Editor
         internal static void DrawButton()
         {
             using var disabled = new EditorGUI.DisabledScope(!Available());
-            if (GUILayout.Button(new GUIContent(Label, Tip), EditorStyles.miniButton, GUILayout.ExpandWidth(false)))
+            if (GUILayout.Button(new GUIContent(Tr(Label), Tr(Tip)), EditorStyles.miniButton, GUILayout.ExpandWidth(false)))
                 Begin();
         }
 
@@ -174,10 +175,10 @@ namespace CsgBrush.Editor
         void Draw(SceneView view)
         {
             var feature = guide != null ? anchor : hover;
-            var hint = guide == null ? "Укажите вершину или середину ребра" : "Укажите положение на ребре   •   Ctrl — шаг сетки";
+            var hint = guide == null ? Tr("Укажите вершину или середину ребра") : Tr("Укажите положение на ребре   •   Ctrl — шаг сетки");
             Handles.BeginGUI();
             GUI.Label(new Rect(8f, view.position.height - 65f, view.position.width - 16f, 22f),
-                hint + "   •   Esc — отмена", EditorStyles.helpBox);
+                hint + Tr("   •   Esc — отмена"), EditorStyles.helpBox);
             Handles.EndGUI();
             if (feature.Part == null) return;
             var origin = feature.Position;

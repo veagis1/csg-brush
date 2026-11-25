@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -143,9 +144,9 @@ namespace CsgBrush.Editor
             go.TryGetComponent<Brush>(out var brush);
             if (plan == null) plan = NearestPlan(ReferencePosition(go.transform, brush));
             if (plan == null || go.GetComponent<FloorPlan>() != null) return null;
-            if (go.transform.parent != plan.transform) Undo.SetTransformParent(go.transform, plan.transform, "Привязать к стене");
+            if (go.transform.parent != plan.transform) Undo.SetTransformParent(go.transform, plan.transform, Tr("Привязать к стене"));
             if (!go.TryGetComponent<WallAnchor>(out var a)) a = Undo.AddComponent<WallAnchor>(go);
-            Undo.RecordObject(a, "Привязать к стене");
+            Undo.RecordObject(a, Tr("Привязать к стене"));
             a.startId = a.endId = WallAnchor.Unplaced;
             if (brush != null && brush.IsOpening) a.face = WallFace.Centered;
             else if (a.face == WallFace.Centered) a.face = WallFace.Inside; // the side it is on decides
@@ -181,7 +182,7 @@ namespace CsgBrush.Editor
             if (go == null || !go.TryGetComponent<WallAnchor>(out var a)) return;
             var plan = a.Plan;
             int group = Undo.GetCurrentGroup();
-            if (plan != null) Undo.SetTransformParent(go.transform, plan.transform.parent, "Отвязать от стены");
+            if (plan != null) Undo.SetTransformParent(go.transform, plan.transform.parent, Tr("Отвязать от стены"));
             a.MarkBrushes(false);
             Undo.DestroyObjectImmediate(a);
             Undo.CollapseUndoOperations(group);
@@ -388,7 +389,7 @@ namespace CsgBrush.Editor
         {
             if (a.startId == wall.startId && a.endId == wall.endId && a.face == face && Mathf.Approximately(a.distance, distance) && Mathf.Approximately(a.height, height)
                 && Mathf.Approximately(a.offset, offset) && Mathf.Approximately(a.alongOffset, alongOffset) && Quaternion.Angle(a.rotation, rotation) < 1e-3f) return;
-            Undo.RecordObject(a, "Переместить вдоль стены");
+            Undo.RecordObject(a, Tr("Переместить вдоль стены"));
             a.startId = wall.startId; a.endId = wall.endId; a.face = face; a.distance = distance; a.height = height; a.offset = offset; a.rotation = rotation; a.wallLength = wall.Length;
             a.alongOffset = alongOffset;
         }
@@ -396,7 +397,7 @@ namespace CsgBrush.Editor
         static void SetFree(WallAnchor a)
         {
             if (a.startId == WallAnchor.Free) return;
-            Undo.RecordObject(a, "Переместить за пределы стены");
+            Undo.RecordObject(a, Tr("Переместить за пределы стены"));
             a.startId = a.endId = WallAnchor.Free;
         }
 
@@ -489,9 +490,9 @@ namespace CsgBrush.Editor
         {
             if (a == null || plan == null) return;
             var old = a.Plan;
-            if (old != plan) Undo.SetTransformParent(a.transform, plan.transform, "Сменить стену");
+            if (old != plan) Undo.SetTransformParent(a.transform, plan.transform, Tr("Сменить стену"));
             var walls = new List<FloorPlan.Wall>(); plan.Walls(walls);
-            Undo.RecordObject(a, "Сменить стену");
+            Undo.RecordObject(a, Tr("Сменить стену"));
             a.alongOffset = 0f;
             if (wallIndex < 0 || wallIndex >= walls.Count) a.startId = a.endId = WallAnchor.Free;
             else

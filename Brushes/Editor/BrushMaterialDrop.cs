@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -94,7 +95,7 @@ namespace CsgBrush.Editor
         public static void Drop(Brush hit, Material material)
         {
             if (!(hit.generatedBy is FloorPlan plan)) { BrushApi.SetMaterial(hit, material); return; }
-            Undo.RecordObject(plan, "Задать материал плана стен");
+            Undo.RecordObject(plan, Tr("Задать материал плана стен"));
             string name = hit.name;
             if (name.StartsWith("Floor ") || name.StartsWith("Ceiling "))
             {

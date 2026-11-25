@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -129,14 +130,14 @@ namespace CsgBrush.Editor
         {
             if (a.startId == startId && a.endId == endId && Mathf.Approximately(a.distance, distance) && Mathf.Approximately(a.angle, angle)
                 && Mathf.Approximately(a.offset, offset) && Quaternion.Angle(a.rotation, turn) < 1e-3f) return;
-            Undo.RecordObject(a, "Переместить объект по сплайну");
+            Undo.RecordObject(a, Tr("Переместить объект по сплайну"));
             a.startId = startId; a.endId = endId; a.distance = distance; a.angle = angle; a.offset = offset; a.rotation = turn; a.linkLength = length;
         }
 
         static void SetFree(SplineAnchor a)
         {
             if (a.startId == WallAnchor.Free) return;
-            Undo.RecordObject(a, "Снять привязку к сплайну при перемещении");
+            Undo.RecordObject(a, Tr("Снять привязку к сплайну при перемещении"));
             a.startId = a.endId = WallAnchor.Free;
         }
 
@@ -152,9 +153,9 @@ namespace CsgBrush.Editor
             if (spline == null) spline = NearestSpline(go.transform.position);
             if (spline == null || go.GetComponent<PointGraph>() != null) return null;
             int group = Undo.GetCurrentGroup();
-            if (go.transform.parent != spline.transform) Undo.SetTransformParent(go.transform, spline.transform, "Привязать к сплайну");
+            if (go.transform.parent != spline.transform) Undo.SetTransformParent(go.transform, spline.transform, Tr("Привязать к сплайну"));
             if (!go.TryGetComponent<SplineAnchor>(out var a)) a = Undo.AddComponent<SplineAnchor>(go);
-            Undo.RecordObject(a, "Привязать к сплайну");
+            Undo.RecordObject(a, Tr("Привязать к сплайну"));
             a.startId = a.endId = WallAnchor.Unplaced;
             a.MarkBrushes(true);
             Layout(spline);
@@ -168,7 +169,7 @@ namespace CsgBrush.Editor
             if (go == null || !go.TryGetComponent<SplineAnchor>(out var a)) return;
             var spline = a.Spline;
             int group = Undo.GetCurrentGroup();
-            if (spline != null) Undo.SetTransformParent(go.transform, spline.transform.parent, "Отвязать от сплайна");
+            if (spline != null) Undo.SetTransformParent(go.transform, spline.transform.parent, Tr("Отвязать от сплайна"));
             a.MarkBrushes(false);
             Undo.DestroyObjectImmediate(a);
             Undo.CollapseUndoOperations(group);

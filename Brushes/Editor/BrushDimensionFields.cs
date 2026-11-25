@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -17,7 +18,6 @@ namespace CsgBrush.Editor
         static readonly List<Rect> placedLabels = new List<Rect>();
         static readonly Color Plate = new Color(0.08f, 0.10f, 0.12f, 0.94f);
         static readonly Color Accent = new Color(0.33f, 0.92f, 0.95f);
-        static readonly CultureInfo Russian = CultureInfo.GetCultureInfo("ru-RU");
         static readonly string[] AxisSuffix =
         {
             "м (<color=#FF7373>X</color>)",
@@ -79,7 +79,7 @@ namespace CsgBrush.Editor
         }
 
         internal static string FormatDimension(float meters, int axis) =>
-            meters.ToString("0.00###", Russian) + " " + AxisSuffix[axis];
+            meters.ToString("0.00###", BrushLanguage.Culture) + " " + Tr(AxisSuffix[axis]);
 
         // All geometry below is in GUI points, so zoom and display scaling do not change the gap.
         internal static Rect BadgeRect(Vector2 midpoint, Vector2 along, Vector2 outward, Vector2 size, List<Rect> occupied)
@@ -157,7 +157,7 @@ namespace CsgBrush.Editor
                     draft = EditorGUI.TextField(number, draft);
                     var suffix = Rect.MinMaxRect(number.xMax, r.yMin, r.xMax, r.yMax);
                     EditorGUI.DrawRect(suffix, Plate);
-                    GUI.Label(suffix, AxisSuffix[edge.Axis], Badge);
+                    GUI.Label(suffix, Tr(AxisSuffix[edge.Axis]), Badge);
                     if (focus)
                     {
                         EditorGUI.FocusTextInControl(key);
@@ -174,7 +174,7 @@ namespace CsgBrush.Editor
                     {
                         activeKey = key;
                         owner = view;
-                        draft = meters.ToString("0.#####", Russian);
+                        draft = meters.ToString("0.#####", BrushLanguage.Culture);
                         focus = true;
                         e.Use();
                         view.Repaint();
@@ -234,16 +234,16 @@ namespace CsgBrush.Editor
         {
             if (!ResizeCandidate(brush, axis, meters, out var shape, out var size, out var move, out var deformation)) return false;
             if ((size - brush.size).sqrMagnitude < 1e-12f && move.sqrMagnitude < 1e-12f) return true;
-            Undo.RecordObject(brush, "Изменить размер");
+            Undo.RecordObject(brush, Tr("Изменить размер"));
             var children = new List<(Transform child, Vector3 position)>();
             if (move != Vector3.zero)
             {
-                Undo.RecordObject(brush.transform, "Изменить размер");
+                Undo.RecordObject(brush.transform, Tr("Изменить размер"));
                 foreach (Transform child in brush.transform)
                 {
                     if (Brush.IsGeneratedChildName(child.name)) continue;
                     children.Add((child, child.position));
-                    Undo.RecordObject(child, "Изменить размер");
+                    Undo.RecordObject(child, Tr("Изменить размер"));
                 }
             }
             if (brush.shape == BrushShape.Custom)
@@ -268,8 +268,8 @@ namespace CsgBrush.Editor
         internal static void DrawBrushField(Brush brush, Edge edge, float meters)
         {
             int axis = edge.Axis;
-            string label = axis == 0 ? "Ширина" : axis == 1 ? "Высота" : "Глубина";
-            Field("csg.size." + brush.GetEntityId() + "." + axis, edge, label + " в метрах. Enter применяет, Esc отменяет.",
+            string label = axis == 0 ? Tr("Ширина") : axis == 1 ? Tr("Высота") : Tr("Глубина");
+            Field("csg.size." + brush.GetEntityId() + "." + axis, edge, label + Tr(" в метрах. Enter применяет, Esc отменяет."),
                 meters, value => Resize(brush, axis, value), value =>
                 {
                     if (ResizeCandidate(brush, axis, value, out var shape, out _, out var move, out _))

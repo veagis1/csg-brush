@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -23,8 +24,8 @@ namespace CsgBrush.Editor
         public override void OnInspectorGUI()
         {
             var a = (WallAnchor)target;
-            if (a.Plan == null) EditorGUILayout.HelpBox("Объект свободен. Чтобы привязать его к плану, выберите стену.", MessageType.Info);
-            bool picking = GUILayout.Toggle(Picking, new GUIContent("Выбрать стену", "Щёлкните по стене в окне сцены, чтобы привязать объект. Escape отменяет выбор."), EditorStyles.miniButton);
+            if (a.Plan == null) EditorGUILayout.HelpBox(Tr("Объект свободен. Чтобы привязать его к плану, выберите стену."), MessageType.Info);
+            bool picking = GUILayout.Toggle(Picking, new GUIContent(Tr("Выбрать стену"), Tr("Щёлкните по стене в окне сцены, чтобы привязать объект. Escape отменяет выбор.")), EditorStyles.miniButton);
             if (picking != Picking) { Picking = picking; m_HoverPlan = null; SceneView.RepaintAll(); }
             if (a.Plan == null) return;
             serializedObject.Update();
@@ -48,12 +49,17 @@ namespace CsgBrush.Editor
 
         static readonly WallFace[] s_FaceOrder = { WallFace.Outside, WallFace.Centered, WallFace.Inside }; // as the floor plan's Side
         static GUIContent[] s_FaceNames;
+        static bool faceNamesEnglish;
 
         static void FaceField(SerializedProperty face)
         {
-            s_FaceNames ??= System.Array.ConvertAll(s_FaceOrder, f => BrushEditor.EnumOption(f));
+            if (s_FaceNames == null || faceNamesEnglish != BrushLanguage.English)
+            {
+                s_FaceNames = System.Array.ConvertAll(s_FaceOrder, f => BrushEditor.EnumOption(f));
+                faceNamesEnglish = BrushLanguage.English;
+            }
             var rect = EditorGUILayout.GetControlRect();
-            var label = EditorGUI.BeginProperty(rect, new GUIContent("Плоскость стены", "Выбирает внешнюю, среднюю или внутреннюю плоскость стены."), face);
+            var label = EditorGUI.BeginProperty(rect, new GUIContent(Tr("Плоскость стены"), Tr("Выбирает внешнюю, среднюю или внутреннюю плоскость стены.")), face);
             EditorGUI.showMixedValue = face.hasMultipleDifferentValues;
             EditorGUI.BeginChangeCheck();
             int picked = EditorGUI.Popup(rect, label, System.Array.IndexOf(s_FaceOrder, (WallFace)face.intValue), s_FaceNames);
@@ -72,13 +78,13 @@ namespace CsgBrush.Editor
             if (Quaternion.Angle(m_EulerOf, first.rotation) > 1e-3f || m_EulerOf == new Quaternion(0f, 0f, 0f, 0f)) { m_Euler = Tidy(first.rotation.eulerAngles); m_EulerOf = first.rotation; }
             EditorGUI.BeginChangeCheck();
             EditorGUI.showMixedValue = mixed;
-            var euler = EditorGUILayout.Vector3Field(new GUIContent("Поворот, °", "Углы относительно стены в градусах. При (0, 0, 0) объект направлен наружу от стены, его верх обращён вверх."), m_Euler);
+            var euler = EditorGUILayout.Vector3Field(new GUIContent(Tr("Поворот, °"), Tr("Углы относительно стены в градусах. При (0, 0, 0) объект направлен наружу от стены, его верх обращён вверх.")), m_Euler);
             EditorGUI.showMixedValue = false;
-            if (EditorGUI.EndChangeCheck()) { m_Euler = euler; m_EulerOf = Quaternion.Euler(euler); SetRotation(_ => Quaternion.Euler(euler), "Повернуть объект на стене"); }
+            if (EditorGUI.EndChangeCheck()) { m_Euler = euler; m_EulerOf = Quaternion.Euler(euler); SetRotation(_ => Quaternion.Euler(euler), Tr("Повернуть объект на стене")); }
             EditorGUILayout.BeginHorizontal();
             GUILayout.Space(EditorGUIUtility.labelWidth + 2f);
-            if (GUILayout.Button(new GUIContent("Развернуть", "Развернуть объект на 180° вокруг вертикальной оси стены."), EditorStyles.miniButton))
-                SetRotation(r => Quaternion.Euler(0f, 180f, 0f) * r, "Развернуть объект на стене");
+            if (GUILayout.Button(new GUIContent(Tr("Развернуть"), Tr("Развернуть объект на 180° вокруг вертикальной оси стены.")), EditorStyles.miniButton))
+                SetRotation(r => Quaternion.Euler(0f, 180f, 0f) * r, Tr("Развернуть объект на стене"));
             EditorGUILayout.EndHorizontal();
         }
 

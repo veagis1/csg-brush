@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using CsgBrush.Colliders;
 using UnityEngine;
@@ -181,13 +182,13 @@ namespace CsgBrush.Editor
                     var corners = new List<Vector3>(set.Count); foreach (var i in set) corners.Add(moved.vertices[i]);
                     var pt = ConvexHull(corners); // the hull: a sloped tread is a twisted quad, its triangle planes must not cut into the block
                     if (pt != null && !pt.IsEmpty) add.Add(pt);
-                    else problem = "Одну ступень не удалось построить, она пропущена.";
+                    else problem = Tr("Одну ступень не удалось построить, она пропущена.");
                 }
             }
             else if (local.IsConvex())
             {
                 var pt = ToPolytope(local.Transformed(toModel), ConvexPolytope.Epsilon); // exact: a 2 cm ice sheet is still a solid
-                if (pt == null) problem = "Не удалось построить форму.";
+                if (pt == null) problem = Tr("Не удалось построить форму.");
                 else add.Add(pt);
             }
             else
@@ -195,7 +196,7 @@ namespace CsgBrush.Editor
                 var pieces = new List<ConvexPolytope>();
                 ConvexDecomposition.VertexWeld = weld;
                 ConvexDecomposition.Decompose(local, pieces);
-                if (!local.IsSound(out var why)) problem = "Некорректная форма: " + BrushBoolean.DescribeProblem(why) + ".";
+                if (!local.IsSound(out var why)) problem = Tr("Некорректная форма: ") + BrushBoolean.DescribeProblem(why) + ".";
                 foreach (var piece in pieces)
                 {
                     // the decomposition works in local space; move the piece by rebuilding it from its transformed faces
@@ -215,7 +216,7 @@ namespace CsgBrush.Editor
                         moved.AddPlane(n, c);
                     }
                     if (moved.Build() && !moved.IsEmpty) add.Add(moved);
-                    else problem = "Одну выпуклую часть не удалось построить, она пропущена.";
+                    else problem = Tr("Одну выпуклую часть не удалось построить, она пропущена.");
                 }
             }
             var inner = HollowInner(b);

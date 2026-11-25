@@ -73,11 +73,11 @@ namespace CsgBrush.Tests
         public void CreationCommandLeavesBrushFloorPlanAndSplineEditing(string item, Type tool)
         {
             Enter<BrushEditContext>(brush);
-            Assert.That(EditorApplication.ExecuteMenuItem("CSG Brush/Создать/" + item), Is.True);
+            Assert.That(EditorApplication.ExecuteMenuItem("CSG Brush/" + BrushLanguage.Tr("Создать") + "/" + BrushLanguage.Tr(item)), Is.True);
             AssertCreation(tool);
 
             Enter<FloorPlanEditContext>(plan);
-            Assert.That(EditorApplication.ExecuteMenuItem("Tools/CSG Brush/Создать/" + item), Is.True);
+            Assert.That(EditorApplication.ExecuteMenuItem("Tools/CSG Brush/" + BrushLanguage.Tr("Создать") + "/" + BrushLanguage.Tr(item)), Is.True);
             AssertCreation(tool);
 
             Enter<SplineEditContext>(spline);
@@ -89,7 +89,7 @@ namespace CsgBrush.Tests
         public void GameObjectCommandClosesComponentEditingAndCreatesImmediately()
         {
             Enter<BrushEditContext>(brush);
-            Assert.That(EditorApplication.ExecuteMenuItem("GameObject/CSG Brush/Блок"), Is.True);
+            Assert.That(EditorApplication.ExecuteMenuItem("GameObject/CSG Brush/" + BrushLanguage.Tr("Блок")), Is.True);
             Assert.That(ToolManager.activeContextType, Is.EqualTo(typeof(GameObjectToolContext)));
             var created = Selection.activeGameObject.GetComponent<Brush>();
             Assert.That(created, Is.Not.Null);
@@ -110,7 +110,7 @@ namespace CsgBrush.Tests
         {
             var pending = EditorApplication.delayCall?.GetInvocationList() ?? Array.Empty<Delegate>();
             var previous = Selection.activeGameObject;
-            Assert.That(EditorApplication.ExecuteMenuItem("GameObject/CSG Brush/" + item), Is.True);
+            Assert.That(EditorApplication.ExecuteMenuItem("GameObject/CSG Brush/" + BrushLanguage.Tr(item)), Is.True);
             Assert.That(ToolManager.activeContextType, Is.EqualTo(typeof(GameObjectToolContext)));
             Assert.That(Selection.activeGameObject, Is.Not.SameAs(previous));
             Assert.That(Selection.activeGameObject.GetComponent<T>(), Is.Not.Null);
@@ -159,7 +159,7 @@ namespace CsgBrush.Tests
             ToolManager.SetActiveTool<BrushPivotTool>();
             Assert.That(ToolManager.activeToolType, Is.EqualTo(typeof(BrushPivotTool)));
 
-            Assert.That(EditorApplication.ExecuteMenuItem("CSG Brush/Создать/Блок"), Is.True);
+            Assert.That(EditorApplication.ExecuteMenuItem("CSG Brush/" + BrushLanguage.Tr("Создать") + "/" + BrushLanguage.Tr("Блок")), Is.True);
             AssertCreation(typeof(CreateBoxBrushTool));
         }
 

@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
@@ -257,7 +258,7 @@ namespace CsgBrush.Editor
                 var p = local(start[i]); if (plan.Flat) p.y = 0f;
                 if (g > 0f) { p.x = Mathf.Round(p.x / g) * g; p.z = Mathf.Round(p.z / g) * g; if (!plan.Flat) p.y = Mathf.Round(p.y / g) * g; }
                 if (p == plan.points[i]) continue;
-                if (!recorded) { Undo.RecordObject(plan, "Изменить план стен"); recorded = true; }
+                if (!recorded) { Undo.RecordObject(plan, Tr("Изменить план стен")); recorded = true; }
                 plan.points[i] = p;
             }
             if (recorded) BrushGenerators.MarkDirty(plan);
@@ -404,7 +405,7 @@ namespace CsgBrush.Editor
         {
             bool allSmooth = true;
             foreach (var i in pointIndices) if (i < plan.points.Count && !plan.IsSmooth(plan.pointIds[i])) allSmooth = false;
-            Undo.RecordObject(plan, allSmooth ? "Сделать точки угловыми" : "Сделать точки плавными");
+            Undo.RecordObject(plan, allSmooth ? Tr("Сделать точки угловыми") : Tr("Сделать точки плавными"));
             foreach (var i in pointIndices) if (i < plan.points.Count) plan.SetSmooth(plan.pointIds[i], !allSmooth);
             BrushGenerators.MarkDirty(plan);
             return !allSmooth;
@@ -445,7 +446,7 @@ namespace CsgBrush.Editor
         {
             plan.EnsureGraph();
             if (walls.Count >= plan.links.Count) { bool all = true; for (int w = 0; w < plan.links.Count; w++) if (!walls.Contains(w)) all = false; if (all) return false; }
-            Undo.RecordObject(plan, "Удалить стены плана");
+            Undo.RecordObject(plan, Tr("Удалить стены плана"));
             var keep = new List<PointGraph.Link>();
             for (int w = 0; w < plan.links.Count; w++) if (!walls.Contains(w)) keep.Add(plan.links[w]);
             plan.links = keep;
@@ -475,7 +476,7 @@ namespace CsgBrush.Editor
                 walls.Add(new PointGraph.Link(a, b, w0.thickness));
             }
             if (walls.Count == 0) return false;
-            Undo.RecordObject(plan, "Удалить точки плана стен");
+            Undo.RecordObject(plan, Tr("Удалить точки плана стен"));
             plan.links = walls;
             plan.RemoveLonePoints();
             BrushGenerators.MarkDirty(plan);
@@ -628,7 +629,7 @@ namespace CsgBrush.Editor
                     case EventType.MouseDown:
                         if (e.button == 0 && !e.alt && HandleUtility.nearestControl == id)
                         {
-                            Undo.RecordObject(plan, "Добавить точку плана стен");
+                            Undo.RecordObject(plan, Tr("Добавить точку плана стен"));
                             plan.SplitLink(w, plan.Curve(w).Length > 2 ? midLocal : FloorPlanTools.SnapLocal(plan, mid)); // a grid point would leave the curve
                             int added = plan.points.Count - 1;
                             sel.Clear(); sel.vertices.Add(added);
@@ -699,17 +700,17 @@ namespace CsgBrush.Editor
             else if (e.type == EventType.ContextClick && GUIUtility.hotControl == 0) // a right click, not the end of a fly-through (right drag)
             {
                 var menu = new GenericMenu();
-                menu.AddItem(new GUIContent("Выделить всё"), false, () => { foreach (var p in SelectedPlans()) SelectAll(p); SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent("Инвертировать выделение"), false, () => { foreach (var p in SelectedPlans()) Invert(p); SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent("Снять выделение"), false, ClearSelection);
-                if (CanDelete()) menu.AddItem(new GUIContent("Удалить  ⌫"), false, DeleteSelection); else menu.AddDisabledItem(new GUIContent("Удалить  ⌫"));
-                if (CanToggleSmooth()) menu.AddItem(new GUIContent("Плавная / угловая точка  S"), false, ToggleSmoothSelection); else menu.AddDisabledItem(new GUIContent("Плавная / угловая точка  S"));
+                menu.AddItem(new GUIContent(Tr("Выделить всё")), false, () => { foreach (var p in SelectedPlans()) SelectAll(p); SceneView.RepaintAll(); });
+                menu.AddItem(new GUIContent(Tr("Инвертировать выделение")), false, () => { foreach (var p in SelectedPlans()) Invert(p); SceneView.RepaintAll(); });
+                menu.AddItem(new GUIContent(Tr("Снять выделение")), false, ClearSelection);
+                if (CanDelete()) menu.AddItem(new GUIContent(Tr("Удалить  ⌫")), false, DeleteSelection); else menu.AddDisabledItem(new GUIContent(Tr("Удалить  ⌫")));
+                if (CanToggleSmooth()) menu.AddItem(new GUIContent(Tr("Плавная / угловая точка  S")), false, ToggleSmoothSelection); else menu.AddDisabledItem(new GUIContent(Tr("Плавная / угловая точка  S")));
                 menu.AddSeparator("");
-                menu.AddItem(new GUIContent("Режим точек  1"), Mode == BrushEditMode.Vertex, () => Mode = BrushEditMode.Vertex);
-                menu.AddItem(new GUIContent("Режим стен  2"), Mode == BrushEditMode.Edge, () => Mode = BrushEditMode.Edge);
-                menu.AddItem(new GUIContent("Режим комнат  3"), Mode == BrushEditMode.Face, () => Mode = BrushEditMode.Face);
+                menu.AddItem(new GUIContent(Tr("Режим точек  1")), Mode == BrushEditMode.Vertex, () => Mode = BrushEditMode.Vertex);
+                menu.AddItem(new GUIContent(Tr("Режим стен  2")), Mode == BrushEditMode.Edge, () => Mode = BrushEditMode.Edge);
+                menu.AddItem(new GUIContent(Tr("Режим комнат  3")), Mode == BrushEditMode.Face, () => Mode = BrushEditMode.Face);
                 menu.AddSeparator("");
-                menu.AddItem(new GUIContent("Завершить редактирование"), false, FloorPlanEditContext.Exit);
+                menu.AddItem(new GUIContent(Tr("Завершить редактирование")), false, FloorPlanEditContext.Exit);
                 menu.ShowAsContext();
                 e.Use();
             }
@@ -888,7 +889,7 @@ namespace CsgBrush.Editor
             if (Vector3.Dot(turnedAbout, axis) < 0f) angle = -angle;
             s_Disc = rotation;
             if (Mathf.Abs(angle) < 1e-4f) return;
-            Undo.RecordObject(spline, "Изменить крен точек сплайна");
+            Undo.RecordObject(spline, Tr("Изменить крен точек сплайна"));
             foreach (var i in moving)
             {
                 if (i >= spline.pointIds.Count) continue;
@@ -973,8 +974,11 @@ namespace CsgBrush.Editor
     {
         public FloorPlanSmoothButton()
         {
-            text = "Сгладить";
-            tooltip = "Проводит кривую через выбранные точки. Повторное нажатие возвращает углы. Сочетание: S.";
+            BrushLanguage.Bind(this, () =>
+            {
+                text = Tr("Сгладить");
+                tooltip = Tr("Проводит кривую через выбранные точки. Повторное нажатие возвращает углы. Сочетание: S.");
+            });
             clicked += FloorPlanEditState.ToggleSmoothSelection;
         }
     }
@@ -992,7 +996,8 @@ namespace CsgBrush.Editor
 
         static EditorToolbarToggle Toggle(BrushEditMode mode, string icon, string tooltip)
         {
-            var t = new EditorToolbarToggle { icon = BrushIcons.Get(icon), tooltip = tooltip };
+            var t = new EditorToolbarToggle { icon = BrushIcons.Get(icon) };
+            BrushLanguage.Bind(t, () => t.tooltip = Tr(tooltip));
             void Refresh() => t.SetValueWithoutNotify(FloorPlanEditState.Mode == mode);
             t.RegisterCallback<AttachToPanelEvent>(evt => { FloorPlanEditState.Changed += Refresh; Refresh(); });
             t.RegisterCallback<DetachFromPanelEvent>(evt => FloorPlanEditState.Changed -= Refresh);

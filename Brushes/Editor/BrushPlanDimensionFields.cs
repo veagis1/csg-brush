@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
@@ -28,11 +29,11 @@ namespace CsgBrush.Editor
                     var position = transform.TransformPoint(new Vector3(corner.x, room.height * 0.5f, corner.y));
                     var interior = transform.TransformPoint(new Vector3(centre.x, room.height * 0.5f, centre.y));
                     var edge = new BrushDimensionFields.Edge(1, position, transform.TransformVector(Vector3.up), interior);
-                    BrushDimensionFields.Field(key + "room/" + index, edge, "Высота комнаты, м", room.height * heightScale,
+                    BrushDimensionFields.Field(key + "room/" + index, edge, Tr("Высота комнаты, м"), room.height * heightScale,
                         meters =>
                         {
                             if (plan == null) return;
-                            Undo.RecordObject(plan, "Изменить высоту комнаты");
+                            Undo.RecordObject(plan, Tr("Изменить высоту комнаты"));
                             plan.SettingsOf(room).height = ToDimension(meters / heightScale);
                             RecordPlan(plan);
                         }, meters => DrawRoomOutline(plan, room, ToDimension(meters / heightScale), PreviewColor));
@@ -77,19 +78,19 @@ namespace CsgBrush.Editor
             var cap = start + firstNormal * ((wall.inner + wall.outer) * 0.5f);
             var capTop = transform.TransformPoint(new Vector3(cap.x, wall.height, cap.y));
             var rise = new BrushDimensionFields.Edge(1, halfHeight, transform.TransformVector(Vector3.up), centre);
-            BrushDimensionFields.Field(key + "/height", rise, "Высота стены, м", wall.height * heightScale,
+            BrushDimensionFields.Field(key + "/height", rise, Tr("Высота стены, м"), wall.height * heightScale,
                 meters => SetWallDimension(plan, wall, meters / heightScale, true),
                 meters => PreviewWall(plan, wall, Mathf.Max(wall.sharedRoomHeight, ToDimension(meters / heightScale)), wall.Thickness));
             if (widthScale >= 1e-6f)
                 BrushDimensionFields.Field(key + "/width", new BrushDimensionFields.Edge(2, capTop, transform.TransformVector(across), centre),
-                    "Толщина поперёк стены, м", wall.Thickness * widthScale,
+                    Tr("Толщина поперёк стены, м"), wall.Thickness * widthScale,
                     meters => SetWallDimension(plan, wall, meters / widthScale, false),
                     meters => PreviewWall(plan, wall, wall.height, ToDimension(meters / widthScale)));
 
             var a = new Vector3(wall.a.x, 0f, wall.a.y);
             var b = new Vector3(wall.b.x, 0f, wall.b.y);
             float length = transform.TransformVector(b - a).magnitude;
-            string title = wall.Curved ? "Длина хорды стены, м" : "Длина стены, м";
+            string title = wall.Curved ? Tr("Длина хорды стены, м") : Tr("Длина стены, м");
             var span = new BrushDimensionFields.Edge(0, transform.TransformPoint((a + b) * 0.5f), transform.TransformVector(b - a), centre);
             BrushDimensionFields.Field(key + "/length", span, title, length,
                 value => SetWallLength(plan, wall, value), value => PreviewWallLength(plan, wall, value));
@@ -157,7 +158,7 @@ namespace CsgBrush.Editor
         internal static bool SetWallLength(FloorPlan plan, FloorPlan.Wall wall, float meters)
         {
             if (!TryWallEnd(plan, wall, meters, out int end, out var point)) return false;
-            Undo.RecordObject(plan, "Изменить длину стены");
+            Undo.RecordObject(plan, Tr("Изменить длину стены"));
             plan.points[end] = point;
             RecordPlan(plan);
             return true;
@@ -188,10 +189,10 @@ namespace CsgBrush.Editor
             if (height && value > 0f && value + 1e-5f < wall.sharedRoomHeight)
             {
                 float minimum = wall.sharedRoomHeight * plan.transform.TransformVector(Vector3.up).magnitude;
-                SceneView.currentDrawingSceneView?.ShowNotification(new GUIContent($"Высота общей стены должна быть не меньше {minimum:0.###} м."));
+                SceneView.currentDrawingSceneView?.ShowNotification(new GUIContent(BrushLanguage.Format("Высота общей стены должна быть не меньше {0:0.###} м.", minimum)));
                 return false;
             }
-            Undo.RecordObject(plan, height ? "Изменить высоту стены" : "Изменить толщину стены");
+            Undo.RecordObject(plan, height ? Tr("Изменить высоту стены") : Tr("Изменить толщину стены"));
             var link = plan.links[index];
             if (height) link.height = ToDimension(value);
             else link.thickness = ToDimension(value);

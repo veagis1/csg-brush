@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using CsgBrush.Manifold;
 using UnityEngine;
@@ -222,13 +223,13 @@ namespace CsgBrush.Editor
         {
             switch (reason)
             {
-                case "not enough vertices or faces": return "недостаточно вершин или граней";
-                case "open": return "форма не замкнута";
-                case "no volume": return "отсутствует объём";
-                case "degenerate face": return "вырожденная грань";
-                case "non-planar face": return "грань не лежит в одной плоскости";
-                case "self-intersecting": return "самопересечение";
-                default: return reason ?? "неизвестная причина";
+                case "not enough vertices or faces": return Tr("недостаточно вершин или граней");
+                case "open": return Tr("форма не замкнута");
+                case "no volume": return Tr("отсутствует объём");
+                case "degenerate face": return Tr("вырожденная грань");
+                case "non-planar face": return Tr("грань не лежит в одной плоскости");
+                case "self-intersecting": return Tr("самопересечение");
+                default: return reason ?? Tr("неизвестная причина");
             }
         }
 

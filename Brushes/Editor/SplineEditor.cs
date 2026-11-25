@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.EditorTools;
@@ -25,7 +26,7 @@ namespace CsgBrush.Editor
         {
             var spline = (Spline)target;
             serializedObject.Update();
-            void Field(SerializedProperty property) => EditorGUILayout.PropertyField(property, BrushEditor.PropertyLabel(typeof(Spline), property));
+            void Field(SerializedProperty property) => BrushEditor.DrawProperty(property, BrushEditor.PropertyLabel(typeof(Spline), property));
             var profile = serializedObject.FindProperty(nameof(Spline.profile));
             Field(profile);
             Field(serializedObject.FindProperty(nameof(Spline.size)));
@@ -47,23 +48,23 @@ namespace CsgBrush.Editor
             PointGraphGUI.Tolerance(serializedObject);
 
             spline.EnsureGraph();
-            EditorGUILayout.LabelField("Траектория", $"Точек {spline.points.Count} · звеньев {spline.links.Count}");
-            if (TighterThanProfile(spline)) EditorGUILayout.HelpBox("Радиус поворота слишком мал для этого сечения. Внутренняя сторона профиля складывается.", MessageType.Warning);
+            EditorGUILayout.LabelField(Tr("Траектория"), BrushLanguage.Format("Точек {0} · звеньев {1}", spline.points.Count, spline.links.Count));
+            if (TighterThanProfile(spline)) EditorGUILayout.HelpBox(Tr("Радиус поворота слишком мал для этого сечения. Внутренняя сторона профиля складывается."), MessageType.Warning);
             EditorGUILayout.BeginHorizontal();
             bool editing = PointGraphEditContext.IsActive;
-            if (GUILayout.Toggle(editing, new GUIContent("Редактировать", "Перемещайте, поворачивайте и масштабируйте выделенные точки или звенья. Клавиши 1 и 2 меняют режим выделения."), EditorStyles.miniButton) != editing)
+            if (GUILayout.Toggle(editing, new GUIContent(Tr("Редактировать"), Tr("Перемещайте, поворачивайте и масштабируйте выделенные точки или звенья. Клавиши 1 и 2 меняют режим выделения.")), EditorStyles.miniButton) != editing)
             {
                 if (editing) PointGraphEditContext.Exit(); else PointGraphEditContext.Enter();
             }
             bool drawing = ToolManager.activeToolType == typeof(SplineDrawTool);
-            if (GUILayout.Toggle(drawing, new GUIContent("Рисовать", "Добавляйте точки щелчком. Escape завершает текущий штрих. Enter или повторный Escape закрывает инструмент."), EditorStyles.miniButton) != drawing)
+            if (GUILayout.Toggle(drawing, new GUIContent(Tr("Рисовать"), Tr("Добавляйте точки щелчком. Escape завершает текущий штрих. Enter или повторный Escape закрывает инструмент.")), EditorStyles.miniButton) != drawing)
             {
                 if (drawing) ToolManager.RestorePreviousPersistentTool();
                 else { PointGraphEditContext.Exit(); ToolManager.SetActiveTool<SplineDrawTool>(); }
             }
             EditorGUILayout.EndHorizontal();
             if (editing && targets.Length == 1 && FloorPlanEditState.Mode == BrushEditMode.Vertex) DrawRoll(spline);
-            if (spline.droppedPieces > 0) EditorGUILayout.HelpBox($"Не построено частей: {spline.droppedPieces}. Поворот слишком резкий для выбранного сечения.", MessageType.Warning);
+            if (spline.droppedPieces > 0) EditorGUILayout.HelpBox(BrushLanguage.Format("Не построено частей: {0}. Поворот слишком резкий для выбранного сечения.", spline.droppedPieces), MessageType.Warning);
         }
 
         /// <summary>Edit mode: the roll of the selected points, degrees (Rotate turns it in the Scene view).</summary>
@@ -77,13 +78,13 @@ namespace CsgBrush.Editor
                 float r = spline.Roll(spline.pointIds[i]);
                 if (!any) { first = r; any = true; } else if (!Mathf.Approximately(r, first)) mixed = true;
             }
-            EditorGUILayout.LabelField($"Выбранные точки ({sel.vertices.Count})", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(BrushLanguage.Format("Выбранные точки ({0})", sel.vertices.Count), EditorStyles.boldLabel);
             EditorGUI.showMixedValue = mixed;
             EditorGUI.BeginChangeCheck();
-            float value = EditorGUILayout.FloatField(new GUIContent("Крен сечения", "Угол в градусах вокруг траектории в выбранных точках. Ноль сохраняет исходную ориентацию. Угол можно менять инструментом поворота в сцене."), first);
+            float value = EditorGUILayout.FloatField(new GUIContent(Tr("Крен сечения"), Tr("Угол в градусах вокруг траектории в выбранных точках. Ноль сохраняет исходную ориентацию. Угол можно менять инструментом поворота в сцене.")), first);
             EditorGUI.showMixedValue = false;
             if (!EditorGUI.EndChangeCheck()) return;
-            Undo.RecordObject(spline, "Изменить крен точек сплайна");
+            Undo.RecordObject(spline, Tr("Изменить крен точек сплайна"));
             foreach (var i in sel.vertices) spline.SetRoll(spline.pointIds[i], value);
             BrushGenerators.MarkDirty(spline);
         }
@@ -124,7 +125,7 @@ namespace CsgBrush.Editor
     [EditorTool("Рисовать сплайн", typeof(Spline))]
     public sealed class SplineDrawTool : EditorTool
     {
-        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Spline"), "Рисовать сплайн");
+        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Spline"), Tr("Рисовать сплайн"));
 
         enum Hover { None, Free, Point, Link }
         Hover m_Kind; Vector3 m_Hover; int m_HoverPoint = -1, m_HoverLink = -1;
@@ -169,7 +170,7 @@ namespace CsgBrush.Editor
             {
                 e.Use();
                 if (e.clickCount == 2) { EndStroke(); return; }
-                Undo.RecordObject(spline, "Рисовать сплайн");
+                Undo.RecordObject(spline, Tr("Рисовать сплайн"));
                 bool joined = m_Kind != Hover.Free;
                 int point = AddAt(spline, m_Kind == Hover.Point ? m_HoverPoint : -1, m_Kind == Hover.Link ? m_HoverLink : -1, m_Hover);
                 bool started = m_Last >= 0;
@@ -182,7 +183,7 @@ namespace CsgBrush.Editor
             {
                 if (e.keyCode == KeyCode.Backspace && m_Stroke.Count >= 2)
                 {
-                    Undo.RecordObject(spline, "Удалить звено сплайна");
+                    Undo.RecordObject(spline, Tr("Удалить звено сплайна"));
                     int last = m_Stroke[m_Stroke.Count - 1], prev = m_Stroke[m_Stroke.Count - 2];
                     spline.links.RemoveAll(l => (l.start == prev && l.end == last) || (l.start == last && l.end == prev));
                     spline.RemoveLonePoints();
@@ -284,8 +285,8 @@ namespace CsgBrush.Editor
         {
             var go = new GameObject("Spline");
             GameObjectUtility.SetStaticEditorFlags(go, BrushSettings.instance.defaultModelStaticFlags); // its pieces take the spline's flags
-            Undo.RegisterCreatedObjectUndo(go, "Создать сплайн");
-            if (parent != null) Undo.SetTransformParent(go.transform, parent, "Создать сплайн");
+            Undo.RegisterCreatedObjectUndo(go, Tr("Создать сплайн"));
+            if (parent != null) Undo.SetTransformParent(go.transform, parent, Tr("Создать сплайн"));
             go.transform.position = position;
             var spline = Undo.AddComponent<Spline>(go);
             int first = firstPoint ? spline.AddPoint(Vector3.zero) : -1; // the draw tool starts its first link here
@@ -307,9 +308,9 @@ namespace CsgBrush.Editor
     [EditorTool("Сплайн", variantGroup = typeof(BrushCreateTool), variantPriority = 12)]
     public sealed class CreateSplineTool : EditorTool
     {
-        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Spline"), "Сплайн");
-        [MenuItem("CSG Brush/Создать/Сплайн", false, 13)]
-        [MenuItem("Tools/CSG Brush/Создать/Сплайн", false, 13)] static void Menu() => BrushMenu.ActivateCreation<CreateSplineTool>();
+        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Spline"), Tr("Сплайн"));
+        [MenuItem(BrushCommandMenu.CreateRoot + "Сплайн", false, 13)]
+        [MenuItem("Tools/" + BrushCommandMenu.CreateRoot + "Сплайн", false, 13)] static void Menu() => BrushMenu.ActivateCreation<CreateSplineTool>();
 
         Vector3 m_Hover; bool m_HoverValid;
         BrushSurfaceGrid.Frame m_Grid;
@@ -365,7 +366,7 @@ namespace CsgBrush.Editor
                 if (m_Spline != null)
                 {
                     var s = m_Spline;
-                    Undo.RecordObject(s, "Рисовать сплайн");
+                    Undo.RecordObject(s, Tr("Рисовать сплайн"));
                     int start = SplineDrawTool.AddAt(s, m_Point, m_Point >= 0 ? -1 : m_Link, m_Local);
                     BrushGenerators.MarkDirty(s);
                     Selection.activeGameObject = s.gameObject;

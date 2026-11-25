@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -86,7 +87,7 @@ namespace CsgBrush.Editor
 
         internal void Assign(Brush cutter)
         {
-            Undo.RecordObjects(new Object[] { cutter, cutter.gameObject }, "Назначить цель вычета");
+            Undo.RecordObjects(new Object[] { cutter, cutter.gameObject }, Tr("Назначить цель вычета"));
             cutter.gameObject.layer = Layer;
             cutter.operation = BrushOperation.Subtract;
             cutter.addressedCut = true;

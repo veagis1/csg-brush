@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -137,13 +138,12 @@ namespace CsgBrush.Editor
         [Obsolete("Use FormatMeters.")]
         public string FormatUnits(float meters) => FormatMeters(meters);
 
-        static readonly CultureInfo Russian = CultureInfo.GetCultureInfo("ru-RU");
-        public static string FormatMeters(float meters) => meters.ToString("0.#####", Russian) + " м";
-        internal static string FormatGridSteps(float[] steps) => steps == null ? "" : string.Join(" ", Array.ConvertAll(steps, step => step.ToString("R", Russian)));
+        public static string FormatMeters(float meters) => meters.ToString("0.#####", BrushLanguage.Culture) + Tr(" м");
+        internal static string FormatGridSteps(float[] steps) => steps == null ? "" : string.Join(" ", Array.ConvertAll(steps, step => step.ToString("R", BrushLanguage.Culture)));
 
         internal string[] GridStepNames() => gridSizes == null || gridSizes.Length == 0
             ? new[] { FormatMeters(GridMeters) }
-            : Array.ConvertAll(gridSizes, step => step.ToString("G6", Russian) + " м");
+            : Array.ConvertAll(gridSizes, step => step.ToString("G6", BrushLanguage.Culture) + Tr(" м"));
 
         internal static bool TryParseGridSteps(string text, out float[] steps)
         {
@@ -214,13 +214,27 @@ namespace CsgBrush.Editor
             [InspectorName("Всё")] Everything = -1,
         }
 
+        [Flags]
+        enum EnglishStaticFlags
+        {
+            Nothing = 0,
+            ContributeGI = (int)StaticFlagOption.ContributeGI,
+            OccluderStatic = (int)StaticFlagOption.OccluderStatic,
+            OccludeeStatic = (int)StaticFlagOption.OccludeeStatic,
+            BatchingStatic = (int)StaticFlagOption.BatchingStatic,
+            ReflectionProbeStatic = (int)StaticFlagOption.ReflectionProbeStatic,
+            Everything = -1
+        }
+
         static StaticEditorFlags DrawStaticFlags(StaticEditorFlags flags)
         {
             const StaticEditorFlags visibleFlags = StaticEditorFlags.ContributeGI | StaticEditorFlags.OccluderStatic |
                 StaticEditorFlags.OccludeeStatic | StaticEditorFlags.BatchingStatic | StaticEditorFlags.ReflectionProbeStatic;
-            var label = new GUIContent("Флаги статичности", "Новые браши, планы стен и сплайны получают эту маску. «Ничего» сбрасывает всю маску. «Всё» включает все биты, в том числе скрытые.");
+            var label = new GUIContent(Tr("Флаги статичности"), Tr("Новые браши, планы стен и сплайны получают эту маску. «Ничего» сбрасывает всю маску. «Всё» включает все биты, в том числе скрытые."));
             EditorGUI.BeginChangeCheck();
-            var selected = (StaticFlagOption)EditorGUILayout.EnumFlagsField(label, (StaticFlagOption)flags);
+            var selected = BrushLanguage.English
+                ? (StaticFlagOption)(int)(EnglishStaticFlags)EditorGUILayout.EnumFlagsField(label, (EnglishStaticFlags)(int)flags)
+                : (StaticFlagOption)EditorGUILayout.EnumFlagsField(label, (StaticFlagOption)flags);
             if (!EditorGUI.EndChangeCheck()) return flags;
             if (selected == StaticFlagOption.None || selected == StaticFlagOption.Everything)
                 return (StaticEditorFlags)selected;
@@ -235,33 +249,46 @@ namespace CsgBrush.Editor
             var provider = new SettingsProvider("Project/Brushes", SettingsScope.Project)
             {
                 label = "CSG Brush",
-                keywords = new HashSet<string>(new[] { "brush", "grid", "meters", "level", "браш", "сетка", "метры", "уровень" }),
+                keywords = new HashSet<string>(new[] { "brush", "grid", "meters", "level", "language", "язык", "браш", "сетка", "метры", "уровень" }),
                 guiHandler = _ =>
                 {
-                    var s = BrushSettings.instance;
-                    EditorGUI.BeginChangeCheck();
-                    var gridText = BrushSettings.FormatGridSteps(s.gridSizes);
-                    var newGridText = EditorGUILayout.DelayedTextField(new GUIContent("Шаги сетки (м)", "Положительные шаги сетки в метрах. Разделяйте значения пробелами. В дробях можно использовать запятую или точку."), gridText);
-                    if (newGridText != gridText && BrushSettings.TryParseGridSteps(newGridText, out var steps))
-                        s.gridSizes = steps;
-                    s.defaultBoxSize = EditorGUILayout.Vector3Field(new GUIContent("Размер коробки (м)", "Размер новой коробки в метрах по осям X, Y и Z."), s.defaultBoxSize);
-                    s.rotationSnapDegrees = EditorGUILayout.FloatField(new GUIContent("Шаг поворота (°)", "Шаг привязки вращения в градусах. Чем он больше, тем крупнее угловой шаг. Ноль отключает привязку поворота."), s.rotationSnapDegrees);
-                    var names = s.GridStepNames();
-                    s.gridIndex = EditorGUILayout.Popup(new GUIContent("Шаг сетки", "Текущий шаг сетки в метрах. Меньший шаг даёт более точную привязку."), Mathf.Clamp(s.gridIndex, 0, names.Length - 1), names);
-                    s.snapToGrid = EditorGUILayout.Toggle(new GUIContent("Привязывать браши к сетке", "После каждой правки положение, размеры и поворот браша привязываются к мировой сетке, независимо от родительского объекта."), s.snapToGrid);
-                    s.curveTolerance = Mathf.Max(PointGraph.MinTolerance, EditorGUILayout.FloatField(new GUIContent("Допуск кривых (м)", "Максимальное отклонение стены или сплайна от кривой в метрах. Меньше — плавнее контур и больше сегментов. Минимум 0,01 м. Отдельный объект может переопределить этот допуск."), s.curveTolerance));
-                    EditorGUILayout.BeginHorizontal();
-                    s.defaultMaterial = (Material)EditorGUILayout.ObjectField(new GUIContent("Основной материал", "Материал граней браша без собственного материала. Если поле пусто, при первом использовании в Assets/CSG Brush создаётся текстура с сеткой в метрах."), s.defaultMaterial, typeof(Material), false);
-                    if (GUILayout.Button(new GUIContent("Сетка", "Заново создать материал сетки из списка шагов и использовать его."), GUILayout.Width(56))) { s.defaultMaterial = null; BrushGridMaterial.Regenerate(); BrushGridMaterial.GetOrCreate(); BrushApi.ForceUpdate(); }
-                    EditorGUILayout.EndHorizontal();
-                    s.showGenerated = EditorGUILayout.Toggle(new GUIContent("Созданные объекты", "Показывает служебные объекты, созданные CSG Brush, в иерархии."), s.showGenerated);
-                    s.defaultModelStaticFlags = DrawStaticFlags(s.defaultModelStaticFlags);
-                    s.autoLightmapUVs = EditorGUILayout.Toggle(new GUIContent("Автоматические UV карт освещения", "Создаёт UV для карт освещения после завершения правки мешей брашей. При отключении развёртку нужно создать вручную перед запеканием."), s.autoLightmapUVs);
-                    if (EditorGUI.EndChangeCheck())
-                        s.NotifyChanged();
+                    float previousWidth = EditorGUIUtility.labelWidth;
+                    try
+                    {
+                        // Allow for the bilingual language selector and the longer Russian labels.
+                        EditorGUIUtility.labelWidth = Mathf.Min(240f, EditorGUIUtility.currentViewWidth * 0.45f);
+                        DrawFields();
+                    }
+                    finally { EditorGUIUtility.labelWidth = previousWidth; }
                 }
             };
             return provider;
+        }
+
+        static void DrawFields()
+        {
+            BrushLanguage.DrawPreference();
+            var s = BrushSettings.instance;
+            EditorGUI.BeginChangeCheck();
+            var gridText = BrushSettings.FormatGridSteps(s.gridSizes);
+            var newGridText = EditorGUILayout.DelayedTextField(new GUIContent(Tr("Шаги сетки (м)"), Tr("Положительные шаги сетки в метрах. Разделяйте значения пробелами. В дробях можно использовать запятую или точку.")), gridText);
+            if (newGridText != gridText && BrushSettings.TryParseGridSteps(newGridText, out var steps))
+                s.gridSizes = steps;
+            s.defaultBoxSize = EditorGUILayout.Vector3Field(new GUIContent(Tr("Размер коробки (м)"), Tr("Размер новой коробки в метрах по осям X, Y и Z.")), s.defaultBoxSize);
+            s.rotationSnapDegrees = EditorGUILayout.FloatField(new GUIContent(Tr("Шаг поворота (°)"), Tr("Шаг привязки вращения в градусах. Чем он больше, тем крупнее угловой шаг. Ноль отключает привязку поворота.")), s.rotationSnapDegrees);
+            var names = s.GridStepNames();
+            s.gridIndex = EditorGUILayout.Popup(new GUIContent(Tr("Шаг сетки"), Tr("Текущий шаг сетки в метрах. Меньший шаг даёт более точную привязку.")), Mathf.Clamp(s.gridIndex, 0, names.Length - 1), names);
+            s.snapToGrid = EditorGUILayout.Toggle(new GUIContent(Tr("Привязывать браши к сетке"), Tr("После каждой правки положение, размеры и поворот браша привязываются к мировой сетке, независимо от родительского объекта.")), s.snapToGrid);
+            s.curveTolerance = Mathf.Max(PointGraph.MinTolerance, EditorGUILayout.FloatField(new GUIContent(Tr("Допуск кривых (м)"), Tr("Максимальное отклонение стены или сплайна от кривой в метрах. Меньше — плавнее контур и больше сегментов. Минимум 0,01 м. Отдельный объект может переопределить этот допуск.")), s.curveTolerance));
+            EditorGUILayout.BeginHorizontal();
+            s.defaultMaterial = (Material)EditorGUILayout.ObjectField(new GUIContent(Tr("Основной материал"), Tr("Материал граней браша без собственного материала. Если поле пусто, при первом использовании в Assets/CSG Brush создаётся текстура с сеткой в метрах.")), s.defaultMaterial, typeof(Material), false);
+            if (GUILayout.Button(new GUIContent(Tr("Сетка"), Tr("Заново создать материал сетки из списка шагов и использовать его.")), GUILayout.Width(56))) { s.defaultMaterial = null; BrushGridMaterial.Regenerate(); BrushGridMaterial.GetOrCreate(); BrushApi.ForceUpdate(); }
+            EditorGUILayout.EndHorizontal();
+            s.showGenerated = EditorGUILayout.Toggle(new GUIContent(Tr("Созданные объекты"), Tr("Показывает служебные объекты, созданные CSG Brush, в иерархии.")), s.showGenerated);
+            s.defaultModelStaticFlags = DrawStaticFlags(s.defaultModelStaticFlags);
+            s.autoLightmapUVs = EditorGUILayout.Toggle(new GUIContent(Tr("Автоматические UV карт освещения"), Tr("Создаёт UV для карт освещения после завершения правки мешей брашей. При отключении развёртку нужно создать вручную перед запеканием.")), s.autoLightmapUVs);
+            if (EditorGUI.EndChangeCheck())
+                s.NotifyChanged();
         }
     }
 }

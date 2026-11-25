@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
@@ -109,7 +110,7 @@ namespace CsgBrush.Editor
                 var poly = ShapeOf(brush);
                 if (poly == null || !poly.IsValid)
                 {
-                    Handles.Label(brush.transform.position, "Ручная правка этой формы пока недоступна", EditorStyles.helpBox);
+                    Handles.Label(brush.transform.position, Tr("Ручная правка этой формы пока недоступна"), EditorStyles.helpBox);
                     continue;
                 }
                 var sel = Sel(brush);
@@ -227,15 +228,15 @@ namespace CsgBrush.Editor
             else if (e.type == EventType.ContextClick && GUIUtility.hotControl == 0) // a right click, not the end of a fly-through (right drag)
             {
                 var menu = new GenericMenu();
-                menu.AddItem(new GUIContent("Выбрать всё"), false, SelectAll);
-                menu.AddItem(new GUIContent("Инвертировать выбор"), false, Invert);
-                menu.AddItem(new GUIContent("Снять выделение"), false, ClearSelection);
+                menu.AddItem(new GUIContent(Tr("Выбрать всё")), false, SelectAll);
+                menu.AddItem(new GUIContent(Tr("Инвертировать выбор")), false, Invert);
+                menu.AddItem(new GUIContent(Tr("Снять выделение")), false, ClearSelection);
                 menu.AddSeparator("");
-                menu.AddItem(new GUIContent("Вершины  1"), Mode == BrushEditMode.Vertex, () => { Mode = BrushEditMode.Vertex; SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent("Рёбра  2"), Mode == BrushEditMode.Edge, () => { Mode = BrushEditMode.Edge; SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent("Грани  3"), Mode == BrushEditMode.Face, () => { Mode = BrushEditMode.Face; SceneView.RepaintAll(); });
+                menu.AddItem(new GUIContent(Tr("Вершины  1")), Mode == BrushEditMode.Vertex, () => { Mode = BrushEditMode.Vertex; SceneView.RepaintAll(); });
+                menu.AddItem(new GUIContent(Tr("Рёбра  2")), Mode == BrushEditMode.Edge, () => { Mode = BrushEditMode.Edge; SceneView.RepaintAll(); });
+                menu.AddItem(new GUIContent(Tr("Грани  3")), Mode == BrushEditMode.Face, () => { Mode = BrushEditMode.Face; SceneView.RepaintAll(); });
                 menu.AddSeparator("");
-                menu.AddItem(new GUIContent("Завершить правку"), false, BrushEditContext.Exit);
+                menu.AddItem(new GUIContent(Tr("Завершить правку")), false, BrushEditContext.Exit);
                 menu.ShowAsContext();
                 e.Use();
             }

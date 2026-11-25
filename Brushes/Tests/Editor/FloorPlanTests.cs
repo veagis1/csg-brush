@@ -247,12 +247,31 @@ namespace CsgBrush.Tests
         static WallAnchor Anchor(Brush b) => b.GetComponent<WallAnchor>();
         static void Rebuild(FloorPlan plan) { BrushGenerators.Update(plan, true); BrushApi.ForceUpdate(); Physics.SyncTransforms(); }
 
+        // These rooms sample wall geometry at fixed heights, using the package's default door and window.
+        static Brush PlaceDefaultOpening(FloorPlan plan, BrushShape shape, int wallIndex, float distance)
+        {
+            var settings = BrushSettings.instance;
+            var door = (settings.newDoorWidth, settings.newDoorHeight);
+            var window = (settings.newWindowWidth, settings.newWindowHeight, settings.newWindowSill);
+            try
+            {
+                (settings.newDoorWidth, settings.newDoorHeight) = (0f, 0f);
+                (settings.newWindowWidth, settings.newWindowHeight, settings.newWindowSill) = (0f, 0f, 0f);
+                return WallAnchors.Place(plan, shape, wallIndex, distance);
+            }
+            finally
+            {
+                (settings.newDoorWidth, settings.newDoorHeight) = door;
+                (settings.newWindowWidth, settings.newWindowHeight, settings.newWindowSill) = window;
+            }
+        }
+
         [Test]
         public void ADoorCutsItsPlanWallAndAWindowStandsOnItsSill()
         {
             var plan = Room(FourByThree);
-            var door = WallAnchors.Place(plan, BrushShape.Door, 0, 2f); // the wall along z = 0, outside the room
-            var window = WallAnchors.Place(plan, BrushShape.Window, 1, 1.5f); // the wall along x = 4
+            var door = PlaceDefaultOpening(plan, BrushShape.Door, 0, 2f); // the wall along z = 0, outside the room
+            var window = PlaceDefaultOpening(plan, BrushShape.Window, 1, 1.5f); // the wall along x = 4
             Rebuild(plan);
             Assert.AreEqual(plan.transform, door.transform.parent); Assert.AreEqual(BrushOperation.Subtract, door.operation);
             Assert.IsTrue(Anchor(door).onWall && Anchor(window).onWall);
@@ -270,7 +289,7 @@ namespace CsgBrush.Tests
         public void ADoorFollowsItsWallAndItsThickness()
         {
             var plan = Room(FourByThree);
-            var door = WallAnchors.Place(plan, BrushShape.Door, 0, 1f);
+            var door = PlaceDefaultOpening(plan, BrushShape.Door, 0, 1f);
             Rebuild(plan);
             Assert.That(Vector3.Distance(door.transform.position, new Vector3(1f, 1.1f, -0.1f)), Is.LessThan(1e-4f));
             plan.points[0] = new Vector3(0f, 0f, -1f); // the wall turns; the door keeps 1 m from its first corner
@@ -288,7 +307,7 @@ namespace CsgBrush.Tests
         public void SplittingAWallKeepsTheDoorAndDeletingTheWallFreesIt()
         {
             var plan = Room(FourByThree);
-            var door = WallAnchors.Place(plan, BrushShape.Door, 0, 3f);
+            var door = PlaceDefaultOpening(plan, BrushShape.Door, 0, 3f);
             Rebuild(plan);
             var ids = new List<int>(plan.pointIds);
             int added = plan.SplitWall(0, new Vector3(2f, 0f, 0f)); // a + on the door's wall
@@ -422,7 +441,7 @@ namespace CsgBrush.Tests
                 picture.transform.position = new Vector3(1f, 1.5f, 0.05f); // against the inside of the wall along z = 0
                 var a = WallAnchors.Attach(picture);
                 Rebuild(plan);
-                var door = WallAnchors.Place(plan, BrushShape.Door, 0, 3f);
+                var door = PlaceDefaultOpening(plan, BrushShape.Door, 0, 3f);
                 Rebuild(plan);
                 plan.EnsureGraph(); SmoothAll(plan);
                 Physics.SyncTransforms();
@@ -502,7 +521,7 @@ namespace CsgBrush.Tests
             {
                 s.snapToGrid = false;
                 var plan = Room(FourByThree);
-                var door = WallAnchors.Place(plan, BrushShape.Door, 0, 2f);
+                var door = PlaceDefaultOpening(plan, BrushShape.Door, 0, 2f);
                 Rebuild(plan);
                 door.transform.position = new Vector3(1.3f, 1.1f, -0.3f); // along its wall, a little off it
                 WallAnchors.Moved(Anchor(door));
@@ -906,7 +925,7 @@ namespace CsgBrush.Tests
             int inner = plan.AddWall(front, back);
             Rebuild(plan);
             Undo.IncrementCurrentGroup();
-            var door = WallAnchors.Place(plan, BrushShape.Door, inner, 1.5f);
+            var door = PlaceDefaultOpening(plan, BrushShape.Door, inner, 1.5f);
             Rebuild(plan);
             var placed = door.transform.position;
             Assert.IsFalse(Solid(new Vector3(2f, 1f, 1.5f)), "the doorway is open");
@@ -935,7 +954,7 @@ namespace CsgBrush.Tests
             int inner = plan.AddWall(a, b);
             Rebuild(plan);
             Undo.IncrementCurrentGroup();
-            var door = WallAnchors.Place(plan, BrushShape.Door, inner, 1.5f);
+            var door = PlaceDefaultOpening(plan, BrushShape.Door, inner, 1.5f);
             Rebuild(plan);
             var placed = door.transform.position; var ids = (Anchor(door).startId, Anchor(door).endId);
             Undo.IncrementCurrentGroup();
@@ -961,7 +980,7 @@ namespace CsgBrush.Tests
             int inner = plan.AddWall(a, b);
             Rebuild(plan);
             Undo.IncrementCurrentGroup();
-            var door = WallAnchors.Place(plan, BrushShape.Door, inner, 1.5f);
+            var door = PlaceDefaultOpening(plan, BrushShape.Door, inner, 1.5f);
             Rebuild(plan);
             var placed = door.transform.position; var ids = (Anchor(door).startId, Anchor(door).endId);
             Undo.IncrementCurrentGroup();

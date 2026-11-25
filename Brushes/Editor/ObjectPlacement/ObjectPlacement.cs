@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -46,7 +47,7 @@ namespace CsgBrush.Editor
         {
             if (!CanMove(source) || !float.IsFinite(destination.sqrMagnitude) ||
                 source.position == destination) return false;
-            Undo.RecordObject(source, "Переместить объект к вершине или ребру");
+            Undo.RecordObject(source, Tr("Переместить объект к вершине или ребру"));
             source.position = destination;
             foreach (var brush in source.GetComponentsInChildren<Brush>(true))
             {

@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using System.Linq;
 using CsgBrush.Manifold;
@@ -211,9 +212,9 @@ namespace CsgBrush.Editor
             var state = Evaluate(target, shape, pose, ignore, inner);
             if (state != Result.Outline)
             {
-                string message = state == Result.Disjoint ? "Нет пересечения с целью" :
-                    state == Result.Internal ? "Вычет без контура на поверхности" :
-                    state == Result.RemovesTarget ? "Будет удалён объём цели" : "Предпросмотр недоступен";
+                string message = state == Result.Disjoint ? Tr("Нет пересечения с целью") :
+                    state == Result.Internal ? Tr("Вычет без контура на поверхности") :
+                    state == Result.RemovesTarget ? Tr("Будет удалён объём цели") : Tr("Предпросмотр недоступен");
                 Handles.Label(pose.MultiplyPoint3x4(shape.Bounds().center), message, EditorStyles.helpBox);
                 return;
             }

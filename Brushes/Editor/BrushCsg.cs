@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using System.Diagnostics;
 using CsgBrush.Colliders;
@@ -763,7 +764,7 @@ namespace CsgBrush.Editor
                 if (s_Solids.TryGetValue(r.brush, out var old)) old.solid?.Dispose();
                 var data = job.newSolidData[n];
                 var entry = new SolidEntry { key = r.key, solid = job.newSolids[n], bounds = data.bounds, blocks = data.blocks, polyhedron = data.polyhedron };
-                if (entry.solid == null) r.brush.problem = "Не удалось построить форму.";
+                if (entry.solid == null) r.brush.problem = Tr("Не удалось построить форму.");
                 s_Solids[r.brush] = entry;
                 r.solid = entry; job.records[job.newSolidIndices[n]] = r;
             }

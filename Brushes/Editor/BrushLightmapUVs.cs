@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using System.Diagnostics;
 using UnityEditor;
@@ -52,7 +53,7 @@ namespace CsgBrush.Editor
             if (sw.Elapsed.TotalSeconds > SlowSeconds && !s_WarnedSlow)
             {
                 s_WarnedSlow = true;
-                Debug.Log($"CSG Brush: развёртка UV для карт освещения заняла {sw.Elapsed.TotalSeconds:0.0} с. Для крупных групп можно отключить автоматические UV в Project Settings → CSG Brush и создавать развёртки перед запеканием.");
+                Debug.Log(BrushLanguage.Format("CSG Brush: развёртка UV для карт освещения заняла {0:0.0} с. Для крупных групп можно отключить автоматические UV в Project Settings → CSG Brush и создавать развёртки перед запеканием.", sw.Elapsed.TotalSeconds));
             }
         }
 
@@ -106,7 +107,7 @@ namespace CsgBrush.Editor
                 var mesh = mf.sharedMesh;
                 if (HasLightmapUVs(mesh)) mesh.uv2 = null; // made with other settings: from the mesh as built
                 if (mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 && mesh.vertexCount > 30000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32; // room for the vertices the unwrap may add
-                if (!Unwrapping.GenerateSecondaryUVSet(mesh, param)) { Debug.LogWarning("CSG Brush: не удалось создать UV для карт освещения у " + mf.transform.parent?.name + "/" + mf.name + ".", mf); continue; }
+                if (!Unwrapping.GenerateSecondaryUVSet(mesh, param)) { Debug.LogWarning(Tr("CSG Brush: не удалось создать UV для карт освещения у ") + mf.transform.parent?.name + "/" + mf.name + ".", mf); continue; }
                 if (!mf.TryGetComponent<BrushMeshSources>(out var saved)) saved = mf.gameObject.AddComponent<BrushMeshSources>();
                 saved.lightmapUVSettings = settings;
                 EditorSceneManager.MarkSceneDirty(mf.gameObject.scene);
@@ -140,7 +141,7 @@ namespace CsgBrush.Editor
         static void Menu()
         {
             int made = Generate();
-            Debug.Log(made == 0 ? "CSG Brush. Все освещаемые меши брашей уже имеют UV-развёртки для карт освещения." : $"CSG Brush. Количество мешей брашей с новыми UV-развёртками для карт освещения — {made}.");
+            Debug.Log(made == 0 ? Tr("CSG Brush. Все освещаемые меши брашей уже имеют UV-развёртки для карт освещения.") : BrushLanguage.Format("CSG Brush. Количество мешей брашей с новыми UV-развёртками для карт освещения — {0}.", made));
         }
 
         static void OnBakeCompleted()
@@ -148,7 +149,7 @@ namespace CsgBrush.Editor
             var missing = new List<string>();
             foreach (var mf in LitMeshes()) if (!HasLightmapUVs(mf.sharedMesh)) missing.Add(mf.transform.parent?.name + "/" + mf.name);
             if (missing.Count == 0) return;
-            Debug.LogWarning("CSG Brush: эти меши брашей пропущены при запекании из-за отсутствия UV для карт освещения: " + string.Join(", ", missing) + ". Выполните Tools → CSG Brush → Создать UV-развёртки для карт освещения и повторите запекание.");
+            Debug.LogWarning(Tr("CSG Brush: эти меши брашей пропущены при запекании из-за отсутствия UV для карт освещения: ") + string.Join(", ", missing) + Tr(". Выполните Tools → CSG Brush → Создать UV-развёртки для карт освещения и повторите запекание."));
         }
     }
 }

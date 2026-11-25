@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using CsgBrush.Colliders;
 using UnityEditor;
@@ -30,7 +31,7 @@ namespace CsgBrush.Editor
                 if (brush.polyhedron == null || !brush.polyhedron.IsValid)
                     brush.polyhedron = BrushGeometry.Polyhedron(brush); // regenerate the original shape when editable vertices are missing
                 brush.size = brush.polyhedron.Bounds().size;
-                if (!brush.polyhedron.IsSound(out var why)) brush.problem = "Некорректная форма: " + BrushBoolean.DescribeProblem(why) + ".";
+                if (!brush.polyhedron.IsSound(out var why)) brush.problem = Tr("Некорректная форма: ") + BrushBoolean.DescribeProblem(why) + ".";
             }
             else if (brush.HasParametricSize)
                 brush.size = BrushGeometry.Polyhedron(brush).Bounds().size; // curved and spiral stairs: the size follows the parameters

@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -62,16 +63,16 @@ namespace CsgBrush.Editor
             {
                 if (BrushesOf(group).Count == 0) continue;
                 var meshes = MeshChildren(group);
-                if (meshes.Count == 0) return group.name + ": нет дочернего объекта с мешем";
+                if (meshes.Count == 0) return group.name + Tr(": нет дочернего объекта с мешем");
                 foreach (var mf in meshes)
                 {
-                    if (mf.sharedMesh == null) return group.name + ": " + mf.name + " — меш отсутствует";
-                    if (!EditorUtility.IsPersistent(mf.sharedMesh)) return group.name + ": " + mf.name + " — меш не сохранён";
+                    if (mf.sharedMesh == null) return group.name + ": " + mf.name + Tr(" — меш отсутствует");
+                    if (!EditorUtility.IsPersistent(mf.sharedMesh)) return group.name + ": " + mf.name + Tr(" — меш не сохранён");
                 }
                 foreach (var mc in group.GetComponentsInChildren<MeshCollider>(true))
                 {
-                    if (mc.sharedMesh == null) return group.name + ": коллайдер " + mc.name + " — меш отсутствует";
-                    if (!EditorUtility.IsPersistent(mc.sharedMesh)) return group.name + ": коллайдер " + mc.name + " — меш не сохранён";
+                    if (mc.sharedMesh == null) return group.name + Tr(": коллайдер ") + mc.name + Tr(" — меш отсутствует");
+                    if (!EditorUtility.IsPersistent(mc.sharedMesh)) return group.name + Tr(": коллайдер ") + mc.name + Tr(" — меш не сохранён");
                 }
             }
             return null;

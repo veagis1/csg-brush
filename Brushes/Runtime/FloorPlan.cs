@@ -53,14 +53,14 @@ namespace CsgBrush
         /// <summary>Plans from before wall networks were an outline through the points in order: closed joined the last to the first. Read once, when they are converted.</summary>
         [HideInInspector] public bool closed;
 
-        [Header("Стены")]
+        [System.ComponentModel.Category("Стены")]
         [InspectorName("Открытые и внутренние, м"), Tooltip("Толщина отдельной стены, открытой ломаной и перегородки в метрах. Половина толщины по каждую сторону линии. Минимум 0,001 м. Своя толщина участка имеет приоритет.")] public float interiorWallThickness = 0.1f;
         [InspectorName("Наружный контур, м"), Tooltip("Толщина наружной стены замкнутой комнаты в метрах. Минимум 0,001 м. Положение относительно линии задаётся ниже. Своя толщина участка имеет приоритет.")] public float wallThickness = 0.2f;
         [InspectorName("Высота по умолчанию, м"), Tooltip("Высота комнат и открытых стен от уровня плана, в метрах. Её можно переопределить у комнаты и участка стены. Минимум 0,001 м.")] public float wallHeight = 3f;
         [InspectorName("Положение наружной стены"), Tooltip("Положение наружных стен относительно начерченной линии. Внутренние стены всегда центрируются на линии.")] public Side side = Side.Outside;
         [InspectorName("Материал стен"), Tooltip("Пустое поле использует материал проекта по умолчанию.")] public Material wallMaterial;
 
-        [Header("Пол и потолок")]
+        [System.ComponentModel.Category("Пол и потолок")]
         [InspectorName("Создавать пол"), Tooltip("Создавать плиту пола в каждой комнате. Для отдельной комнаты можно задать своё значение.")] public bool floor = true;
         [InspectorName("Толщина пола, м"), Tooltip("Толщина пола в метрах. Плита растёт вниз от основания стен.")] public float floorThickness = 0.2f;
         [InspectorName("Материал пола"), Tooltip("Пустое поле использует материал проекта по умолчанию.")] public Material floorMaterial;

@@ -1,3 +1,4 @@
+using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
@@ -299,7 +300,7 @@ namespace CsgBrush.Editor
             {
                 var brush = active[i];
                 if (brush == null || !IsOffGrid(brush)) continue;
-                if (recordUndo) Undo.RecordObjects(new Object[] { brush, brush.transform }, "Привязать браши к сетке");
+                if (recordUndo) Undo.RecordObjects(new Object[] { brush, brush.transform }, Tr("Привязать браши к сетке"));
                 SnapOnce(brush); // its parent was reset: put it on the grid wherever it was left
                 if (Snap(brush)) { count++; BrushSync.Ensure(brush); }
             }
@@ -519,7 +520,7 @@ namespace CsgBrush.Editor
             var parents = new List<Transform>(TransformedParents());
             foreach (var p in parents)
             {
-                Undo.RecordObject(p, "Сбросить трансформацию родителя");
+                Undo.RecordObject(p, Tr("Сбросить трансформацию родителя"));
                 p.rotation = SnapRotation(p.rotation, 90f);
                 p.localScale = Vector3.one;
             }
