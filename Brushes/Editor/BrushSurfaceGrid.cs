@@ -140,21 +140,6 @@ namespace CsgBrush.Editor
                     held = default;
                     SceneView.RepaintAll();
                 });
-            menu.AddSeparator("");
-            var pickPivot = new GUIContent("Привязать к вершине или ребру");
-            var resetPivot = new GUIContent("Сбросить точку привязки");
-            if (!EditorApplication.isPlayingOrWillChangePlaymode && Selection.gameObjects.Length == 1 &&
-                Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<Brush>(out var brush) &&
-                brush.gameObject.scene.IsValid() && !EditorUtility.IsPersistent(brush) && BrushApi.CanPickPivot(brush))
-            {
-                menu.AddItem(pickPivot, false, () => BrushPivotTool.Schedule(brush, reset: false));
-                menu.AddItem(resetPivot, false, () => BrushPivotTool.Schedule(brush, reset: true));
-            }
-            else
-            {
-                menu.AddDisabledItem(pickPivot);
-                menu.AddDisabledItem(resetPivot);
-            }
             menu.ShowAsContext();
         }
 

@@ -23,7 +23,8 @@ namespace CsgBrush.Editor
             var toolbar = new OverlayToolbar();
             toolbar.Add(new IMGUIContainer(DrawCreateMenu));
             toolbar.Add(new IMGUIContainer(ObjectPlacementTool.DrawButton));
-            toolbar.Add(new IMGUIContainer(() => DrawDimensionsAndSnapping(BrushSettings.instance)));
+            toolbar.Add(new IMGUIContainer(() => DrawGridAndVisibility(BrushSettings.instance)));
+            toolbar.Add(new IMGUIContainer(DrawSnapMenus));
             toolbar.Add(new IMGUIContainer(DrawEditToggles));
             foreach (var operation in new[] { BrushOperation.Add, BrushOperation.Subtract })
             {
@@ -116,16 +117,28 @@ namespace CsgBrush.Editor
             if (chosen != current) { s.shapeEditSelection = (ShapeEditSelection)chosen; s.NotifyChanged(); }
         }
 
-        static void DrawDimensionsAndSnapping(BrushSettings s)
+        static void DrawGridAndVisibility(BrushSettings s)
         {
             using var row = new EditorGUILayout.HorizontalScope();
+            const string snapTip = "Включить привязку к сетке при правке положения, размеров, поворота и вершин. Шаг указан справа в метрах. Клавиши [ и ] уменьшают и увеличивают шаг.";
+            var icon = EditorGUIUtility.IconContent("SceneViewSnap")?.image;
+            var snapContent = icon != null ? new GUIContent(icon, snapTip) : new GUIContent("Сетка", snapTip);
+            bool snap = GUILayout.Toggle(s.snapToGrid, snapContent, EditorStyles.miniButton, GUILayout.Width(icon != null ? 26 : 42), GUILayout.Height(18));
+            if (snap != s.snapToGrid) { s.snapToGrid = snap; s.NotifyChanged(); }
+            var names = s.GridStepNames();
+            int idx = EditorGUILayout.Popup(Mathf.Clamp(s.gridIndex, 0, names.Length - 1), names, GUILayout.Width(74));
+            if (idx != s.gridIndex) s.SetGridIndex(idx);
+            bool cuts = GUILayout.Toggle(s.showCuts, new GUIContent("Вычеты", "Показывать вычитающие браши полупрозрачным красным объёмом. Так их можно выбрать, даже если они полностью убрали геометрию."), EditorStyles.miniButton, GUILayout.Width(54), GUILayout.Height(18));
+            if (cuts != s.showCuts) { s.showCuts = cuts; s.NotifyChanged(); SceneView.RepaintAll(); }
             bool sizes = GUILayout.Toggle(s.showDimensions, new GUIContent("Размеры", BrushSettings.DimensionsTooltip), EditorStyles.miniButton, GUILayout.Width(62), GUILayout.Height(18));
             if (sizes != s.showDimensions) { s.showDimensions = sizes; s.NotifyChanged(); SceneView.RepaintAll(); }
+        }
+
+        static void DrawSnapMenus()
+        {
+            using var row = new EditorGUILayout.HorizontalScope();
             BrushSurfaceGrid.DrawMenu();
-            var snapIcon = EditorGUIUtility.IconContent("SceneViewSnap");
-            var snapContent = snapIcon != null && snapIcon.image != null ? new GUIContent(snapIcon.image, "Привязка к сетке. При правке привязывает положение, размеры, поворот и вершины.") : new GUIContent("Привязка");
-            bool snap = GUILayout.Toggle(s.snapToGrid, snapContent, EditorStyles.miniButton, GUILayout.Width(snapIcon != null && snapIcon.image != null ? 26 : 70), GUILayout.Height(18));
-            if (snap != s.snapToGrid) { s.snapToGrid = snap; s.NotifyChanged(); }
+            BrushPivotTool.DrawMenu();
         }
 
         static void Draw()
@@ -139,19 +152,8 @@ namespace CsgBrush.Editor
                 ObjectPlacementTool.DrawButton();
             }
 
-            // Independent row keeps each pair together even at the minimum width.
-            EditorGUILayout.BeginHorizontal();
-            var gridIcon = EditorGUIUtility.IconContent("GridAxisY");
-            GUILayout.Label(gridIcon != null && gridIcon.image != null ? new GUIContent(gridIcon.image, "Шаг сетки. Клавиши [ и ] уменьшают и увеличивают шаг.") : new GUIContent("Сетка"), GUILayout.Width(gridIcon != null && gridIcon.image != null ? 20 : 42), GUILayout.Height(18));
-            var names = s.GridStepNames();
-            int idx = EditorGUILayout.Popup(Mathf.Clamp(s.gridIndex, 0, names.Length - 1), names, GUILayout.Width(74));
-            if (idx != s.gridIndex) s.SetGridIndex(idx);
-            bool cuts = GUILayout.Toggle(s.showCuts, new GUIContent("Вычеты", "Показывать вычитающие браши полупрозрачным красным объёмом. Так их можно выбрать, даже если они полностью убрали геометрию."), EditorStyles.miniButton, GUILayout.Width(54), GUILayout.Height(18));
-            if (cuts != s.showCuts) { s.showCuts = cuts; s.NotifyChanged(); SceneView.RepaintAll(); }
-            GUILayout.FlexibleSpace();
-            EditorGUILayout.EndHorizontal();
-
-            DrawDimensionsAndSnapping(s);
+            DrawGridAndVisibility(s);
+            DrawSnapMenus();
             DrawEditToggles();
             if (showShapeSelection) DrawShapeEditSelection(s);
             if (BrushCreateTool.Active != null) DrawNewBrush(s, BrushCreateTool.Active);
@@ -236,7 +238,7 @@ namespace CsgBrush.Editor
             if (!BrushCreateTool.IsOpening(shape)) // a door or window is always a cut
             {
                 tool.DrawOperationPanel();
-                s.newGridSnap = (GridSnap)EditorGUILayout.EnumPopup(new GUIContent("Привязка к сетке", "К сетке привязываются крайние вершины формы либо точка опоры. Привязку можно отключить."), s.newGridSnap);
+                s.newGridSnap = (GridSnap)EditorGUILayout.EnumPopup(new GUIContent("Привязка к сетке", "К сетке привязываются крайние вершины формы или начало рабочей системы координат объекта. Привязку можно отключить."), s.newGridSnap);
             }
             var moduleTypes = BrushApi.ModuleTypes();
             if (moduleTypes.Count > 0) ModulesDropdown(s, moduleTypes);

@@ -18,6 +18,12 @@ namespace CsgBrush.Editor
         static readonly Color Plate = new Color(0.08f, 0.10f, 0.12f, 0.94f);
         static readonly Color Accent = new Color(0.33f, 0.92f, 0.95f);
         static readonly CultureInfo Russian = CultureInfo.GetCultureInfo("ru-RU");
+        static readonly string[] AxisSuffix =
+        {
+            "м (<color=#FF7373>X</color>)",
+            "м (<color=#79DD75>Y</color>)",
+            "м (<color=#78AAFF>Z</color>)"
+        };
 
         static BrushDimensionFields()
         {
@@ -46,7 +52,7 @@ namespace CsgBrush.Editor
             get
             {
                 if (badge != null) return badge;
-                badge = new GUIStyle(EditorStyles.boldLabel) { alignment = TextAnchor.MiddleCenter, fontSize = 14 };
+                badge = new GUIStyle(EditorStyles.boldLabel) { alignment = TextAnchor.MiddleCenter, fontSize = 14, richText = true };
                 badge.normal.textColor = Color.white;
                 return badge;
             }
@@ -73,7 +79,7 @@ namespace CsgBrush.Editor
         }
 
         internal static string FormatDimension(float meters, int axis) =>
-            meters.ToString("0.00###", Russian) + " м (" + "XYZ"[axis] + ")";
+            meters.ToString("0.00###", Russian) + " " + AxisSuffix[axis];
 
         // All geometry below is in GUI points, so zoom and display scaling do not change the gap.
         internal static Rect BadgeRect(Vector2 midpoint, Vector2 along, Vector2 outward, Vector2 size, List<Rect> occupied)
@@ -151,7 +157,7 @@ namespace CsgBrush.Editor
                     draft = EditorGUI.TextField(number, draft);
                     var suffix = Rect.MinMaxRect(number.xMax, r.yMin, r.xMax, r.yMax);
                     EditorGUI.DrawRect(suffix, Plate);
-                    GUI.Label(suffix, "м (" + "XYZ"[edge.Axis] + ")", Badge);
+                    GUI.Label(suffix, AxisSuffix[edge.Axis], Badge);
                     if (focus)
                     {
                         EditorGUI.FocusTextInControl(key);

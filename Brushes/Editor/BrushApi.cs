@@ -305,7 +305,7 @@ namespace CsgBrush.Editor
             SetPivotAtLocalPoint(brush, localPoint);
             if (brush.gridSnap == GridSnap.Shape)
             {
-                Undo.RecordObject(brush, "Привязать гизмо к вершине или ребру");
+                Undo.RecordObject(brush, BrushPivotTool.PickLabel);
                 brush.gridSnap = GridSnap.Pivot;
                 PrefabUtility.RecordPrefabInstancePropertyModifications(brush);
             }
@@ -361,11 +361,11 @@ namespace CsgBrush.Editor
         static void MovePivot(Brush brush, Vector3 pivot, Vector3 move, bool? outside = null)
         {
             var t = brush.transform;
-            Undo.RecordObject(brush, "Задать точку опоры браша");
-            Undo.RecordObject(t, "Задать точку опоры браша");
+            Undo.RecordObject(brush, "Задать начало WCS");
+            Undo.RecordObject(t, "Задать начало WCS");
             var children = new List<(Transform child, Vector3 position, Quaternion rotation)>();
             foreach (Transform c in t)
-                if (!Brush.IsGeneratedChildName(c.name)) { Undo.RecordObject(c, "Задать точку опоры браша"); children.Add((c, c.position, c.rotation)); }
+                if (!Brush.IsGeneratedChildName(c.name)) { Undo.RecordObject(c, "Задать начало WCS"); children.Add((c, c.position, c.rotation)); }
             var world = t.TransformPoint(move);
             if (brush.HasPivot)
             {
@@ -398,7 +398,7 @@ namespace CsgBrush.Editor
         public static void SetPivotMode(Brush brush, PivotMode mode)
         {
             if (brush.pivotMode == mode) return;
-            Undo.RecordObject(brush, "Задать режим точки опоры браша");
+            Undo.RecordObject(brush, "Задать режим WCS");
             bool has = PivotBox(brush, out var size, out var distance) && brush.HasPivot;
             brush.pivotMode = mode;
             if (has) brush.pivot = mode == PivotMode.Normalized ? Fractions(distance, size, brush.pivotOutsideBounds) : distance;

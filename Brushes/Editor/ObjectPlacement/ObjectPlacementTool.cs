@@ -4,11 +4,12 @@ using UnityEngine;
 
 namespace CsgBrush.Editor
 {
-    [EditorTool("Привязать объект")]
+    [EditorTool(ObjectPlacementTool.Label)]
     public sealed class ObjectPlacementTool : EditorTool
     {
-        const string Menu = "CSG Brush/Привязать";
-        const string Tip = "Переместить опору выбранного объекта на вершину или середину ребра другого объекта. Второй щелчок фиксирует положение. Ctrl — шаг сетки в метрах, Esc — отмена.";
+        internal const string Label = "Переместить к";
+        const string Menu = "CSG Brush/" + Label;
+        const string Tip = "Переместить выбранный объект началом его рабочей системы координат к вершине или середине ребра другого объекта. Второй щелчок фиксирует положение. Ctrl — шаг сетки в метрах, Esc — отмена.";
         static readonly Color PreviewColor = new Color(0.2f, 0.91f, 0.97f, 0.9f);
         Transform source;
         PlacementScene scene;
@@ -38,7 +39,7 @@ namespace CsgBrush.Editor
         internal static void DrawButton()
         {
             using var disabled = new EditorGUI.DisabledScope(!Available());
-            if (GUILayout.Button(new GUIContent("Привязать", Tip), EditorStyles.miniButton, GUILayout.ExpandWidth(false)))
+            if (GUILayout.Button(new GUIContent(Label, Tip), EditorStyles.miniButton, GUILayout.ExpandWidth(false)))
                 Begin();
         }
 

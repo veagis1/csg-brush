@@ -10,14 +10,14 @@ namespace CsgBrush
     public enum GridSnap
     {
         [Tooltip("Крайние вершины ложатся на линии сетки, чтобы соседние браши стыковались без зазоров."), InspectorName("По форме")] Shape,
-        [Tooltip("К сетке привязывается точка опоры, а форма перемещается вместе с ней."), InspectorName("По точке опоры")] Pivot,
+        [Tooltip("К сетке привязывается начало рабочей системы координат объекта, а форма перемещается вместе с ним."), InspectorName("По началу WCS")] Pivot,
         [Tooltip("Положение и размеры сохраняют введённые значения без округления по сетке."), InspectorName("Отключено")] Off,
     }
 
     /// <summary>How a brush's pivot is measured.</summary>
     public enum PivotMode
     {
-        [Tooltip("Координата от 0 до 1 по каждой оси. Точка опоры смещается вместе с изменением размера."), InspectorName("Доля размера")] Normalized,
+        [Tooltip("Внутри габарита координата по каждой оси лежит в диапазоне от 0 до 1. Начало рабочей системы координат объекта смещается при изменении размера."), InspectorName("Доля размера")] Normalized,
         [Tooltip("Расстояние от левого нижнего заднего угла. При изменении размера сохраняется в метрах."), InspectorName("Расстояние")] Absolute,
     }
 
@@ -121,7 +121,7 @@ namespace CsgBrush
 
         // Local metres from the transform to the construction axis of a round stair or the centre of an opening.
         [SerializeField, HideInInspector] internal Vector3 shapeOriginOffsetMeters;
-        [Tooltip("Привязывает к сетке крайние вершины или точку опоры при перемещении и масштабировании. Поворот не вызывает привязку.")]
+        [Tooltip("Привязывает к сетке крайние вершины или начало рабочей системы координат объекта при перемещении и масштабировании. Поворот не вызывает привязку.")]
         public GridSnap gridSnap = GridSnap.Shape;
 
         /// <summary>Box-like shapes whose geometry follows <see cref="pivot"/>.</summary>

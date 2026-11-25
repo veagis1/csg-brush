@@ -55,7 +55,7 @@ namespace CsgBrush.Editor
         public bool newSlopedFloor = false;
         public bool newSlopedCeiling = false;
         [Tooltip("Добавляет сплошную опору до пола под прямой или изогнутой лестницей.")] public bool newSupportUnderSteps = true;
-        [Tooltip("Привязка нового браша к сетке за крайние вершины формы или за точку опоры. Привязку можно отключить.")] public GridSnap newGridSnap = GridSnap.Shape;
+        [Tooltip("Привязка нового браша к сетке за крайние вершины формы или за начало рабочей системы координат объекта. Привязку можно отключить.")] public GridSnap newGridSnap = GridSnap.Shape;
         [Tooltip("Толщина стены в метрах. Ноль соответствует шагу сетки.")] public float newWallThickness = 0f;
         [Range(1f, 180f)] public float newArchAngle = 180f;
         [Tooltip("Ширина двери в метрах. Ноль соответствует 1 м.")] public float newDoorWidth = 0f;

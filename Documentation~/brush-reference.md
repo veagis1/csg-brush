@@ -125,7 +125,7 @@ Useful pivots:
 
 Setting the pivot moves the transform, never the shape. Switching the pivot mode doesn't move anything. On a Custom shape, setting the pivot moves the vertices instead.
 
-For a single editable brush, choose **Привязать к вершине или ребру** in the Inspector, then click a vertex or a marked edge midpoint in the Scene view. Move and Rotate use the selected point in local axes. **Сбросить привязку** puts the pivot at the centre of the geometry. Generated or wall-anchored brushes are positioned by their owner.
+For a single editable brush, choose **WCS → Привязать WCS к вершине** in the Scene overlay or **Привязать WCS к вершине** in the Inspector. Click a vertex or a marked edge midpoint to set the origin of the object's working coordinate system. Move and Rotate use this origin and the local axes. **Сбросить WCS** returns the origin to the centre of the geometry. Generated or wall-anchored brushes are positioned by their owner.
 
 ## Add and subtract
 

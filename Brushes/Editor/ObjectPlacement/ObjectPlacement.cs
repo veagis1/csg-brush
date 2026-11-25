@@ -46,7 +46,7 @@ namespace CsgBrush.Editor
         {
             if (!CanMove(source) || !float.IsFinite(destination.sqrMagnitude) ||
                 source.position == destination) return false;
-            Undo.RecordObject(source, "Привязать объект");
+            Undo.RecordObject(source, "Переместить объект к вершине или ребру");
             source.position = destination;
             foreach (var brush in source.GetComponentsInChildren<Brush>(true))
             {

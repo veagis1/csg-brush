@@ -7,10 +7,10 @@ namespace CsgBrush.Tests
 {
     public class BrushDimensionLabelTests
     {
-        [TestCase(0, "19,75 м (X)")]
-        [TestCase(1, "19,75 м (Y)")]
-        [TestCase(2, "19,75 м (Z)")]
-        public void DimensionIncludesItsLocalAxis(int axis, string expected)
+        [TestCase(0, "19,75 м (<color=#FF7373>X</color>)")]
+        [TestCase(1, "19,75 м (<color=#79DD75>Y</color>)")]
+        [TestCase(2, "19,75 м (<color=#78AAFF>Z</color>)")]
+        public void OnlyTheLocalAxisLetterUsesItsAxisColor(int axis, string expected)
         {
             Assert.AreEqual(expected, BrushDimensionFields.FormatDimension(19.75f, axis));
         }

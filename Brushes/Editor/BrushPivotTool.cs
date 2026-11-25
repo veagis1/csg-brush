@@ -4,17 +4,41 @@ using UnityEngine;
 
 namespace CsgBrush.Editor
 {
-    [EditorTool("Привязать гизмо к вершине или ребру", typeof(Brush))]
+    [EditorTool(BrushPivotTool.PickLabel, typeof(Brush))]
     public sealed class BrushPivotTool : EditorTool
     {
         const float PickRadius = 12f; // GUI points
+        internal const string PickLabel = "Привязать WCS к вершине";
+        internal static readonly GUIContent PickCommand = new GUIContent(PickLabel,
+            "Укажите вершину или середину ребра в сцене. Туда переместится начало рабочей системы координат объекта. При привязке по форме сетка переключится на начало WCS. Esc отменяет выбор.");
+        internal static readonly GUIContent ResetCommand = new GUIContent("Сбросить WCS",
+            "Вернуть начало рабочей системы координат объекта в центр его габарита. Геометрия останется на месте.");
         internal static bool Active => ToolManager.activeToolType == typeof(BrushPivotTool);
-        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), "Привязать гизмо к вершине или ребру");
+        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), PickCommand.tooltip);
         public override bool IsAvailable() => IsSelectedBrush(target as Brush);
 
         static bool IsSelectedBrush(Brush brush) => brush != null && brush.gameObject.scene.IsValid() &&
             Selection.activeGameObject == brush.gameObject && Selection.gameObjects.Length == 1 &&
-            !EditorApplication.isPlayingOrWillChangePlaymode && BrushApi.CanPickPivot(brush);
+            !EditorApplication.isPlayingOrWillChangePlaymode && !EditorUtility.IsPersistent(brush) && BrushApi.CanPickPivot(brush);
+
+        internal static void DrawMenu()
+        {
+            if (!GUILayout.Button(new GUIContent("WCS ▾", "WCS — рабочая система координат объекта. Выберите один редактируемый браш, чтобы задать или сбросить начало WCS."),
+                    EditorStyles.miniButton, GUILayout.ExpandWidth(false), GUILayout.Height(18))) return;
+            var brush = Selection.activeGameObject?.GetComponent<Brush>();
+            var menu = new GenericMenu();
+            if (IsSelectedBrush(brush))
+            {
+                menu.AddItem(PickCommand, false, () => Schedule(brush, reset: false));
+                menu.AddItem(ResetCommand, false, () => Schedule(brush, reset: true));
+            }
+            else
+            {
+                menu.AddDisabledItem(PickCommand);
+                menu.AddDisabledItem(ResetCommand);
+            }
+            menu.ShowAsContext();
+        }
 
         internal static void Schedule(Brush brush, bool reset)
         {

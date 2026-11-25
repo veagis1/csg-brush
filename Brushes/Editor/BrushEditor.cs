@@ -125,14 +125,14 @@ namespace CsgBrush.Editor
             }
             EditorGUI.BeginChangeCheck();
             EditorGUI.showMixedValue = mixedMode;
-            var pickedMode = (PivotMode)EditorGUILayout.EnumPopup(new GUIContent("Режим точки опоры", "Доля меняется вместе с размером. У точки вне габарита она может выходить за диапазон от 0 до 1. Расстояние в метрах отсчитывается от левого нижнего заднего угла."), mode);
+            var pickedMode = (PivotMode)EditorGUILayout.EnumPopup(new GUIContent("Режим WCS", "Положение начала рабочей системы координат объекта задаётся в долях габарита или метрах от левого нижнего заднего угла. За границами габарита доля может выходить за диапазон от 0 до 1."), mode);
             EditorGUI.showMixedValue = false;
             if (EditorGUI.EndChangeCheck()) { foreach (var t in targets) BrushApi.SetPivotMode((Brush)t, pickedMode); return; }
             if (mixedMode) return;
             bool relative = mode == PivotMode.Normalized;
             var shown = first.Value;
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.PrefixLabel(new GUIContent(relative ? "Точка опоры" : "Точка опоры (м)", "Положение точки опоры относительно левого нижнего заднего угла браша. При Y = 0 она на нижней грани, при Z = 0 на задней."));
+            EditorGUILayout.PrefixLabel(new GUIContent(relative ? "Начало WCS" : "Начало WCS (м)", "Положение начала рабочей системы координат объекта относительно левого нижнего заднего угла. При Y = 0 начало лежит на нижней грани, при Z = 0 на задней."));
             float w = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth = 14f;
             EditorGUI.BeginChangeCheck();
@@ -197,14 +197,14 @@ namespace CsgBrush.Editor
                 using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button(new GUIContent("Привязать к вершине или ребру", "Выберите вершину или середину ребра в сцене. Esc отменяет выбор. Гизмо перемещения и вращения перейдёт в эту точку. При привязке по форме сетка переключится на опору.")))
+                    if (GUILayout.Button(BrushPivotTool.PickCommand))
                         BrushPivotTool.Schedule(single, reset: false);
-                    if (GUILayout.Button(new GUIContent("Сбросить привязку", "Вернуть точку опоры в центр габарита детали. Геометрия останется на месте.")))
+                    if (GUILayout.Button(BrushPivotTool.ResetCommand))
                         BrushPivotTool.Schedule(single, reset: true);
                 }
             }
             bool snaps = true; foreach (var t in targets) if (((Brush)t).IsOpening || ((Brush)t).IsGenerated) snaps = false; // placed by their wall or plan
-            if (snaps) EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(Brush.gridSnap)), new GUIContent("Привязка к сетке", "При перемещении и изменении размеров привязывает к сетке крайние вершины или точку опоры. Поворот привязку не вызывает."));
+            if (snaps) EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(Brush.gridSnap)), new GUIContent("Привязка к сетке", "При перемещении и изменении размеров привязывает к сетке крайние вершины или начало рабочей системы координат объекта. Поворот привязку не вызывает."));
 
             if (shape != BrushShape.Custom && BrushApi.CanConvertToCustom(shape))
             {
