@@ -36,7 +36,11 @@ namespace CsgBrush.Editor
         protected abstract Type RotateTool { get; }
         protected abstract Type ScaleTool { get; }
 
-        public override void OnWillBeDeactivated() => FloorPlanEditState.CancelInteraction();
+        public override void OnWillBeDeactivated()
+        {
+            BrushDimensionFields.Cancel();
+            FloorPlanEditState.CancelInteraction();
+        }
 
         protected override Type GetEditorToolType(Tool tool)
         {
@@ -85,7 +89,14 @@ namespace CsgBrush.Editor
         public static BrushEditMode Mode
         {
             get => s_Mode;
-            set { if (s_Mode == value) return; s_Mode = value; Changed?.Invoke(); SceneView.RepaintAll(); }
+            set
+            {
+                if (s_Mode == value) return;
+                BrushDimensionFields.Cancel();
+                s_Mode = value;
+                Changed?.Invoke();
+                SceneView.RepaintAll();
+            }
         }
 
         public sealed class Selection
@@ -365,7 +376,7 @@ namespace CsgBrush.Editor
 
         static void HandleKeys(Event e)
         {
-            if (Tools.viewToolActive) return; // flying (right mouse held) or orbiting: W A S D Q E move the view, S is not Smooth
+            if (Tools.viewToolActive || BrushDimensionFields.IsEditingInCurrentView) return;
             // Delete removes the selected points or walls instead of the plan
             if ((e.type == EventType.ValidateCommand || e.type == EventType.ExecuteCommand) && (e.commandName == "Delete" || e.commandName == "SoftDelete") && CanDelete())
             {
@@ -727,7 +738,7 @@ namespace CsgBrush.Editor
                     if (Mode == BrushEditMode.Face)
                     {
                         var rooms = RoomsOf(p);
-                        if (click) { if (FloorPlanTools.MouseOnFloor(p, e.mousePosition, out var floor)) { var l = p.transform.InverseTransformPoint(floor); SelectRoom(sel, rooms, new Vector2(l.x, l.z), remove); } }
+                        if (click) { if (FloorPlanTools.MouseOnFloor(p, e.mousePosition, out var floor)) { var l = p.WorldToGraph(floor); SelectRoom(sel, rooms, new Vector2(l.x, l.z), remove); } }
                         else
                         {
                             var screens = new List<Vector2[]>();

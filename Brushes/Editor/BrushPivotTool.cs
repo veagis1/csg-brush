@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace CsgBrush.Editor
 {
-    [EditorTool("Snap WCS to Vertex", typeof(Brush))]
+    [EditorTool("Snap WCS to Vertex")]
     public sealed class BrushPivotTool : EditorTool
     {
         const float PickRadius = 12f; // GUI points
@@ -16,22 +16,53 @@ namespace CsgBrush.Editor
             Tr("Вернуть начало рабочей системы координат объекта в центр его габарита. Геометрия останется на месте."));
         internal static bool Active => ToolManager.activeToolType == typeof(BrushPivotTool);
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), PickCommand.tooltip);
-        public override bool IsAvailable() => IsSelectedBrush(target as Brush);
+        Component source;
+        public override bool IsAvailable() => CanEdit(Selected());
 
-        static bool IsSelectedBrush(Brush brush) => brush != null && brush.gameObject.scene.IsValid() &&
-            Selection.activeGameObject == brush.gameObject && Selection.gameObjects.Length == 1 &&
-            !EditorApplication.isPlayingOrWillChangePlaymode && !EditorUtility.IsPersistent(brush) && BrushApi.CanPickPivot(brush);
+        static Component Selected()
+        {
+            var go = Selection.activeGameObject;
+            if (go == null || Selection.gameObjects.Length != 1) return null;
+            return go.TryGetComponent<PointGraph>(out var graph) ? (Component)graph : go.GetComponent<Brush>();
+        }
+
+        static bool CanEdit(Component item) => item != null && item.gameObject.scene.IsValid() &&
+            !EditorApplication.isPlayingOrWillChangePlaymode && !EditorUtility.IsPersistent(item) &&
+            (item is PointGraph graph && graph.points.Count > 0 || item is Brush brush && BrushApi.CanPickPivot(brush));
+
+        public override void OnActivated()
+        {
+            source = Selected();
+            Selection.selectionChanged += OnSelectionChanged;
+        }
+
+        public override void OnWillBeDeactivated() => Selection.selectionChanged -= OnSelectionChanged;
+
+        void OnSelectionChanged()
+        {
+            if (Active && source != Selected()) ToolManager.RestorePreviousPersistentTool();
+        }
+
+        internal static void DrawButtons(Component item)
+        {
+            using (new EditorGUI.DisabledScope(!CanEdit(item)))
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button(PickCommand)) Schedule(item, reset: false);
+                if (GUILayout.Button(ResetCommand)) Schedule(item, reset: true);
+            }
+        }
 
         internal static void DrawMenu()
         {
-            if (!GUILayout.Button(new GUIContent("WCS ▾", Tr("WCS — рабочая система координат объекта. Выберите один редактируемый браш, чтобы задать или сбросить начало WCS.")),
+            if (!GUILayout.Button(new GUIContent("WCS ▾", Tr("Выберите один браш, план этажа или сплайн, чтобы задать или сбросить начало WCS.")),
                     EditorStyles.miniButton, GUILayout.ExpandWidth(false), GUILayout.Height(18))) return;
-            var brush = Selection.activeGameObject?.GetComponent<Brush>();
+            var item = Selected();
             var menu = new GenericMenu();
-            if (IsSelectedBrush(brush))
+            if (CanEdit(item))
             {
-                menu.AddItem(PickCommand, false, () => Schedule(brush, reset: false));
-                menu.AddItem(ResetCommand, false, () => Schedule(brush, reset: true));
+                menu.AddItem(PickCommand, false, () => Schedule(item, reset: false));
+                menu.AddItem(ResetCommand, false, () => Schedule(item, reset: true));
             }
             else
             {
@@ -41,16 +72,17 @@ namespace CsgBrush.Editor
             menu.ShowAsContext();
         }
 
-        internal static void Schedule(Brush brush, bool reset)
+        internal static void Schedule(Component item, bool reset)
         {
             // A tool/context change can rebuild the active editor. Finish the Inspector's IMGUI pass first.
             int toolVersion = BrushMenu.ToolVersion;
             EditorApplication.delayCall += () =>
             {
-                if (BrushMenu.ToolVersion != toolVersion || !IsSelectedBrush(brush)) return;
+                if (BrushMenu.ToolVersion != toolVersion || item != Selected() || !CanEdit(item)) return;
                 if (reset)
                 {
-                    BrushApi.ResetPivot(brush);
+                    if (item is PointGraph graph) GeneratorWcs.SetOrigin(graph, GeneratorWcs.Geometry(graph).bounds.center);
+                    else BrushApi.ResetPivot((Brush)item);
                     MoveFromPivot();
                 }
                 else Begin();
@@ -60,6 +92,7 @@ namespace CsgBrush.Editor
         static void Begin()
         {
             BrushEditContext.Exit();
+            PointGraphEditContext.Exit();
             ToolManager.SetActiveTool<BrushPivotTool>();
             SceneView.lastActiveSceneView?.Focus();
             SceneView.RepaintAll();
@@ -68,6 +101,7 @@ namespace CsgBrush.Editor
         internal static void MoveFromPivot()
         {
             BrushEditContext.Exit();
+            PointGraphEditContext.Exit();
             Tools.current = Tool.Move;
             Tools.pivotMode = UnityEditor.PivotMode.Pivot;
             Tools.pivotRotation = PivotRotation.Local;
@@ -76,8 +110,7 @@ namespace CsgBrush.Editor
 
         public override void OnToolGUI(EditorWindow window)
         {
-            if (!(window is SceneView view) || !IsSelectedBrush(target as Brush)) return;
-            var brush = (Brush)target;
+            if (!(window is SceneView view) || !CanEdit(source)) return;
             var e = Event.current;
             if (e.alt || Tools.viewToolActive) return;
             if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
@@ -92,52 +125,66 @@ namespace CsgBrush.Editor
             if (e.type == EventType.MouseMove) view.Repaint();
             if (e.type != EventType.Repaint && !(e.type == EventType.MouseDown && e.button == 0)) return;
 
-            var poly = BrushHooks.LocalShape(brush, out _);
-            if (poly == null) return;
-            var matrix = brush.transform.localToWorldMatrix;
             float closest = PickRadius * PickRadius, depth = float.PositiveInfinity;
-            int picked = -1, edgeEnd = -1;
-            Vector3 pickedWorld = default;
-            void Consider(Vector3 local, int a, int b = -1)
+            bool picked = false, pickedEdge = false;
+            Vector3 pickedWorld = default, pickedLocal = default;
+            void Consider(Vector3 local, Vector3 world, bool edge)
             {
-                var world = matrix.MultiplyPoint3x4(local);
                 var screen = HandleUtility.WorldToGUIPointWithDepth(world);
                 if (screen.z < view.camera.nearClipPlane || screen.z > view.camera.farClipPlane) return;
                 float d = ((Vector2)screen - e.mousePosition).sqrMagnitude;
                 if (d < closest || (Mathf.Approximately(d, closest) && screen.z < depth))
                 {
-                    picked = a;
-                    edgeEnd = b;
+                    picked = true;
+                    pickedEdge = edge;
+                    pickedLocal = local;
                     pickedWorld = world;
                     closest = d;
                     depth = screen.z;
                 }
                 if (e.type != EventType.Repaint) return;
                 float size = HandleUtility.GetHandleSize(world);
-                if (b < 0) Handles.DotHandleCap(0, world, Quaternion.identity, size * 0.035f, EventType.Repaint);
+                if (!edge) Handles.DotHandleCap(0, world, Quaternion.identity, size * 0.035f, EventType.Repaint);
                 else Handles.RectangleHandleCap(0, world, view.camera.transform.rotation, size * 0.027f, EventType.Repaint);
             }
 
-            using (new Handles.DrawingScope(new Color(0.35f, 0.92f, 0.86f)))
-                for (int i = 0; i < poly.vertices.Length; i++)
-                    Consider(poly.vertices[i], i);
-            using (new Handles.DrawingScope(new Color(0.60f, 0.72f, 1f)))
+            var vertexColor = new Color(0.35f, 0.92f, 0.86f);
+            var edgeColor = new Color(0.60f, 0.72f, 1f);
+            if (source is PointGraph graph)
             {
-                foreach (var (a, b) in poly.Edges())
-                    Consider((poly.vertices[a] + poly.vertices[b]) * 0.5f, a, b);
+                var geometry = GeneratorWcs.Geometry(graph);
+                using (new Handles.DrawingScope(vertexColor))
+                    foreach (var point in geometry.vertices) Consider(point, graph.GraphToWorld(point), false);
+                using (new Handles.DrawingScope(edgeColor))
+                    foreach (var point in geometry.midpoints) Consider(point, graph.GraphToWorld(point), true);
             }
-            if (e.type == EventType.Repaint && picked >= 0)
+            else
+            {
+                var poly = BrushHooks.LocalShape((Brush)source, out _);
+                if (poly == null) return;
+                var matrix = source.transform.localToWorldMatrix;
+                using (new Handles.DrawingScope(vertexColor))
+                    foreach (var point in poly.vertices) Consider(point, matrix.MultiplyPoint3x4(point), false);
+                using (new Handles.DrawingScope(edgeColor))
+                    foreach (var (a, b) in poly.Edges())
+                    {
+                        var point = (poly.vertices[a] + poly.vertices[b]) * 0.5f;
+                        Consider(point, matrix.MultiplyPoint3x4(point), true);
+                    }
+            }
+            if (e.type == EventType.Repaint && picked)
             {
                 using (new Handles.DrawingScope(Color.yellow))
                     Handles.SphereHandleCap(0, pickedWorld, Quaternion.identity, HandleUtility.GetHandleSize(pickedWorld) * 0.12f, EventType.Repaint);
-                Handles.Label(pickedWorld, edgeEnd < 0 ? Tr("  Вершина") : Tr("  Середина ребра"));
+                Handles.Label(pickedWorld, pickedEdge ? Tr("  Середина ребра") : Tr("  Вершина"));
             }
             if (e.type == EventType.MouseDown && HandleUtility.nearestControl == control)
             {
                 e.Use();
-                if (picked < 0) return;
-                bool applied = edgeEnd < 0 ? BrushApi.SetPivotToVertex(brush, picked) : BrushApi.SetPivotToEdge(brush, picked, edgeEnd);
-                if (applied) MoveFromPivot();
+                if (!picked) return;
+                if (source is PointGraph path) GeneratorWcs.SetOrigin(path, pickedLocal);
+                else BrushApi.SetPickedPivot((Brush)source, pickedLocal);
+                MoveFromPivot();
             }
         }
     }

@@ -50,7 +50,8 @@ namespace CsgBrush.Editor
             {
                 if (owner == null || occupied.Contains(owner.transform)) return;
                 bool carried = owner.transform.IsChildOf(source);
-                if (!ObjectPlacement.IsSelectableGeometry(owner.transform)) return;
+                if (carried ? !ObjectPlacement.IsSelectableGeometry(owner.transform) :
+                    !ObjectPlacement.CanTarget(source, owner.transform)) return;
                 occupied.Add(owner.transform);
                 (carried ? moving : targets).Add(new Part(owner, bounds, mesh));
             }
@@ -153,9 +154,24 @@ namespace CsgBrush.Editor
                 mouse.y >= min.y - MagnetRadius && mouse.y <= max.y + MagnetRadius;
         }
 
-        internal void DrawPreview(Vector3 destination, Color color)
+        internal bool DrawPreview(Component candidate, Vector3 destination, Color color, out Vector3 workingOrigin)
         {
             var shift = Matrix4x4.Translate(destination - source.position);
+            workingOrigin = destination;
+            Brush window = null;
+            Vector3 previewSize = default;
+            if (ObjectPlacement.IsWallWindow(source))
+            {
+                if (!ObjectPlacement.TryWindowPlacement(source, candidate, destination, out var placement)) return false;
+                var plan = placement.plan.transform;
+                var inverseRotation = Quaternion.Inverse(plan.rotation);
+                var toDestination = plan.localToWorldMatrix * Matrix4x4.TRS(plan.InverseTransformPoint(placement.position),
+                    inverseRotation * placement.rotation, placement.localScale);
+                shift = toDestination * source.worldToLocalMatrix;
+                workingOrigin = placement.position;
+                window = source.GetComponent<Brush>();
+                previewSize = placement.size;
+            }
             foreach (var part in moving)
             {
                 if (part.Owner == null) continue;
@@ -170,9 +186,18 @@ namespace CsgBrush.Editor
                         part.WireIndices[i * 2 + 1] = data.Edges[i].y;
                     }
                 }
-                using (new Handles.DrawingScope(color, shift * part.Owner.transform.localToWorldMatrix))
+                var matrix = shift * part.Owner.transform.localToWorldMatrix;
+                if (window != null && part.Owner == window)
+                {
+                    var pivotShift = window.PivotShift;
+                    float depthScale = previewSize.z / window.ClampedSize.z;
+                    matrix *= Matrix4x4.Translate(pivotShift) * Matrix4x4.Scale(new Vector3(1f, 1f, depthScale)) *
+                        Matrix4x4.Translate(-pivotShift);
+                }
+                using (new Handles.DrawingScope(color, matrix))
                     Handles.DrawLines(data.Vertices, part.WireIndices);
             }
+            return true;
         }
     }
 }

@@ -13,6 +13,14 @@ namespace CsgBrush
     /// </summary>
     public abstract class PointGraph : BrushGenerator
     {
+        // The path and the floor keep their own frame when the user relocates the Transform pivot.
+        // Zero preserves the coordinate system of existing scenes and prefabs.
+        [SerializeField, HideInInspector] internal Vector3 graphOrigin;
+        [SerializeField, HideInInspector] internal PivotMode wcsMode;
+
+        public Vector3 GraphToWorld(Vector3 point) => transform.TransformPoint(graphOrigin + point);
+        public Vector3 WorldToGraph(Vector3 world) => transform.InverseTransformPoint(world) - graphOrigin;
+
         /// <summary>A link between two points, by their ids.</summary>
         [Serializable]
         public struct Link

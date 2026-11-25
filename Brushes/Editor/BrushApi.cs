@@ -249,19 +249,25 @@ namespace CsgBrush.Editor
 
         /// <summary>
         /// Where the transform sits in the brush's box, in its <see cref="Brush.pivotMode"/> (a fraction of the size, or
-        /// metres from the left, bottom, back corner); a Custom shape's comes from its vertices. Curved and spiral stairs,
-        /// doors and windows have no numeric pivot field and use the vertex picker.
+        /// metres from the left, bottom, back corner); a Custom shape's comes from its vertices. Doors and radial
+        /// stairs use the vertex picker. A window measures the offset of its opening from the transform.
         /// </summary>
         public static Vector3? PivotOf(Brush brush)
         {
             if (!PivotBox(brush, out var size, out var distance)) return null;
-            return brush.pivotMode == PivotMode.Normalized ? Fractions(distance, size, brush.pivotOutsideBounds) : distance;
+            return brush.pivotMode == PivotMode.Normalized ? Fractions(distance, size, AllowsOutside(brush, distance, size)) : distance;
         }
 
         /// <summary>The brush's box size and its pivot in metres from the box's left, bottom, back corner.</summary>
         static bool PivotBox(Brush brush, out Vector3 size, out Vector3 distance)
         {
             if (brush.HasPivot) { size = brush.ClampedSize; distance = brush.PivotDistance(size); return true; }
+            if (brush.shape == BrushShape.Window && !brush.IsGenerated && (!brush.anchored || WallAnchors.CanEditWindowPivot(brush)))
+            {
+                size = brush.ClampedSize;
+                distance = size * 0.5f - brush.PivotShift;
+                return true;
+            }
             size = distance = default;
             if (brush.shape != BrushShape.Custom || brush.polyhedron == null || !brush.polyhedron.IsValid) return false;
             var b = brush.polyhedron.Bounds();
@@ -279,8 +285,15 @@ namespace CsgBrush.Editor
         static Vector3 Fractions(Vector3 distance, Vector3 size, bool outside) =>
             new Vector3(Fraction(distance.x, size.x, outside), Fraction(distance.y, size.y, outside), Fraction(distance.z, size.z, outside));
 
+        static bool OutsideBox(Vector3 distance, Vector3 size) => distance.x < -1e-5f || distance.y < -1e-5f || distance.z < -1e-5f ||
+            distance.x > size.x + 1e-5f || distance.y > size.y + 1e-5f || distance.z > size.z + 1e-5f;
+
+        // A window can acquire a thinner wall after its WCS was placed on the old face.
+        static bool AllowsOutside(Brush brush, Vector3 distance, Vector3 size) =>
+            brush.pivotOutsideBounds || (brush.shape == BrushShape.Window && OutsideBox(distance, size));
+
         internal static bool CanPickPivot(Brush brush) => brush != null && !brush.IsGenerated &&
-            !brush.anchored && (brush.UsesShapeOriginOffset || PivotBox(brush, out _, out _));
+            (!brush.anchored || WallAnchors.CanEditWindowPivot(brush)) && (brush.UsesShapeOriginOffset || PivotBox(brush, out _, out _));
 
         /// <summary>Place the transform on an authored vertex without moving the solid or its children.</summary>
         public static bool SetPivotToVertex(Brush brush, int vertexIndex)
@@ -301,7 +314,7 @@ namespace CsgBrush.Editor
             return SetPickedPivot(brush, (shape.vertices[a] + shape.vertices[b]) * 0.5f);
         }
 
-        static bool SetPickedPivot(Brush brush, Vector3 localPoint)
+        internal static bool SetPickedPivot(Brush brush, Vector3 localPoint)
         {
             SetPivotAtLocalPoint(brush, localPoint);
             if (brush.gridSnap == GridSnap.Shape)
@@ -333,8 +346,7 @@ namespace CsgBrush.Editor
             }
             if (!PivotBox(brush, out var size, out var current)) return;
             var distance = current + localPoint;
-            bool outside = brush.HasPivot && (distance.x < -1e-5f || distance.y < -1e-5f || distance.z < -1e-5f ||
-                distance.x > size.x + 1e-5f || distance.y > size.y + 1e-5f || distance.z > size.z + 1e-5f);
+            bool outside = brush.HasPivot && OutsideBox(distance, size);
             var pivot = brush.pivotMode == PivotMode.Absolute ? distance : Fractions(distance, size, outside);
             if (localPoint.sqrMagnitude < 1e-12f && outside == brush.pivotOutsideBounds) return;
             MovePivot(brush, pivot, localPoint, outside);
@@ -346,9 +358,9 @@ namespace CsgBrush.Editor
         /// </summary>
         public static void SetPivot(Brush brush, Vector3 pivot)
         {
-            if (!PivotBox(brush, out var size, out var current)) return;
+            if (!float.IsFinite(pivot.sqrMagnitude) || !PivotBox(brush, out var size, out var current)) return;
             bool relative = brush.pivotMode == PivotMode.Normalized;
-            if (!brush.pivotOutsideBounds)
+            if (!AllowsOutside(brush, current, size))
             {
                 if (relative) pivot = new Vector3(Mathf.Clamp01(pivot.x), Mathf.Clamp01(pivot.y), Mathf.Clamp01(pivot.z));
                 else pivot = new Vector3(Mathf.Clamp(pivot.x, 0f, size.x), Mathf.Clamp(pivot.y, 0f, size.y), Mathf.Clamp(pivot.z, 0f, size.z));
@@ -360,6 +372,13 @@ namespace CsgBrush.Editor
         }
 
         static void MovePivot(Brush brush, Vector3 pivot, Vector3 move, bool? outside = null)
+        {
+            if (WallAnchors.CanEditWindowPivot(brush))
+                WallAnchors.WithoutMoveTracking(brush.GetComponent<WallAnchor>(), () => ApplyPivot(brush, pivot, move, outside));
+            else ApplyPivot(brush, pivot, move, outside);
+        }
+
+        static void ApplyPivot(Brush brush, Vector3 pivot, Vector3 move, bool? outside)
         {
             var t = brush.transform;
             Undo.RecordObject(brush, Tr("Задать начало WCS"));
@@ -403,6 +422,7 @@ namespace CsgBrush.Editor
             bool has = PivotBox(brush, out var size, out var distance) && brush.HasPivot;
             brush.pivotMode = mode;
             if (has) brush.pivot = mode == PivotMode.Normalized ? Fractions(distance, size, brush.pivotOutsideBounds) : distance;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(brush);
             BrushSync.Ensure(brush);
         }
 

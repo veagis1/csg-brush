@@ -73,8 +73,11 @@ namespace CsgBrush.Editor
                         DrawDimensions(bounds, BrushGeometry.LocalToWorld(brush), true, interactive ? brush : null);
                     continue;
                 }
-                if (selected.Length == 1 && go.TryGetComponent<FloorPlan>(out var plan) && BrushPlanDimensionFields.Draw(plan))
+                if (go.TryGetComponent<FloorPlan>(out var plan))
+                {
+                    BrushPlanDimensionFields.Draw(plan, selected.Length == 1);
                     continue;
+                }
                 if (Event.current.type != EventType.Repaint) continue;
                 if (go.TryGetComponent<PointGraph>(out var graph))
                     DrawPathLengths(graph);

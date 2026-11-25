@@ -11,6 +11,7 @@ namespace CsgBrush.Editor
         internal const string Label = "Переместить к";
         const string Menu = "CSG Brush/" + Label;
         const string Tip = "Переместить выбранный объект началом его рабочей системы координат к вершине или середине ребра другого объекта. Второй щелчок фиксирует положение. Ctrl — шаг сетки в метрах, Esc — отмена.";
+        const string WindowTip = "Переместить окно вдоль стены плана, сохранив высоту над полом. Первый щелчок выбирает вершину или середину ребра стены, второй фиксирует положение. Ctrl — шаг сетки в метрах, Esc — отмена.";
         static readonly Color PreviewColor = new Color(0.2f, 0.91f, 0.97f, 0.9f);
         Transform source;
         PlacementScene scene;
@@ -22,7 +23,8 @@ namespace CsgBrush.Editor
         int held;
 
         internal static bool Active => ToolManager.activeToolType == typeof(ObjectPlacementTool);
-        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), Tr(Tip));
+        static string Tooltip => Tr(ObjectPlacement.IsWallWindow(Selection.activeTransform) ? WindowTip : Tip);
+        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), Tooltip);
         public override bool IsAvailable() => Available();
 
         [MenuItem(Menu, true)]
@@ -40,7 +42,7 @@ namespace CsgBrush.Editor
         internal static void DrawButton()
         {
             using var disabled = new EditorGUI.DisabledScope(!Available());
-            if (GUILayout.Button(new GUIContent(Tr(Label), Tr(Tip)), EditorStyles.miniButton, GUILayout.ExpandWidth(false)))
+            if (GUILayout.Button(new GUIContent(Tr(Label), Tooltip), EditorStyles.miniButton, GUILayout.ExpandWidth(false)))
                 Begin();
         }
 
@@ -48,6 +50,7 @@ namespace CsgBrush.Editor
         {
             BrushShapeHandles.CancelGesture();
             BrushSurfaceGrid.CancelPicking();
+            WallAnchorEditor.CancelPicking();
             if (ToolManager.activeContextType != typeof(GameObjectToolContext))
                 ToolManager.SetActiveContext<GameObjectToolContext>();
             source = Selection.activeTransform;
@@ -100,9 +103,10 @@ namespace CsgBrush.Editor
                         break;
                     default: continue;
                 }
-                if (!(changed is Mesh || changed is Brush || changed is MeshFilter ||
+                if (!(changed is Mesh || changed is Brush || changed is FloorPlan || changed is MeshFilter ||
                     changed is Renderer || changed is Collider)) continue;
-                if (guide != null && (changed == anchor.Part.Owner || changed == anchor.Part.Mesh))
+                if (guide != null && (changed == anchor.Part.Owner || changed == anchor.Part.Mesh ||
+                    anchor.Part.Owner is Brush wall && wall.generatedBy == changed))
                 {
                     Release();
                     guide = null;
@@ -166,7 +170,7 @@ namespace CsgBrush.Editor
                 bool finish = confirmOnRelease && guide != null;
                 Release();
                 e.Use();
-                if (finish) { ObjectPlacement.Commit(source, guide.Position); Stop(); return; }
+                if (finish) { ObjectPlacement.Commit(source, guide.Position, anchor.Part.Owner); Stop(); return; }
             }
             if (e.type == EventType.Repaint) Draw(view);
             else view.Repaint();
@@ -175,7 +179,9 @@ namespace CsgBrush.Editor
         void Draw(SceneView view)
         {
             var feature = guide != null ? anchor : hover;
-            var hint = guide == null ? Tr("Укажите вершину или середину ребра") : Tr("Укажите положение на ребре   •   Ctrl — шаг сетки");
+            var hint = guide == null
+                ? Tr(ObjectPlacement.IsWallWindow(source) ? "Укажите вершину или середину ребра стены плана" : "Укажите вершину или середину ребра")
+                : Tr("Укажите положение на ребре   •   Ctrl — шаг сетки");
             Handles.BeginGUI();
             GUI.Label(new Rect(8f, view.position.height - 65f, view.position.width - 16f, 22f),
                 hint + Tr("   •   Esc — отмена"), EditorStyles.helpBox);
@@ -183,7 +189,7 @@ namespace CsgBrush.Editor
             if (feature.Part == null) return;
             var origin = feature.Position;
             var destination = guide?.Position ?? origin;
-            scene.DrawPreview(destination, PreviewColor);
+            bool preview = scene.DrawPreview(feature.Part.Owner, destination, PreviewColor, out var workingOrigin);
             guide?.DrawEdges();
             using (new Handles.DrawingScope(Color.yellow))
             {
@@ -191,9 +197,9 @@ namespace CsgBrush.Editor
                 if (feature.Midpoint) Handles.RectangleHandleCap(0, origin, view.camera.transform.rotation, size, EventType.Repaint);
                 else Handles.DotHandleCap(0, origin, Quaternion.identity, size, EventType.Repaint);
             }
-            if (guide == null) return;
+            if (guide == null || !preview) return;
             using (new Handles.DrawingScope(PreviewColor))
-                Handles.DotHandleCap(0, destination, Quaternion.identity, HandleUtility.GetHandleSize(destination) * 0.055f, EventType.Repaint);
+                Handles.DotHandleCap(0, workingOrigin, Quaternion.identity, HandleUtility.GetHandleSize(workingOrigin) * 0.055f, EventType.Repaint);
             Handles.Label(destination, "   " + BrushSettings.FormatMeters(Vector3.Distance(origin, destination)), EditorStyles.whiteBoldLabel);
         }
     }

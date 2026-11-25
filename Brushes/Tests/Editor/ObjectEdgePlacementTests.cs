@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Collections.Generic;
 using CsgBrush.Editor;
 using NUnit.Framework;
 using UnityEditor;
@@ -200,6 +201,155 @@ namespace CsgBrush.Tests
                 settings.showCuts = previousShowCuts;
                 Tools.visibleLayers = previousLayers;
             }
+        }
+
+        [TestCase(false, false)]
+        [TestCase(true, false)]
+        [TestCase(false, true)]
+        [TestCase(true, true)]
+        public void AnchoredWindowMovesItsCornerAlongTheSelectedWallAndPreservesSill(bool reparent, bool scaled)
+        {
+            var settings = BrushSettings.instance;
+            bool previousSnap = settings.snapToGrid;
+            var previousSteps = settings.gridSizes;
+            int previousIndex = settings.gridIndex;
+            try
+            {
+                settings.snapToGrid = true;
+                settings.gridSizes = new[] { 0.5f };
+                settings.gridIndex = 0;
+                var initialPlan = SingleWallPlan(Vector3.up * 2f, Vector3.right, 0.2f);
+                var destinationPlan = reparent
+                    ? SingleWallPlan(new Vector3(9f, 4f, 3f), Vector3.forward, 0.6f)
+                    : initialPlan;
+                if (scaled)
+                {
+                    initialPlan.transform.localScale = new Vector3(0.8f, 2f, 1.1f);
+                    if (reparent) destinationPlan.transform.localScale = new Vector3(1.5f, 0.6f, 2.2f);
+                    else
+                    {
+                        int start = initialPlan.AddPoint(new Vector3(9f, 0f, 3f));
+                        int end = initialPlan.AddPoint(new Vector3(9f, 0f, 10f));
+                        initialPlan.AddWall(start, end, 0.6f);
+                        BrushGenerators.Update(initialPlan);
+                    }
+                }
+                var walls = new List<FloorPlan.Wall>();
+                initialPlan.Walls(walls);
+                const float initialDistance = 2.25f;
+                const float sill = 1.15f;
+                var initial = new WallAnchors.Placement { plan = initialPlan, wall = walls[0], distance = initialDistance, sill = sill };
+                WallAnchors.OpeningPose(initialPlan, initial.wall, initialDistance, sill, new Vector2(1.2f, 1.3f),
+                    out initial.position, out initial.rotation, out initial.size);
+                var window = WallAnchors.Create(BrushShape.Window, initial);
+                var anchor = window.GetComponent<WallAnchor>();
+                if (scaled)
+                {
+                    window.transform.localScale = new Vector3(1.4f, 0.75f, 1.2f);
+                    WallAnchors.Layout(initialPlan);
+                }
+                var originalVertices = WorldVertices(window);
+                var originalSize = WindowWorldSize(window);
+                Assert.That(SillHeight(initialPlan, originalVertices), Is.EqualTo(sill).Within(0.0001f));
+                int corner = System.Array.FindIndex(BrushGeometry.Polyhedron(window).vertices, v => v.x < 0f && v.y < 0f && v.z < 0f);
+                Undo.IncrementCurrentGroup();
+                Assert.That(BrushApi.SetPivotToVertex(window, corner), Is.True);
+                Undo.FlushUndoRecordObjects();
+                BrushGenerators.Flush();
+                BrushApi.ForceUpdate();
+                AssertPositionAndVertices(originalVertices[corner], originalVertices, window);
+                Assert.That(anchor.distance, Is.EqualTo(initialDistance));
+                var initialPivot = window.transform.position;
+                var initialShift = window.PivotShift;
+
+                destinationPlan.Walls(walls);
+                var wall = walls[scaled && !reparent ? 1 : 0];
+                var target = destinationPlan.generated.First(b => BrushCutTarget.FromBrush(b).TryWall(out var candidate) && candidate.index == wall.index);
+                var other = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Assert.That(ObjectPlacement.CanMove(window.transform), Is.True);
+                Assert.That(ObjectPlacement.CanTarget(window.transform, other.transform), Is.False);
+                Assert.That(ObjectPlacement.CanTarget(window.transform, target.transform), Is.True);
+                Assert.That(ObjectPlacement.Commit(window.transform, other.transform.position, other.transform), Is.False);
+                const float destinationAlong = 4.13f;
+                wall.At(destinationAlong, out var targetPoint, out _, out var outward);
+                targetPoint += outward * wall.outer;
+                var feature = destinationPlan.GraphToWorld(new Vector3(targetPoint.x, wall.height, targetPoint.y));
+                Assert.That(ObjectPlacement.TryWindowPlacement(window.transform, target, feature, out var preview), Is.True);
+                Near(initialPivot, window.transform.position);
+                Assert.That(anchor.Plan, Is.EqualTo(initialPlan));
+                Undo.IncrementCurrentGroup();
+
+                Assert.That(ObjectPlacement.Commit(window.transform, feature, target), Is.True);
+                BrushGenerators.Flush();
+                BrushApi.ForceUpdate();
+                Assert.That(anchor.Plan, Is.EqualTo(destinationPlan));
+                Assert.That(anchor.onWall, Is.True);
+                Assert.That(anchor.height, Is.EqualTo(sill));
+                Assert.That(window.PivotShift, Is.EqualTo(initialShift));
+                Assert.That(window.size.z, Is.EqualTo(preview.size.z).Within(0.0001f));
+                Near(preview.position, window.transform.position);
+                Near(originalSize, WindowWorldSize(window));
+                var localPivot = destinationPlan.WorldToGraph(window.transform.position);
+                wall.Project(new Vector2(localPivot.x, localPivot.z), out float actualAlong, out _);
+                Assert.That(actualAlong, Is.EqualTo(destinationAlong).Within(0.0001f));
+                Assert.That(SillHeight(destinationPlan, WorldVertices(window)), Is.EqualTo(sill).Within(0.0001f));
+                if (scaled)
+                {
+                    var wallStart = destinationPlan.GraphToWorld(new Vector3(wall.a.x, 0f, wall.a.y));
+                    var wallEnd = destinationPlan.GraphToWorld(new Vector3(wall.b.x, 0f, wall.b.y));
+                    Assert.That(ObjectPlacement.TryWindowPlacement(window.transform, target, wallStart, out var startPreview), Is.True);
+                    Assert.That(ObjectPlacement.TryWindowPlacement(window.transform, target, wallEnd, out var endPreview), Is.True);
+                    float halfWidth = window.ClampedSize.x * Mathf.Abs(window.transform.localScale.x) * 0.5f;
+                    Assert.That(startPreview.distance, Is.EqualTo(halfWidth).Within(0.0001f));
+                    Assert.That(endPreview.distance, Is.EqualTo(wall.Length - halfWidth).Within(0.0001f));
+                }
+
+                Undo.PerformUndo();
+                BrushGenerators.Flush();
+                BrushApi.ForceUpdate();
+                Assert.That(anchor.Plan, Is.EqualTo(initialPlan));
+                Assert.That(anchor.distance, Is.EqualTo(initialDistance));
+                AssertPositionAndVertices(initialPivot, originalVertices, window);
+
+                Undo.PerformRedo();
+                BrushGenerators.Flush();
+                BrushApi.ForceUpdate();
+                Assert.That(anchor.Plan, Is.EqualTo(destinationPlan));
+                Assert.That(anchor.height, Is.EqualTo(sill));
+                Near(preview.position, window.transform.position);
+                Assert.That(SillHeight(destinationPlan, WorldVertices(window)), Is.EqualTo(sill).Within(0.0001f));
+                Near(originalSize, WindowWorldSize(window));
+            }
+            finally
+            {
+                settings.snapToGrid = previousSnap;
+                settings.gridSizes = previousSteps;
+                settings.gridIndex = previousIndex;
+            }
+        }
+
+        static float SillHeight(FloorPlan plan, Vector3[] vertices)
+        {
+            var floor = plan.GraphToWorld(Vector3.zero);
+            return vertices.Min(v => Vector3.Dot(v - floor, plan.transform.up));
+        }
+
+        static Vector3 WindowWorldSize(Brush window)
+        {
+            var t = window.transform;
+            return new Vector3(t.TransformVector(Vector3.right * window.ClampedSize.x).magnitude,
+                t.TransformVector(Vector3.up * window.ClampedSize.y).magnitude, 0f);
+        }
+
+        static FloorPlan SingleWallPlan(Vector3 position, Vector3 direction, float thickness)
+        {
+            var plan = new GameObject("План с одной стеной").AddComponent<FloorPlan>();
+            plan.transform.position = position;
+            int a = plan.AddPoint(Vector3.zero);
+            int b = plan.AddPoint(direction * 7f);
+            plan.AddWall(a, b, thickness);
+            BrushGenerators.Update(plan);
+            return plan;
         }
 
         [Test]

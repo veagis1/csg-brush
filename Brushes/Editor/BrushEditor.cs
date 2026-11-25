@@ -228,16 +228,7 @@ namespace CsgBrush.Editor
             else DrawSize(shape);
             DrawPivot();
             if (targets.Length == 1 && target is Brush single && BrushApi.CanPickPivot(single) && !EditorUtility.IsPersistent(single))
-            {
-                using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    if (GUILayout.Button(BrushPivotTool.PickCommand))
-                        BrushPivotTool.Schedule(single, reset: false);
-                    if (GUILayout.Button(BrushPivotTool.ResetCommand))
-                        BrushPivotTool.Schedule(single, reset: true);
-                }
-            }
+                BrushPivotTool.DrawButtons(single);
             bool snaps = true; foreach (var t in targets) if (((Brush)t).IsOpening || ((Brush)t).IsGenerated) snaps = false; // placed by their wall or plan
             if (snaps) DrawProperty(serializedObject.FindProperty(nameof(Brush.gridSnap)), new GUIContent(Tr("Привязка к сетке"), Tr("При перемещении и изменении размеров привязывает к сетке крайние вершины или начало рабочей системы координат объекта. Поворот привязку не вызывает.")));
 

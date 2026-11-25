@@ -166,6 +166,7 @@ namespace CsgBrush.Editor
             if (t != null || !create) return t;
             var go = new GameObject(BrushGenerator.ContainerName);
             go.transform.SetParent(g.transform, false);
+            if (g is PointGraph graph) go.transform.localPosition = graph.graphOrigin;
             return go.transform;
         }
 

@@ -34,6 +34,103 @@ namespace CsgBrush.Tests
             var r = Object.FindAnyObjectByType<MeshRenderer>(); Assert.IsNotNull(r, "the brush renders"); return r.bounds;
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void GeneratorPivotPreservesPathChildrenAndRebuiltGeometry(bool spline)
+        {
+            var go = new GameObject("Generator");
+            PointGraph graph = spline ? (PointGraph)go.AddComponent<Spline>() : go.AddComponent<FloorPlan>();
+            var a = graph.AddPoint(Vector3.zero);
+            var b = graph.AddPoint(new Vector3(6, spline ? 2 : 0, 0));
+            graph.AddLink(a, b);
+            go.transform.SetPositionAndRotation(new Vector3(7, 3, -11), Quaternion.Euler(0, 35, 0));
+            go.transform.localScale = new Vector3(1.5f, 2, 0.5f);
+            BrushGenerators.Update(graph, true);
+            var child = new GameObject("Decoration").transform;
+            child.SetParent(graph.transform, false);
+            child.localPosition = new Vector3(2, 3, -1);
+            var decoration = child.position;
+            var pathBefore = FloorPlanTools.WorldPath(graph, 0);
+            var shape = World(graph.generated[0]);
+            var originalPivot = graph.transform.position;
+            var features = GeneratorWcs.Geometry(graph);
+            Assert.IsNotEmpty(features.midpoints);
+            var corner = features.vertices.OrderByDescending(p => p.y).First();
+            var picked = graph.GraphToWorld(corner);
+            Undo.IncrementCurrentGroup();
+            Assert.IsTrue(GeneratorWcs.SetOrigin(graph, corner));
+            BrushGenerators.Update(graph, true);
+            AssertPosition(picked, graph.transform.position);
+            AssertPosition(decoration, child.position);
+            AssertPosition(corner, graph.WorldToGraph(picked));
+            AssertPosition(pathBefore[0], FloorPlanTools.WorldPath(graph, 0)[0]);
+            AssertPosition(pathBefore[1], FloorPlanTools.WorldPath(graph, 0)[1]);
+            Same(shape, World(graph.generated[0]), "regenerated shape at picked pivot");
+            Undo.PerformUndo();
+            BrushGenerators.Update(graph, true);
+            AssertPosition(originalPivot, graph.transform.position);
+            AssertPosition(decoration, child.position);
+            Undo.PerformRedo();
+            BrushGenerators.Update(graph, true);
+            AssertPosition(picked, graph.transform.position);
+            Same(shape, World(graph.generated[0]), "shape after redo");
+
+            Object.DestroyImmediate(BrushGenerators.Container(graph, false).gameObject);
+            BrushGenerators.Update(graph, true);
+            Same(shape, World(graph.generated[0]), "new derived container uses the authored path frame");
+            var shift = new Vector3(3, 0, 1.5f);
+            graph.transform.position += shift;
+            Same(new Bounds(shape.center + shift, shape.size), World(graph.generated[0]), "normal Move translates the shape");
+            AssertPosition(decoration + shift, child.position);
+        }
+
+        [Test]
+        public void LegacyPlanPrefabKeepsItsFloorWhenAnInstanceGetsAWcs()
+        {
+            string prefabPath = AssetDatabase.GenerateUniqueAssetPath("Assets/__wcs_plan.prefab");
+            string scenePath = AssetDatabase.GenerateUniqueAssetPath("Assets/__wcs_plan.unity");
+            try
+            {
+                var author = new GameObject("Plan with window").AddComponent<FloorPlan>();
+                author.AddLink(author.AddPoint(Vector3.zero), author.AddPoint(Vector3.right * 8f));
+                BrushGenerators.Update(author, true);
+                var window = WallAnchors.Place(author, BrushShape.Window, 0, 3f);
+                var openingBefore = World(window);
+                PrefabUtility.SaveAsPrefabAsset(author.gameObject, prefabPath);
+                Object.DestroyImmediate(author.gameObject);
+
+                // Simulate a prefab authored before graph WCS fields existed.
+                var yaml = System.IO.File.ReadAllLines(prefabPath);
+                Assert.IsTrue(yaml.Any(line => line.StartsWith("  graphOrigin:")));
+                System.IO.File.WriteAllLines(prefabPath, yaml.Where(line => !line.StartsWith("  graphOrigin:") && !line.StartsWith("  wcsMode:")).ToArray());
+                AssetDatabase.ImportAsset(prefabPath, ImportAssetOptions.ForceSynchronousImport);
+                var asset = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+                var instance = ((GameObject)PrefabUtility.InstantiatePrefab(asset)).GetComponent<FloorPlan>();
+                var floor = instance.GraphToWorld(Vector3.zero);
+                AssertPosition(instance.transform.position, floor);
+                var corner = new Vector3(3, 2, 0);
+                var picked = instance.GraphToWorld(corner);
+                GeneratorWcs.SetOrigin(instance, corner);
+                BrushGenerators.Update(instance, true);
+                Assert.IsTrue(EditorSceneManager.SaveScene(instance.gameObject.scene, scenePath));
+                EditorSceneManager.OpenScene(scenePath);
+                var restored = Object.FindAnyObjectByType<FloorPlan>();
+                BrushGenerators.Update(restored, true);
+                Assert.IsTrue(PrefabUtility.IsPartOfPrefabInstance(restored));
+                AssertPosition(picked, restored.transform.position);
+                AssertPosition(floor, restored.GraphToWorld(Vector3.zero));
+                var anchor = restored.GetComponentInChildren<WallAnchor>();
+                Assert.IsTrue(anchor.onWall);
+                Same(openingBefore, World(anchor.GetComponent<Brush>()), "window on restored floor");
+            }
+            finally
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                AssetDatabase.DeleteAsset(scenePath);
+                AssetDatabase.DeleteAsset(prefabPath);
+            }
+        }
+
         [Test]
         public void SettingThePivotMovesTheTransformAndLeavesTheShape()
         {
@@ -423,7 +520,13 @@ namespace CsgBrush.Tests
                 Assert.That(actual.distance, Is.EqualTo(expected.distance).Within(0.0001f));
                 Assert.That(actual.height, Is.EqualTo(expected.height).Within(0.0001f));
                 AssertPosition(World(plain).center, World(shifted).center);
-                Assert.That(BrushApi.SetPivotToVertex(shifted, 1), Is.False);
+                var picked = WorldVertices(shifted)[1];
+                Assert.IsTrue(BrushApi.SetPivotToVertex(shifted, 1));
+                WallAnchors.Layout(plan);
+                AssertPosition(picked, shifted.transform.position);
+                AssertPosition(World(plain).center, World(shifted).center);
+                Assert.That(actual.distance, Is.EqualTo(expected.distance).Within(0.0001f));
+                Assert.That(actual.height, Is.EqualTo(expected.height).Within(0.0001f));
 
                 plan.points[0] += Vector3.forward;
                 WallAnchors.Layout(plan);
@@ -436,16 +539,42 @@ namespace CsgBrush.Tests
         }
 
         [Test]
-        public void DoorsWindowsAndRadialStairsKeepTheirOwnPivot()
+        public void DoorsAndRadialStairsKeepTheirOwnPivot()
         {
             BrushSettings.instance.snapToGrid = false;
-            foreach (var shape in new[] { BrushShape.Door, BrushShape.Window, BrushShape.CurvedStairs, BrushShape.SpiralStairs })
+            foreach (var shape in new[] { BrushShape.Door, BrushShape.CurvedStairs, BrushShape.SpiralStairs })
             {
                 var b = BrushApi.Create(shape, Vector3.zero, new Vector3(1f, 2f, 0.3f), Quaternion.identity);
                 b.pivot = Vector3.zero;
                 Assert.IsNull(BrushApi.PivotOf(b), shape + " has no pivot to set");
                 Assert.AreEqual(Vector3.zero, b.PivotShift, shape + " ignores the field");
             }
+        }
+
+        [Test]
+        public void WindowNumericWcsMeasuresTheOpeningFromItsMinimumCorner()
+        {
+            var window = BrushApi.Create(BrushShape.Window, new Vector3(3, 2, 1), new Vector3(2, 1, 0.5f), Quaternion.Euler(0, 35, 0), snap: false);
+            var before = WorldVertices(window);
+            window.pivot = Vector3.zero; // old serialized pivot field is unused for openings
+            AssertPosition(Vector3.one * 0.5f, BrushApi.PivotOf(window).Value);
+            var origin = window.transform.TransformPoint(-window.ClampedSize * 0.5f);
+            BrushApi.SetPivot(window, Vector3.zero);
+            AssertPosition(origin, window.transform.position);
+            AssertVertices(before, window);
+            BrushApi.SetPivotMode(window, PivotMode.Absolute);
+            var meters = new Vector3(0.25f, 0.75f, 0.1f);
+            BrushApi.SetPivot(window, meters);
+            AssertPosition(meters, BrushApi.PivotOf(window).Value);
+            AssertVertices(before, window);
+            window.size = new Vector3(2, 1, 0.1f); // a wall thinner than the distance to the existing pivot
+            BrushApi.SetPivotMode(window, PivotMode.Normalized);
+            var thin = BrushApi.PivotOf(window).Value;
+            Assert.Less(thin.z, 0f);
+            var oldDepth = window.PivotShift.z;
+            thin.x = 0.6f;
+            BrushApi.SetPivot(window, thin);
+            Assert.That(window.PivotShift.z, Is.EqualTo(oldDepth).Within(1e-5f));
         }
     }
 }

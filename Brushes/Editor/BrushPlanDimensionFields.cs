@@ -2,20 +2,32 @@ using static CsgBrush.Editor.BrushLanguage;
 using System;
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.EditorTools;
 using UnityEngine;
 
 namespace CsgBrush.Editor
 {
     internal static class BrushPlanDimensionFields
     {
-        internal static bool Draw(FloorPlan plan)
+        internal static void Draw(FloorPlan plan, bool singleSelection)
         {
-            if (!FloorPlanEditContext.IsActive || BrushCreateTool.Active != null) return false;
-            var selection = FloorPlanEditState.Sel(plan);
+            bool editable = singleSelection && BrushCreateTool.Active == null &&
+                ToolManager.activeToolType != typeof(FloorPlanDrawTool) && Tools.current != Tool.View &&
+                !Tools.viewToolActive && !FloorPlanEditState.Dragging(plan) && !EditorUtility.IsPersistent(plan);
+            var selection = editable && FloorPlanEditContext.IsActive ? FloorPlanEditState.Sel(plan) : null;
             string key = "csg.plan/" + plan.GetEntityId() + "/";
+            var walls = new List<FloorPlan.Wall>();
+            plan.Walls(walls);
+            foreach (var wall in walls)
+            {
+                string wallKey = key + wall.startId + "/" + wall.endId;
+                DrawWallLength(plan, wall, wallKey + "/length", editable);
+            }
+            if (selection == null) return;
+
             var transform = plan.transform;
             float heightScale = transform.TransformVector(Vector3.up).magnitude;
-            if (heightScale < 1e-6f) return false;
+            if (heightScale < 1e-6f) return;
 
             if (FloorPlanEditState.Mode == BrushEditMode.Face && selection.rooms.Count == 1)
             {
@@ -26,8 +38,8 @@ namespace CsgBrush.Editor
                     foreach (var point in room.polygon) centre += point;
                     centre /= room.polygon.Length;
                     var corner = room.polygon[0];
-                    var position = transform.TransformPoint(new Vector3(corner.x, room.height * 0.5f, corner.y));
-                    var interior = transform.TransformPoint(new Vector3(centre.x, room.height * 0.5f, centre.y));
+                    var position = plan.GraphToWorld(new Vector3(corner.x, room.height * 0.5f, corner.y));
+                    var interior = plan.GraphToWorld(new Vector3(centre.x, room.height * 0.5f, centre.y));
                     var edge = new BrushDimensionFields.Edge(1, position, transform.TransformVector(Vector3.up), interior);
                     BrushDimensionFields.Field(key + "room/" + index, edge, Tr("Высота комнаты, м"), room.height * heightScale,
                         meters =>
@@ -37,20 +49,16 @@ namespace CsgBrush.Editor
                             plan.SettingsOf(room).height = ToDimension(meters / heightScale);
                             RecordPlan(plan);
                         }, meters => DrawRoomOutline(plan, room, ToDimension(meters / heightScale), PreviewColor));
-                    return true;
+                    return;
                 }
             }
-            if (FloorPlanEditState.Mode != BrushEditMode.Edge || selection.edges.Count != 1) return false;
-            var walls = new List<FloorPlan.Wall>();
-            plan.Walls(walls);
+            if (FloorPlanEditState.Mode != BrushEditMode.Edge || selection.edges.Count != 1) return;
             foreach (int index in selection.edges)
             {
-                if (index < 0 || index >= walls.Count) return false;
+                if (index < 0 || index >= walls.Count) return;
                 var wall = walls[index];
                 DrawWall(plan, wall, key + wall.startId + "/" + wall.endId, heightScale);
-                return true;
             }
-            return false;
         }
 
         static int LinkIndex(FloorPlan plan, int start, int end)
@@ -72,11 +80,11 @@ namespace CsgBrush.Editor
             var across = new Vector3(firstNormal.x, 0f, firstNormal.y);
             float widthScale = transform.TransformVector(across).magnitude;
             wall.At(wall.Length * 0.5f, out var middle, out _, out _);
-            var centre = transform.TransformPoint(new Vector3(middle.x, wall.height * 0.5f, middle.y));
+            var centre = plan.GraphToWorld(new Vector3(middle.x, wall.height * 0.5f, middle.y));
             var upright = end + lastNormal * wall.outer;
-            var halfHeight = transform.TransformPoint(new Vector3(upright.x, wall.height * 0.5f, upright.y));
+            var halfHeight = plan.GraphToWorld(new Vector3(upright.x, wall.height * 0.5f, upright.y));
             var cap = start + firstNormal * ((wall.inner + wall.outer) * 0.5f);
-            var capTop = transform.TransformPoint(new Vector3(cap.x, wall.height, cap.y));
+            var capTop = plan.GraphToWorld(new Vector3(cap.x, wall.height, cap.y));
             var rise = new BrushDimensionFields.Edge(1, halfHeight, transform.TransformVector(Vector3.up), centre);
             BrushDimensionFields.Field(key + "/height", rise, Tr("Высота стены, м"), wall.height * heightScale,
                 meters => SetWallDimension(plan, wall, meters / heightScale, true),
@@ -86,14 +94,34 @@ namespace CsgBrush.Editor
                     Tr("Толщина поперёк стены, м"), wall.Thickness * widthScale,
                     meters => SetWallDimension(plan, wall, meters / widthScale, false),
                     meters => PreviewWall(plan, wall, wall.height, ToDimension(meters / widthScale)));
+        }
 
-            var a = new Vector3(wall.a.x, 0f, wall.a.y);
-            var b = new Vector3(wall.b.x, 0f, wall.b.y);
-            float length = transform.TransformVector(b - a).magnitude;
-            string title = wall.Curved ? Tr("Длина хорды стены, м") : Tr("Длина стены, м");
-            var span = new BrushDimensionFields.Edge(0, transform.TransformPoint((a + b) * 0.5f), transform.TransformVector(b - a), centre);
-            BrushDimensionFields.Field(key + "/length", span, title, length,
-                value => SetWallLength(plan, wall, value), value => PreviewWallLength(plan, wall, value));
+        static void DrawWallLength(FloorPlan plan, FloorPlan.Wall wall, string key, bool editable)
+        {
+            var path = new Vector3[wall.path.Length];
+            for (int i = 0; i < path.Length; i++)
+                path[i] = plan.GraphToWorld(new Vector3(wall.path[i].x, 0f, wall.path[i].y));
+            float meters = PointGraph.PathLength(path);
+            if (meters <= 1e-4f) return;
+            PointGraph.PathPoint(path, meters * 0.5f, out var midpoint, out var tangent);
+            var outward = Vector3.Cross(plan.transform.up, tangent);
+            if (wall.outwardLeft) outward = -outward;
+            var edge = new BrushDimensionFields.Edge(-1, midpoint, tangent, midpoint - outward);
+            string title = Tr("Длина стены, м");
+            if (editable && meters >= 0.001f && CanResizeLength(plan, wall))
+                BrushDimensionFields.Field(key, edge, title, meters, value => SetWallLength(plan, wall, value),
+                    value => PreviewWallLength(plan, wall, value));
+            else
+                BrushDimensionFields.Field(null, edge, title, meters, null);
+        }
+
+        internal static void DrawLengthReadout(Vector3 start, Vector3 end)
+        {
+            var delta = end - start;
+            float meters = delta.magnitude;
+            if (meters <= 1e-4f) return;
+            var midpoint = (start + end) * 0.5f;
+            BrushDimensionFields.Readout(new BrushDimensionFields.Edge(-1, midpoint, delta, midpoint), meters);
         }
 
         static readonly Color PreviewColor = new Color(0.36f, 0.86f, 1f, 1f);
@@ -103,7 +131,7 @@ namespace CsgBrush.Editor
             if (Event.current.type != EventType.Repaint) return;
             var line = new Vector3[room.polygon.Length + 1];
             for (int i = 0; i < room.polygon.Length; i++)
-                line[i] = plan.transform.TransformPoint(new Vector3(room.polygon[i].x, height, room.polygon[i].y));
+                line[i] = plan.GraphToWorld(new Vector3(room.polygon[i].x, height, room.polygon[i].y));
             line[line.Length - 1] = line[0];
             using (new Handles.DrawingScope(color))
             {
@@ -128,7 +156,7 @@ namespace CsgBrush.Editor
                 {
                     var delta = (path[i + 1] - path[i]).normalized;
                     var n = wall.outwardLeft ? new Vector2(-delta.y, delta.x) : new Vector2(delta.y, -delta.x);
-                    Vector3 World(Vector2 p) => plan.transform.TransformPoint(new Vector3(p.x, 0f, p.y));
+                    Vector3 World(Vector2 p) => plan.GraphToWorld(new Vector3(p.x, 0f, p.y));
                     var a = World(path[i] + n * wall.inner * ratio);
                     var b = World(path[i + 1] + n * wall.inner * ratio);
                     var c = World(path[i + 1] + n * wall.outer * ratio);
@@ -140,24 +168,35 @@ namespace CsgBrush.Editor
             }
         }
 
-        static bool TryWallEnd(FloorPlan plan, FloorPlan.Wall wall, float meters, out int index, out Vector3 point)
+        static bool CanResizeLength(FloorPlan plan, FloorPlan.Wall wall) =>
+            !wall.Curved && !plan.IsSmooth(wall.startId) && !plan.IsSmooth(wall.endId);
+
+        internal static bool TryWallEnd(FloorPlan plan, FloorPlan.Wall wall, float meters, out int index, out Vector3 point)
         {
-            index = plan != null ? plan.PointIndex(wall.endId) : -1;
+            index = -1;
             point = default;
-            if (index < 0 || meters < 0.001f || !float.IsFinite(meters)) return false;
+            if (plan == null || meters < 0.001f || !float.IsFinite(meters) || !CanResizeLength(plan, wall) ||
+                LinkIndex(plan, wall.startId, wall.endId) < 0) return false;
             int start = plan.PointIndex(wall.startId);
-            if (start < 0) return false;
-            var begin = plan.Point(start);
-            var vector = plan.Point(index) - begin;
+            int end = plan.PointIndex(wall.endId);
+            if (start < 0 || end < 0) return false;
+            var a = plan.Point(start);
+            var b = plan.Point(end);
+            var wcs = GeneratorWcs.World(plan);
+            bool fixStart = (plan.GraphToWorld(a) - wcs).sqrMagnitude <= (plan.GraphToWorld(b) - wcs).sqrMagnitude;
+            index = fixStart ? end : start;
+            var begin = fixStart ? a : b;
+            var vector = (fixStart ? b : a) - begin;
             float length = plan.transform.TransformVector(vector).magnitude;
-            if (length < 0.001f) return false;
+            if (length < 0.001f || !float.IsFinite(length)) return false;
             point = begin + vector * (meters / length);
-            return true;
+            return !point.Equals(begin) && float.IsFinite(point.x) && float.IsFinite(point.z);
         }
 
         internal static bool SetWallLength(FloorPlan plan, FloorPlan.Wall wall, float meters)
         {
             if (!TryWallEnd(plan, wall, meters, out int end, out var point)) return false;
+            if (plan.points[end].Equals(point)) return true;
             Undo.RecordObject(plan, Tr("Изменить длину стены"));
             plan.points[end] = point;
             RecordPlan(plan);
@@ -167,16 +206,18 @@ namespace CsgBrush.Editor
         static void PreviewWallLength(FloorPlan plan, FloorPlan.Wall wall, float meters)
         {
             if (!TryWallEnd(plan, wall, meters, out int end, out var point)) return;
-            var moved = plan.transform.TransformPoint(point);
-            var original = plan.transform.TransformPoint(plan.Point(end));
+            var moved = plan.GraphToWorld(point);
+            var original = plan.GraphToWorld(plan.Point(end));
+            int movedId = plan.pointIds[end];
             using (new Handles.DrawingScope(PreviewColor))
             {
                 Handles.DrawDottedLine(original, moved, 4f);
                 foreach (var link in plan.links)
                 {
-                    int other = link.start == wall.endId ? link.end : link.end == wall.endId ? link.start : -1;
+                    int other = link.start == movedId ? link.end : link.end == movedId ? link.start : -1;
                     int index = plan.PointIndex(other);
-                    if (index >= 0) Handles.DrawAAPolyLine(3f, plan.transform.TransformPoint(plan.Point(index)), moved);
+                    if (index >= 0 && !plan.IsSmooth(other))
+                        Handles.DrawAAPolyLine(3f, plan.GraphToWorld(plan.Point(index)), moved);
                 }
             }
         }

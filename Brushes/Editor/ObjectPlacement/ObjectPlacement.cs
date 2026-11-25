@@ -12,12 +12,35 @@ namespace CsgBrush.Editor
             if (!IsSelectableGeometry(source) || EditorApplication.isPlayingOrWillChangePlaymode ||
                 (source.hideFlags & HideFlags.NotEditable) != 0 ||
                 (source.gameObject.hideFlags & HideFlags.NotEditable) != 0) return false;
+            if (source.TryGetComponent<SplineAnchor>(out _)) return false;
+            if (source.TryGetComponent<WallAnchor>(out _)) return IsWallWindow(source);
             if (source.TryGetComponent<Brush>(out var brush) && (brush.IsGenerated || brush.anchored)) return false;
-            return !source.TryGetComponent<WallAnchor>(out _) && !source.TryGetComponent<SplineAnchor>(out _);
+            return true;
         }
 
-        internal static bool CanTarget(Transform source, Transform candidate) =>
-            source != null && IsSelectableGeometry(candidate) && !candidate.IsChildOf(source);
+        internal static bool IsWallWindow(Transform source) => source != null &&
+            source.TryGetComponent<Brush>(out var brush) && WallAnchors.CanEditWindowPivot(brush);
+
+        internal static bool CanTarget(Transform source, Transform candidate)
+        {
+            if (source == null || !IsSelectableGeometry(candidate) || candidate.IsChildOf(source)) return false;
+            if (!IsWallWindow(source)) return true;
+            if (!candidate.TryGetComponent<Brush>(out var brush) || !brush.isActiveAndEnabled) return false;
+            var target = BrushCutTarget.FromBrush(brush);
+            var plan = target.Plan;
+            if (plan == null || !target.Valid || !IsSelectableGeometry(plan.transform) || plan.gameObject.scene != source.gameObject.scene) return false;
+            if (source.parent == plan.transform) return true;
+            if ((plan.hideFlags & HideFlags.NotEditable) != 0 ||
+                (plan.gameObject.hideFlags & HideFlags.NotEditable) != 0) return false;
+            return !PrefabUtility.IsPartOfPrefabInstance(source) || PrefabUtility.IsAddedGameObjectOverride(source.gameObject);
+        }
+
+        internal static bool TryWindowPlacement(Transform source, Component candidate, Vector3 destination, out WallAnchors.Placement placement)
+        {
+            placement = default;
+            return IsWallWindow(source) && candidate is Brush wallBrush && CanTarget(source, wallBrush.transform) &&
+                WallAnchors.TryWindowPlacement(source.GetComponent<Brush>(), BrushCutTarget.FromBrush(wallBrush), destination, out placement);
+        }
 
         internal static bool IsSelectableGeometry(Transform item)
         {
@@ -43,10 +66,13 @@ namespace CsgBrush.Editor
             return Vector3.Lerp(a, b, origin + count / steps);
         }
 
-        internal static bool Commit(Transform source, Vector3 destination)
+        internal static bool Commit(Transform source, Vector3 destination, Component candidate = null)
         {
-            if (!CanMove(source) || !float.IsFinite(destination.sqrMagnitude) ||
-                source.position == destination) return false;
+            if (!CanMove(source) || !float.IsFinite(destination.sqrMagnitude)) return false;
+            if (IsWallWindow(source))
+                return TryWindowPlacement(source, candidate, destination, out var placement) &&
+                    WallAnchors.MoveWindow(source.GetComponent<Brush>(), placement);
+            if (source.position == destination) return false;
             Undo.RecordObject(source, Tr("Переместить объект к вершине или ребру"));
             source.position = destination;
             foreach (var brush in source.GetComponentsInChildren<Brush>(true))

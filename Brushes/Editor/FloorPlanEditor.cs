@@ -14,14 +14,14 @@ namespace CsgBrush.Editor
         static float Grid => BrushSettings.instance.snapToGrid ? BrushSettings.instance.GridMeters : 0f;
 
         /// <summary>The plan's floor as a world plane.</summary>
-        public static Plane Floor(PointGraph plan) => new Plane(plan.transform.up, plan.transform.position);
+        public static Plane Floor(PointGraph plan) => new Plane(plan.transform.up, plan.GraphToWorld(Vector3.zero));
 
-        public static Vector3 World(PointGraph plan, Vector3 local) => plan.transform.TransformPoint(plan.Flat ? new Vector3(local.x, 0f, local.z) : local);
+        public static Vector3 World(PointGraph plan, Vector3 local) => plan.GraphToWorld(plan.Flat ? new Vector3(local.x, 0f, local.z) : local);
 
         /// <summary>A world point on the plan's floor, snapped to the grid in the plan's own axes, as a local point.</summary>
         public static Vector3 SnapLocal(PointGraph plan, Vector3 world)
         {
-            var local = plan.transform.InverseTransformPoint(world);
+            var local = plan.WorldToGraph(world);
             if (plan.Flat) local.y = 0f;
             float g = Grid;
             if (g > 0f) { local.x = Mathf.Round(local.x / g) * g; local.z = Mathf.Round(local.z / g) * g; }
@@ -121,7 +121,7 @@ namespace CsgBrush.Editor
             if (curve.Length > 2)
             {
                 // a curved wall: the nearest place on its pieces, as it is (a grid point would leave the curve)
-                var m3 = plan.transform.InverseTransformPoint(world); if (plan.Flat) m3.y = 0f;
+                var m3 = plan.WorldToGraph(world); if (plan.Flat) m3.y = 0f;
                 float bestDist = float.MaxValue;
                 for (int i = 0; i + 1 < curve.Length; i++)
                 {
@@ -135,7 +135,7 @@ namespace CsgBrush.Editor
             plan.LinkPoints(best, out int ia, out int ib);
             Vector3 pa = plan.points[ia], pb = plan.points[ib], ab = pb - pa;
             float len = ab.magnitude;
-            var m = plan.transform.InverseTransformPoint(world); m.y = 0f;
+            var m = plan.WorldToGraph(world); m.y = 0f;
             float t = Mathf.Clamp(Vector3.Dot(m - pa, ab) / len, 0f, len);
             float g = Grid;
             if (g > 0f) t = Mathf.Round(t / g) * g;
@@ -179,6 +179,7 @@ namespace CsgBrush.Editor
             var plan = (FloorPlan)target;
             BrushEditor.DrawNamedProperties(serializedObject);
             PointGraphGUI.Tolerance(serializedObject);
+            GeneratorWcs.DrawInspector(plan);
             plan.EnsureGraph();
             EditorGUILayout.LabelField(Tr("План стен"), BrushLanguage.Format("Точек {0} · стен {1} · комнат {2}", plan.points.Count, plan.links.Count, FloorPlanEditState.RoomsOf(plan).Count));
             EditorGUILayout.BeginHorizontal();
@@ -405,8 +406,7 @@ namespace CsgBrush.Editor
             Handles.DrawAAPolyLine(6f, from, hover);
             Handles.color = FloorPlanTools.Line;
             Handles.DrawAAPolyLine(3f, from, hover);
-            float length = new Vector2(m_Hover.x - plan.points[last].x, m_Hover.z - plan.points[last].z).magnitude;
-            if (BrushSettings.instance.showDimensions) Handles.Label((from + hover) * 0.5f, BrushSettings.FormatMeters(length), EditorStyles.whiteMiniLabel);
+            if (BrushSettings.instance.showDimensions) BrushPlanDimensionFields.DrawLengthReadout(from, hover);
         }
 
         void Finish() => ToolManager.RestorePreviousPersistentTool();

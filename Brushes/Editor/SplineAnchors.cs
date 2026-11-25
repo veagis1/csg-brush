@@ -96,7 +96,7 @@ namespace CsgBrush.Editor
             var outward = pose.right * sp.x + pose.up * sp.y;
             var n = outward.sqrMagnitude > 1e-10f ? outward.normalized : pose.up;
             var t = spline.transform;
-            position = t.TransformPoint(pose.position + outward + n * offset);
+            position = spline.GraphToWorld(pose.position + outward + n * offset);
             rotation = t.rotation * Quaternion.LookRotation(pose.forward, upright ? pose.up : n) * turn;
         }
 
@@ -107,8 +107,8 @@ namespace CsgBrush.Editor
         /// </summary>
         static void Reanchor(Spline spline, SplineAnchor a, bool force)
         {
-            var t = a.transform; var st = spline.transform;
-            var local = st.InverseTransformPoint(t.position);
+            var t = a.transform;
+            var local = spline.WorldToGraph(t.position);
             if (!spline.Nearest(local, out int link, out float along, out _) || !spline.PoseAt(link, along, out var pose)) return;
             var rel = local - pose.position;
             float x = Vector3.Dot(rel, pose.right), y = Vector3.Dot(rel, pose.up);
@@ -182,7 +182,7 @@ namespace CsgBrush.Editor
             for (int i = 0; i < active.Count; i++)
             {
                 if (!(active[i] is Spline s)) continue;
-                var local = s.transform.InverseTransformPoint(world);
+                var local = s.WorldToGraph(world);
                 if (s.Nearest(local, out _, out _, out float d) && d < bestD) { bestD = d; best = s; }
             }
             return best;

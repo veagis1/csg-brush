@@ -215,11 +215,12 @@ namespace CsgBrush.Editor
         }
 
         /// <summary>Local scale that gives a world scale of one under the current parent.</summary>
-        public static Vector3 CounterScale(Transform t)
+        public static Vector3 CounterScale(Transform t) => CounterScaleUnder(t.parent);
+
+        internal static Vector3 CounterScaleUnder(Transform parent)
         {
-            var p = t.parent;
-            if (p == null) return Vector3.one;
-            var ps = p.lossyScale;
+            if (parent == null) return Vector3.one;
+            var ps = parent.lossyScale;
             return new Vector3(Mathf.Abs(ps.x) > 1e-6f ? 1f / ps.x : 1f, Mathf.Abs(ps.y) > 1e-6f ? 1f / ps.y : 1f, Mathf.Abs(ps.z) > 1e-6f ? 1f / ps.z : 1f);
         }
 

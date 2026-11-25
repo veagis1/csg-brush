@@ -26,6 +26,7 @@ namespace CsgBrush.Editor
             public Vector3 position; public Quaternion rotation; public Vector3 size;
             internal BrushSurfaceGrid.Frame grid;
             internal Vector3? drawingPoint;
+            internal Vector3 localScale;
             /// <summary>The plan whose wall it is on, or null.</summary>
             public FloorPlan plan;
             public FloorPlan.Wall wall; public float distance, sill;
@@ -51,12 +52,12 @@ namespace CsgBrush.Editor
                 : BrushSurfaceGrid.Frame.OnPlane(Vector3.zero, Vector3.up);
             if (hit != null && hit.generatedBy is FloorPlan plan && Mathf.Abs(normal.y) < 0.5f)
             {
-                var local = plan.transform.InverseTransformPoint(point);
+                var local = plan.WorldToGraph(point);
                 if (NearestWall(plan, new Vector2(local.x, local.z), out var wall, out float along, out _))
                 {
                     p.plan = plan; p.wall = wall; p.sill = sill;
                     p.grid = BrushSurfaceGrid.ForSurface(hit, point, normal);
-                    p.distance = ClampOpening(Snap(along), wall.Length, opening.x);
+                    p.distance = ClampOpening(Snap(along), wall.Length, opening.x * Mathf.Abs(BrushSnap.CounterScaleUnder(plan.transform).x));
                     p.drawingPoint = BrushDraw.SnapInPlane(point, p.grid.Origin, p.grid.Rotation, Grid);
                     OpeningPose(plan, wall, p.distance, sill, opening, out p.position, out p.rotation, out p.size);
                     return true;
@@ -192,14 +193,29 @@ namespace CsgBrush.Editor
 
         static readonly HashSet<WallAnchor> s_Moved = new HashSet<WallAnchor>();
         static readonly List<FloorPlan.Wall> s_Walls = new List<FloorPlan.Wall>();
+        static readonly HashSet<WallAnchor> s_ExplicitEdits = new HashSet<WallAnchor>();
 
         /// <summary>An anchored object was moved by hand: it takes the nearest wall at the plan's next update.</summary>
         public static void Moved(WallAnchor a)
         {
-            if (a == null) return;
+            if (a == null || s_ExplicitEdits.Contains(a)) return;
             s_Moved.Add(a);
             var plan = a.Plan;
             if (plan != null) BrushGenerators.MarkDirty(plan);
+        }
+
+        internal static void WithoutMoveTracking(WallAnchor anchor, System.Action edit)
+        {
+            if (s_ExplicitEdits.Contains(anchor)) { edit(); return; }
+            Undo.FlushUndoRecordObjects();
+            s_ExplicitEdits.Add(anchor);
+            try { edit(); }
+            finally
+            {
+                // The Undo hook must see these edits while tracking by transform is suspended.
+                try { Undo.FlushUndoRecordObjects(); }
+                finally { s_ExplicitEdits.Remove(anchor); }
+            }
         }
 
         /// <summary>Put everything anchored to the plan on its wall (the plan calls this after building its walls).</summary>
@@ -231,9 +247,8 @@ namespace CsgBrush.Editor
                 Vector3 position; Quaternion rotation;
                 if (opening)
                 {
-                    OpeningPose(plan, wall, ClampOpening(distance, wall.Length, brush.size.x), a.height, new Vector2(brush.size.x, brush.size.y), out position, out rotation, out var size);
+                    OpeningLayoutPose(plan, wall, distance, a.height, brush, child.localScale, out position, out rotation, out var size);
                     if (Mathf.Abs(brush.size.z - size.z) > 1e-5f) { brush.size = new Vector3(brush.size.x, brush.size.y, size.z); BrushSync.Ensure(brush); }
-                    position -= OpeningOffset(child, rotation, brush.PivotShift);
                 }
                 else ObjectPose(plan, wall, a, Mathf.Clamp(distance, 0f, wall.Length), out position, out rotation);
                 var t = child;
@@ -253,11 +268,10 @@ namespace CsgBrush.Editor
         static Vector3 ReferencePosition(Transform t, Brush brush) =>
             brush != null && brush.IsOpening ? t.TransformPoint(brush.PivotShift) : t.position;
 
-        static Vector3 OpeningOffset(Transform t, Quaternion worldRotation, Vector3 localOffset)
+        static Vector3 OpeningOffset(FloorPlan plan, Quaternion worldRotation, Vector3 localScale, Vector3 localOffset)
         {
-            var scaled = Vector3.Scale(t.localScale, localOffset);
-            var parent = t.parent;
-            if (parent == null) return worldRotation * scaled;
+            var scaled = Vector3.Scale(localScale, localOffset);
+            var parent = plan.transform;
             var localRotation = Quaternion.Inverse(parent.rotation) * worldRotation;
             return parent.TransformVector(localRotation * scaled);
         }
@@ -266,7 +280,7 @@ namespace CsgBrush.Editor
 
         static Vector2 Local(FloorPlan plan, Vector3 world)
         {
-            var point = plan.transform.InverseTransformPoint(world);
+            var point = plan.WorldToGraph(world);
             return new Vector2(point.x, point.z);
         }
 
@@ -354,13 +368,17 @@ namespace CsgBrush.Editor
         {
             var t = a.transform;
             var brush = opening ? a.GetComponent<Brush>() : null;
-            var local = plan.transform.InverseTransformPoint(ReferencePosition(t, brush));
+            var local = plan.WorldToGraph(ReferencePosition(t, brush));
             var p2 = new Vector2(local.x, local.z);
             if (!NearestWall(plan, p2, out var wall, out float along, out float across)) return;
             if (opening)
             {
                 if (!force && across > (wall.outer - wall.inner) * 0.5f + CatchMeters) { SetFree(a); return; } // off every wall: a free cut
-                float sill = Mathf.Max(0f, local.y - brush.size.y * 0.5f);
+                var toPlan = plan.transform.worldToLocalMatrix * t.localToWorldMatrix;
+                var y = toPlan.GetRow(1);
+                var half = brush.ClampedSize * 0.5f;
+                float halfHeight = Mathf.Abs(y.x) * half.x + Mathf.Abs(y.y) * half.y + Mathf.Abs(y.z) * half.z;
+                float sill = Mathf.Max(0f, (local.y - halfHeight) * MetresPerUnitNormal(plan, Vector3.up));
                 Set(a, wall, WallFace.Centered, Snap(along), sill, 0f, Quaternion.identity);
                 return;
             }
@@ -440,7 +458,7 @@ namespace CsgBrush.Editor
             for (int i = 0; i < active.Count; i++)
             {
                 if (!(active[i] is FloorPlan plan)) continue;
-                var local = plan.transform.InverseTransformPoint(world);
+                var local = plan.WorldToGraph(world);
                 if (NearestWall(plan, new Vector2(local.x, local.z), out _, out _, out float across) && across < bestD) { bestD = across; best = plan; }
             }
             return best;
@@ -460,7 +478,7 @@ namespace CsgBrush.Editor
             wall.At(distance, out var onLine, out _, out var outward); // along a curved wall: its direction there
             var n = face == WallFace.Inside ? -outward : outward;
             var p = onLine + outward * off;
-            origin = plan.transform.TransformPoint(new Vector3(p.x, 0f, p.y));
+            origin = plan.GraphToWorld(new Vector3(p.x, 0f, p.y));
             rotation = plan.transform.rotation * Quaternion.LookRotation(new Vector3(n.x, 0f, n.y), Vector3.up);
         }
 
@@ -472,11 +490,143 @@ namespace CsgBrush.Editor
         }
 
         /// <summary>The world pose and size of a door or window on a wall: through the wall's thickness, facing across it.</summary>
-        public static void OpeningPose(FloorPlan plan, FloorPlan.Wall wall, float distance, float sill, Vector2 opening, out Vector3 position, out Quaternion rotation, out Vector3 size)
+        public static void OpeningPose(FloorPlan plan, FloorPlan.Wall wall, float distance, float sill, Vector2 opening,
+            out Vector3 position, out Quaternion rotation, out Vector3 size) =>
+            OpeningPose(plan, wall, distance, sill, opening, BrushSnap.CounterScaleUnder(plan.transform), out position, out rotation, out size);
+
+        static void OpeningPose(FloorPlan plan, FloorPlan.Wall wall, float distance, float sill, Vector2 opening, Vector3 localScale,
+            out Vector3 position, out Quaternion rotation, out Vector3 size)
         {
             Frame(plan, wall, WallFace.Centered, distance, out var origin, out rotation);
-            position = origin + plan.transform.up * (sill + opening.y * 0.5f);
-            size = new Vector3(opening.x, opening.y, (wall.outer - wall.inner) + 2f * BrushSettings.OpeningMarginMeters);
+            float height = sill / MetresPerUnitNormal(plan, Vector3.up) + opening.y * Mathf.Abs(localScale.y) * 0.5f;
+            position = origin + plan.transform.TransformVector(Vector3.up * height);
+            wall.At(distance, out _, out _, out var outward);
+            float margin = BrushSettings.OpeningMarginMeters / MetresPerUnitNormal(plan, new Vector3(outward.x, 0f, outward.y));
+            float depthScale = Mathf.Abs(localScale.z) > 1e-6f ? Mathf.Abs(localScale.z) : 1f;
+            size = new Vector3(opening.x, opening.y, (wall.Thickness + 2f * margin) / depthScale);
+        }
+
+        // A floor or wall is a plane in the graph's frame. Transform its normal as a covector to
+        // convert signed distances to that plane even under a non-uniformly scaled ancestry.
+        static float MetresPerUnitNormal(FloorPlan plan, Vector3 normal)
+        {
+            float inverse = plan.transform.worldToLocalMatrix.transpose.MultiplyVector(normal).magnitude;
+            return float.IsFinite(inverse) && inverse > 1e-6f ? 1f / inverse : 1f;
+        }
+
+        static void OpeningLayoutPose(FloorPlan plan, FloorPlan.Wall wall, float distance, float sill, Brush brush, Vector3 scale,
+            out Vector3 position, out Quaternion rotation, out Vector3 size)
+        {
+            var box = brush.ClampedSize;
+            distance = ClampOpening(distance, wall.Length, box.x * Mathf.Abs(scale.x));
+            OpeningPose(plan, wall, distance, sill, new Vector2(box.x, box.y), scale, out position, out rotation, out size);
+            position -= OpeningOffset(plan, rotation, scale, brush.PivotShift);
+        }
+
+        internal static bool CanEditWindowPivot(Brush brush) => brush != null && brush.isActiveAndEnabled &&
+            brush.shape == BrushShape.Window && !brush.IsGenerated &&
+            brush.TryGetComponent<WallAnchor>(out var anchor) && anchor.isActiveAndEnabled && anchor.Plan != null;
+
+        internal static bool TryWindowPlacement(Brush window, BrushCutTarget target, Vector3 point, out Placement placement)
+        {
+            placement = default;
+            if (!CanEditWindowPivot(window) || !float.IsFinite(point.sqrMagnitude) || !target.TryWall(out var wall)) return false;
+            var plan = target.Plan;
+            var anchor = window.GetComponent<WallAnchor>();
+            wall.Project(Local(plan, point), out float along, out _);
+            along = Mathf.Clamp(along, 0f, wall.Length);
+            var source = window.transform;
+            var sourceScale = source.localScale;
+            var pivotShift = window.PivotShift;
+            float openingWidth = window.ClampedSize.x;
+            float worldX = source.TransformVector(Vector3.right).magnitude;
+            float worldY = source.TransformVector(Vector3.up).magnitude;
+            float centre = 0f, error = float.PositiveInfinity;
+            Vector3 scale = sourceScale;
+
+            void Consider(float first, float last, Vector2 direction, Vector2 outward)
+            {
+                var localRotation = Quaternion.LookRotation(new Vector3(outward.x, 0f, outward.y), Vector3.up);
+                float targetX = plan.transform.TransformVector(localRotation * Vector3.right).magnitude;
+                float targetY = plan.transform.TransformVector(localRotation * Vector3.up).magnitude;
+                var candidateScale = new Vector3(
+                    targetX > 1e-6f ? Mathf.Sign(sourceScale.x) * worldX / targetX : sourceScale.x,
+                    targetY > 1e-6f ? Mathf.Sign(sourceScale.y) * worldY / targetY : sourceScale.y,
+                    sourceScale.z);
+                var offset = localRotation * Vector3.Scale(candidateScale, pivotShift);
+                // The anchor stores its centre station. Convert the selected WCS station to the
+                // corresponding centre, using the rotation and scale on this piece of wall.
+                float wanted = along + Vector2.Dot(direction, new Vector2(offset.x, offset.z));
+                float width = openingWidth * Mathf.Abs(candidateScale.x);
+                // At a shared endpoint Wall.At still uses the piece ending there.
+                float start = first > 0f ? first + Mathf.Min(Mathf.Max(1e-5f, first * 2e-7f), (last - first) * 0.25f) : first;
+                float min = Mathf.Max(start, ClampOpening(0f, wall.Length, width));
+                float max = Mathf.Min(last, ClampOpening(wall.Length, wall.Length, width));
+                if (min > max) return;
+                float candidate = Mathf.Clamp(wanted, min, max);
+                float miss = Mathf.Abs(candidate - wanted);
+                if (miss >= error) return;
+                error = miss;
+                centre = candidate;
+                scale = candidateScale;
+            }
+
+            if (wall.Curved)
+            {
+                float first = 0f;
+                for (int i = 1; i < wall.path.Length; i++)
+                {
+                    var delta = wall.path[i] - wall.path[i - 1];
+                    float length = delta.magnitude;
+                    if (length < 1e-9f) continue;
+                    var direction = delta / length;
+                    var right = new Vector2(direction.y, -direction.x);
+                    Consider(first, first + length, direction, wall.outwardLeft ? -right : right);
+                    first += length;
+                }
+            }
+            else Consider(0f, wall.Length, wall.direction, wall.outward);
+
+            if (!float.IsFinite(error)) return false;
+            placement = new Placement { plan = plan, wall = wall, distance = centre, sill = anchor.height, localScale = scale };
+            OpeningLayoutPose(plan, wall, centre, anchor.height, window, scale,
+                out placement.position, out placement.rotation, out placement.size);
+            return true;
+        }
+
+        internal static bool MoveWindow(Brush window, Placement placement)
+        {
+            if (!CanEditWindowPivot(window) || placement.plan == null) return false;
+            var anchor = window.GetComponent<WallAnchor>();
+            var oldPlan = anchor.Plan;
+            var newPlan = placement.plan;
+            var wall = placement.wall;
+            var t = window.transform;
+            if (oldPlan == newPlan && anchor.startId == wall.startId && anchor.endId == wall.endId &&
+                Mathf.Approximately(anchor.distance, placement.distance) && anchor.alongOffset == 0f &&
+                t.localScale == placement.localScale) return false;
+            int group = Undo.GetCurrentGroup();
+            var name = Tr("Переместить вдоль стены");
+            WithoutMoveTracking(anchor, () =>
+            {
+                s_Moved.Remove(anchor);
+                if (oldPlan != newPlan)
+                {
+                    Undo.SetTransformParent(t, newPlan.transform, name);
+                    if (t.parent != newPlan.transform) return;
+                }
+                Undo.RecordObject(t, name);
+                t.localScale = placement.localScale;
+                Undo.RecordObject(window, name);
+                Set(anchor, wall, WallFace.Centered, placement.distance, anchor.height, 0f, Quaternion.identity);
+                Layout(newPlan);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(anchor);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(t);
+                PrefabUtility.RecordPrefabInstancePropertyModifications(window);
+                BrushGenerators.MarkDirty(oldPlan);
+            });
+            Undo.CollapseUndoOperations(group);
+            return anchor.Plan == newPlan;
         }
 
         // ------------------------------------------------------------------ choosing the wall

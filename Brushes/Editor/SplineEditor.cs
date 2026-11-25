@@ -46,6 +46,7 @@ namespace CsgBrush.Editor
             Field(serializedObject.FindProperty(nameof(Spline.material)));
             serializedObject.ApplyModifiedProperties();
             PointGraphGUI.Tolerance(serializedObject);
+            GeneratorWcs.DrawInspector(spline);
 
             spline.EnsureGraph();
             EditorGUILayout.LabelField(Tr("Траектория"), BrushLanguage.Format("Точек {0} · звеньев {1}", spline.points.Count, spline.links.Count));
@@ -218,7 +219,7 @@ namespace CsgBrush.Editor
             if (FreePoint(spline, ray, last >= 0 ? FloorPlanTools.World(spline, spline.points[last]) : (Vector3?)null, out var world))
             {
                 m_Kind = Hover.Free;
-                m_Hover = spline.transform.InverseTransformPoint(world);
+                m_Hover = spline.WorldToGraph(world);
             }
         }
 
@@ -237,7 +238,7 @@ namespace CsgBrush.Editor
                 world = SnapAcross(point, normal, g) + normal * rest;
                 return true;
             }
-            float height = last.HasValue ? last.Value.y : spline.transform.position.y;
+            float height = last.HasValue ? last.Value.y : spline.GraphToWorld(Vector3.zero).y;
             var level = new Plane(Vector3.up, new Vector3(0f, height, 0f));
             if (!level.Raycast(ray, out float t) || t <= 0f) { world = default; return false; }
             world = SnapAcross(ray.GetPoint(t), Vector3.up, g);

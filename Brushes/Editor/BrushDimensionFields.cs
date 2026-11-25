@@ -31,7 +31,11 @@ namespace CsgBrush.Editor
             Undo.undoRedoPerformed += Reset;
             ToolManager.activeToolChanged += Reset;
             EditorApplication.playModeStateChanged += _ => Reset();
-            SceneView.beforeSceneGui += _ => placedLabels.Clear();
+            SceneView.beforeSceneGui += view =>
+            {
+                placedLabels.Clear();
+                if (owner == view && !BrushSettings.instance.showDimensions) Close();
+            };
         }
 
         static void Reset()
@@ -39,8 +43,13 @@ namespace CsgBrush.Editor
             Close();
         }
 
+        internal static bool IsEditingInCurrentView => activeKey != null && owner == SceneView.currentDrawingSceneView;
+
+        internal static void Cancel() => Close();
+
         static void Close()
         {
+            if (activeKey == null) return;
             activeKey = null;
             owner = null;
             focus = false;
@@ -78,8 +87,10 @@ namespace CsgBrush.Editor
             }
         }
 
+        static string Suffix(int axis) => axis < 0 ? Tr("м") : Tr(AxisSuffix[axis]);
+
         internal static string FormatDimension(float meters, int axis) =>
-            meters.ToString("0.00###", BrushLanguage.Culture) + " " + Tr(AxisSuffix[axis]);
+            meters.ToString("0.00###", BrushLanguage.Culture) + " " + Suffix(axis);
 
         // All geometry below is in GUI points, so zoom and display scaling do not change the gap.
         internal static Rect BadgeRect(Vector2 midpoint, Vector2 along, Vector2 outward, Vector2 size, List<Rect> occupied)
@@ -152,12 +163,12 @@ namespace CsgBrush.Editor
                         return;
                     }
                     var number = r;
-                    number.xMax -= 41f;
+                    number.xMax -= edge.Axis < 0 ? 22f : 41f;
                     GUI.SetNextControlName(key);
                     draft = EditorGUI.TextField(number, draft);
                     var suffix = Rect.MinMaxRect(number.xMax, r.yMin, r.xMax, r.yMax);
                     EditorGUI.DrawRect(suffix, Plate);
-                    GUI.Label(suffix, Tr(AxisSuffix[edge.Axis]), Badge);
+                    GUI.Label(suffix, Suffix(edge.Axis), Badge);
                     if (focus)
                     {
                         EditorGUI.FocusTextInControl(key);

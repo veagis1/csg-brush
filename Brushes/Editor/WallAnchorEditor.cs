@@ -15,6 +15,13 @@ namespace CsgBrush.Editor
         /// <summary>Picking a wall in the Scene view: other clicks there are ignored meanwhile.</summary>
         public static bool Picking { get; private set; }
 
+        internal static void CancelPicking()
+        {
+            if (!Picking) return;
+            Picking = false;
+            SceneView.RepaintAll();
+        }
+
         static readonly List<FloorPlan.Wall> s_Walls = new List<FloorPlan.Wall>();
         static readonly Color HoverColor = new Color(1f, 1f, 1f, 0.9f);
         FloorPlan m_HoverPlan; int m_HoverWall = -1;
@@ -25,7 +32,9 @@ namespace CsgBrush.Editor
         {
             var a = (WallAnchor)target;
             if (a.Plan == null) EditorGUILayout.HelpBox(Tr("Объект свободен. Чтобы привязать его к плану, выберите стену."), MessageType.Info);
-            bool picking = GUILayout.Toggle(Picking, new GUIContent(Tr("Выбрать стену"), Tr("Щёлкните по стене в окне сцены, чтобы привязать объект. Escape отменяет выбор.")), EditorStyles.miniButton);
+            bool picking;
+            using (new EditorGUI.DisabledScope(ObjectPlacementTool.Active))
+                picking = GUILayout.Toggle(Picking, new GUIContent(Tr("Выбрать стену"), Tr("Щёлкните по стене в окне сцены, чтобы привязать объект. Escape отменяет выбор.")), EditorStyles.miniButton);
             if (picking != Picking) { Picking = picking; m_HoverPlan = null; SceneView.RepaintAll(); }
             if (a.Plan == null) return;
             serializedObject.Update();
@@ -139,7 +148,7 @@ namespace CsgBrush.Editor
                 m_HoverWall = -1;
                 if (m_HoverPlan != null)
                 {
-                    var local = m_HoverPlan.transform.InverseTransformPoint(point);
+                    var local = m_HoverPlan.WorldToGraph(point);
                     if (WallAnchors.NearestWall(m_HoverPlan, new Vector2(local.x, local.z), out var wall, out _, out _)) m_HoverWall = wall.index;
                 }
                 if (e.type == EventType.MouseMove) SceneView.RepaintAll();
@@ -163,8 +172,7 @@ namespace CsgBrush.Editor
         static void DrawWall(FloorPlan plan, FloorPlan.Wall w, Color color)
         {
             float middle = (w.inner + w.outer) * 0.5f;
-            var t = plan.transform;
-            Vector3 P(Vector2 p, float y) => t.TransformPoint(new Vector3(p.x, y, p.y));
+            Vector3 P(Vector2 p, float y) => plan.GraphToWorld(new Vector3(p.x, y, p.y));
             float h = plan.wallHeight;
             // along the wall's line (a curve's pieces), in its middle: the bottom edge, then back along the top
             var line = new List<Vector2>();

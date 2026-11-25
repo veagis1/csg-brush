@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using CsgBrush.Editor;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 namespace CsgBrush.Tests
@@ -42,6 +43,83 @@ namespace CsgBrush.Tests
             var rect = BrushDimensionFields.BadgeRect(Vector2.zero, Vector2.zero, Vector2.zero,
                 new Vector2(100f, 22f), new List<Rect>());
             Assert.That(rect.yMax, Is.EqualTo(-6f).Within(0.001f));
+        }
+
+        [Test]
+        public void AWallLengthBadgeShowsMetresWithoutAWorldAxis()
+        {
+            Assert.That(BrushDimensionFields.FormatDimension(19.75f, -1),
+                Is.EqualTo(BrushLanguage.English ? "19.75 m" : "19,75 м"));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void StraightWallLengthKeepsTheEndNearestWcsAndUndoesInOneStep(bool reverseLink)
+        {
+            var plan = new GameObject("Plan").AddComponent<FloorPlan>();
+            try
+            {
+                plan.transform.SetPositionAndRotation(new Vector3(33f, -4f, 17f), Quaternion.Euler(19f, 42f, 0f));
+                plan.transform.localScale = new Vector3(2f, 1f, 0.5f);
+                var nearPoint = new Vector3(5f, 0f, 3f);
+                int nearId = plan.AddPoint(nearPoint);
+                int farId = plan.AddPoint(new Vector3(1f, 0f, 1f));
+                int cornerId = plan.AddPoint(new Vector3(6f, 0f, 5f));
+                plan.AddWall(reverseLink ? farId : nearId, reverseLink ? nearId : farId);
+                plan.AddWall(farId, cornerId);
+                Undo.IncrementCurrentGroup();
+                Assert.That(GeneratorWcs.SetOrigin(plan, nearPoint + Vector3.up * 2f), Is.True);
+                var wcs = GeneratorWcs.World(plan);
+                var walls = new List<FloorPlan.Wall>();
+                plan.Walls(walls);
+                var original = plan.points.ToArray();
+                int near = plan.PointIndex(nearId), far = plan.PointIndex(farId);
+
+                const float meters = 9.37f;
+                Assert.That(BrushPlanDimensionFields.TryWallEnd(plan, walls[0], meters, out int moved, out var point), Is.True);
+                Assert.That(moved, Is.EqualTo(far));
+                Assert.That(Vector3.Distance(plan.GraphToWorld(original[near]), plan.GraphToWorld(point)),
+                    Is.EqualTo(meters).Within(1e-5f));
+                CollectionAssert.AreEqual(original, plan.points, "the preview must leave the authoring points alone");
+
+                Undo.IncrementCurrentGroup();
+                Assert.That(BrushPlanDimensionFields.SetWallLength(plan, walls[0], meters), Is.True);
+                Assert.That(plan.points[near], Is.EqualTo(original[near]));
+                Assert.That(plan.points[far], Is.EqualTo(point));
+                Assert.That(plan.points[plan.PointIndex(cornerId)], Is.EqualTo(original[2]));
+                Assert.That(plan.links[1].start, Is.EqualTo(farId), "the adjacent wall still shares the moved endpoint");
+                Undo.FlushUndoRecordObjects();
+                Undo.PerformUndo();
+                CollectionAssert.AreEqual(original, plan.points);
+                Assert.That(GeneratorWcs.World(plan), Is.EqualTo(wcs));
+                Undo.PerformRedo();
+                Assert.That(plan.points[near], Is.EqualTo(original[near]));
+                Assert.That(plan.points[far], Is.EqualTo(point));
+            }
+            finally { Object.DestroyImmediate(plan.gameObject); }
+        }
+
+        [Test]
+        public void CurvedWallLengthIsReadOnly()
+        {
+            var plan = new GameObject("Plan").AddComponent<FloorPlan>();
+            try
+            {
+                int start = plan.AddPoint(Vector3.zero);
+                int end = plan.AddPoint(Vector3.right * 4f);
+                int next = plan.AddPoint(new Vector3(4f, 0f, 4f));
+                plan.AddWall(start, end);
+                plan.AddWall(end, next);
+                plan.SetSmooth(end, true);
+                var walls = new List<FloorPlan.Wall>();
+                plan.Walls(walls);
+                var original = plan.points.ToArray();
+                Assert.That(walls[0].Curved, Is.True);
+                Assert.That(BrushPlanDimensionFields.TryWallEnd(plan, walls[0], 6f, out _, out _), Is.False);
+                Assert.That(BrushPlanDimensionFields.SetWallLength(plan, walls[0], 6f), Is.False);
+                CollectionAssert.AreEqual(original, plan.points);
+            }
+            finally { Object.DestroyImmediate(plan.gameObject); }
         }
     }
 }
