@@ -13,10 +13,7 @@ namespace CsgBrush.Editor
     [Overlay(typeof(SceneView), "Brushes", "CSG Brush", "Brushes", true)]
     public sealed class BrushOverlay : Overlay, ICreateHorizontalToolbar, ICreateVerticalToolbar
     {
-        const float PreferredWidth = 315f, Gap = 4f;
-
-        /// <summary>The panel's width: rows of buttons wrap to fit it.</summary>
-        static float s_Width = PreferredWidth;
+        const float PreferredWidth = 315f, MinimumWidth = 250f;
 
         public OverlayToolbar CreateHorizontalToolbarContent() => CreateOperationToolbar();
         public OverlayToolbar CreateVerticalToolbarContent() => CreateOperationToolbar();
@@ -25,6 +22,8 @@ namespace CsgBrush.Editor
         {
             var toolbar = new OverlayToolbar();
             toolbar.Add(new IMGUIContainer(DrawCreateMenu));
+            toolbar.Add(new IMGUIContainer(() => DrawDimensionsAndSnapping(BrushSettings.instance)));
+            toolbar.Add(new IMGUIContainer(DrawEditToggles));
             foreach (var operation in new[] { BrushOperation.Add, BrushOperation.Subtract })
             {
                 var button = new EditorToolbarButton(operation == BrushOperation.Add ? "+ добавить" : "- вычесть", () =>
@@ -58,37 +57,19 @@ namespace CsgBrush.Editor
         public override VisualElement CreatePanelContent()
         {
             IMGUIContainer container = null;
+            float panelWidth = PreferredWidth;
             container = new IMGUIContainer(() =>
             {
                 float width = container.contentRect.width;
-                s_Width = float.IsNaN(width) || width < PreferredWidth ? PreferredWidth : width;
-                s_Width -= 8f; // the panel's padding
+                if (Event.current.type == EventType.Layout)
+                    panelWidth = (float.IsNaN(width) || width <= 0f ? PreferredWidth : Mathf.Max(MinimumWidth, width)) - 8f;
                 float labelWidth = EditorGUIUtility.labelWidth;
-                EditorGUIUtility.labelWidth = Mathf.Clamp(s_Width * 0.45f, 145f, 190f); // from the panel, not the whole Scene view
+                EditorGUIUtility.labelWidth = Mathf.Clamp(panelWidth * 0.45f, 145f, 190f); // from the panel, not the whole Scene view
                 try { Draw(); }
                 finally { EditorGUIUtility.labelWidth = labelWidth; }
             });
-            container.style.minWidth = PreferredWidth;
+            container.style.minWidth = MinimumWidth;
             return container;
-        }
-
-        /// <summary>A row of buttons that wraps: before a button of this width, start a new row if it would not fit.</summary>
-        static void Wrap(ref float x, float width)
-        {
-            if (x > 0f && x + width > s_Width)
-            {
-                EditorGUILayout.EndHorizontal();
-                EditorGUILayout.BeginHorizontal();
-                x = 0f;
-            }
-            x += width + Gap;
-        }
-
-        /// <summary>A fixed width for the next button of a wrapping row, counted along the row.</summary>
-        static GUILayoutOption Width(ref float x, float width)
-        {
-            x += width + Gap;
-            return GUILayout.Width(width);
         }
 
         static readonly string[] SelectionIcons = { "ShapeEdit_Single", "ShapeEdit_Offset", "ShapeEdit_Match" };
@@ -107,66 +88,71 @@ namespace CsgBrush.Editor
             return image != null ? new GUIContent(image, tooltip) : new GUIContent(name, tooltip);
         }
 
-        /// <summary>The Shape Edit toggle and, while it is on, what a drag does to the other selected brushes (Single / Offset / Match): part of the grid row.</summary>
-        static void DrawShapeEdit(BrushSettings s, ref float x)
+        static void DrawEditToggles()
         {
+            using var row = new EditorGUILayout.HorizontalScope();
             var icon = BrushIcons.Get("ShapeEdit");
             var content = new GUIContent(icon != null ? " Правка формы" : "Правка формы", icon, "Тяните грань для изменения формы (B). Ctrl перемещает её шагами текущей сетки от начала жеста. Shift перемещает обе стороны симметрично.");
-            float width = EditorStyles.miniButton.CalcSize(content).x + (s.shapeHandles ? Gap + SelectionIcons.Length * 24f : 0f);
-            Wrap(ref x, width); // the toggle and its choices stay together
-            bool shapes = GUILayout.Toggle(s.shapeHandles, content, EditorStyles.miniButton, GUILayout.Height(18));
-            if (shapes != s.shapeHandles) { s.shapeHandles = shapes; s.NotifyChanged(); SceneView.RepaintAll(); }
-            if (s.shapeHandles)
-            {
-                var options = new GUIContent[SelectionIcons.Length];
-                for (int i = 0; i < options.Length; i++) options[i] = IconOrName(SelectionIcons[i], SelectionNames[i], SelectionTips[i]);
-                int current = Mathf.Clamp((int)s.shapeEditSelection, 0, options.Length - 1);
-                int chosen = GUILayout.Toolbar(current, options, EditorStyles.miniButton, GUILayout.Width(options.Length * 24), GUILayout.Height(18));
-                if (chosen != current) { s.shapeEditSelection = (ShapeEditSelection)chosen; s.NotifyChanged(); }
-            }
+            bool shapeEdit = BrushShapeHandles.Enabled;
+            bool shapes = GUILayout.Toggle(shapeEdit, content, EditorStyles.miniButton, GUILayout.ExpandWidth(false), GUILayout.Height(18));
+            if (shapes != shapeEdit) BrushShapeHandles.Enabled = shapes;
+            bool editable = false;
+            foreach (var go in Selection.gameObjects)
+                if (go.TryGetComponent<Brush>(out var b) && (b.shape == BrushShape.Custom || BrushApi.CanConvertToCustom(b.shape))) { editable = true; break; }
+            using var disabled = new EditorGUI.DisabledScope(!editable);
+            bool editing = BrushEditContext.IsActive;
+            var edit = new GUIContent("Правка браша", editable ? "Перемещение, поворот и масштаб действуют на выделенные вершины, рёбра или грани. Режим выбора меняется на панели инструментов или клавишами 1, 2 и 3." : "Выберите браш.");
+            if (GUILayout.Toggle(editing, edit, EditorStyles.miniButton, GUILayout.ExpandWidth(false), GUILayout.Height(18)) != editing)
+                BrushEditContext.Toggle();
+        }
+
+        static void DrawShapeEditSelection(BrushSettings s)
+        {
+            var options = new GUIContent[SelectionIcons.Length];
+            for (int i = 0; i < options.Length; i++) options[i] = IconOrName(SelectionIcons[i], SelectionNames[i], SelectionTips[i]);
+            int current = Mathf.Clamp((int)s.shapeEditSelection, 0, options.Length - 1);
+            int chosen = GUILayout.Toolbar(current, options, EditorStyles.miniButton, GUILayout.Width(options.Length * 24), GUILayout.Height(18));
+            if (chosen != current) { s.shapeEditSelection = (ShapeEditSelection)chosen; s.NotifyChanged(); }
+        }
+
+        static void DrawDimensionsAndSnapping(BrushSettings s)
+        {
+            using var row = new EditorGUILayout.HorizontalScope();
+            bool sizes = GUILayout.Toggle(s.showDimensions, new GUIContent("Размеры", BrushSettings.DimensionsTooltip), EditorStyles.miniButton, GUILayout.Width(62), GUILayout.Height(18));
+            if (sizes != s.showDimensions) { s.showDimensions = sizes; s.NotifyChanged(); SceneView.RepaintAll(); }
+            BrushSurfaceGrid.DrawMenu();
+            var snapIcon = EditorGUIUtility.IconContent("SceneViewSnap");
+            var snapContent = snapIcon != null && snapIcon.image != null ? new GUIContent(snapIcon.image, "Привязка к сетке. При правке привязывает положение, размеры, поворот и вершины.") : new GUIContent("Привязка");
+            bool snap = GUILayout.Toggle(s.snapToGrid, snapContent, EditorStyles.miniButton, GUILayout.Width(snapIcon != null && snapIcon.image != null ? 26 : 70), GUILayout.Height(18));
+            if (snap != s.snapToGrid) { s.snapToGrid = snap; s.NotifyChanged(); }
         }
 
         static void Draw()
         {
             var s = BrushSettings.instance;
+            bool showShapeSelection = BrushShapeHandles.Enabled;
             EditorGUILayout.BeginVertical();
+            DrawCreateMenu();
 
-            // grid row: icon, size dropdown, snap toggle, view toggles, Shape Edit
+            // Independent row keeps each pair together even at the minimum width.
             EditorGUILayout.BeginHorizontal();
-            float x = 0f;
             var gridIcon = EditorGUIUtility.IconContent("GridAxisY");
-            GUILayout.Label(gridIcon != null && gridIcon.image != null ? new GUIContent(gridIcon.image, "Шаг сетки. Клавиши [ и ] уменьшают и увеличивают шаг.") : new GUIContent("Сетка"), Width(ref x, gridIcon != null && gridIcon.image != null ? 20 : 42), GUILayout.Height(18));
+            GUILayout.Label(gridIcon != null && gridIcon.image != null ? new GUIContent(gridIcon.image, "Шаг сетки. Клавиши [ и ] уменьшают и увеличивают шаг.") : new GUIContent("Сетка"), GUILayout.Width(gridIcon != null && gridIcon.image != null ? 20 : 42), GUILayout.Height(18));
             var names = s.GridStepNames();
-            int idx = EditorGUILayout.Popup(Mathf.Clamp(s.gridIndex, 0, names.Length - 1), names, Width(ref x, 74));
+            int idx = EditorGUILayout.Popup(Mathf.Clamp(s.gridIndex, 0, names.Length - 1), names, GUILayout.Width(74));
             if (idx != s.gridIndex) s.SetGridIndex(idx);
-            var snapIcon = EditorGUIUtility.IconContent("SceneViewSnap");
-            var snapContent = snapIcon != null && snapIcon.image != null ? new GUIContent(snapIcon.image, "Привязка к сетке. При правке привязывает положение, размеры, поворот и вершины.") : new GUIContent("Привязка");
-            bool snap = GUILayout.Toggle(s.snapToGrid, snapContent, EditorStyles.miniButton, Width(ref x, snapIcon != null && snapIcon.image != null ? 26 : 70), GUILayout.Height(18));
-            if (snap != s.snapToGrid) { s.snapToGrid = snap; s.NotifyChanged(); }
-            bool cuts = GUILayout.Toggle(s.showCuts, new GUIContent("Вычеты", "Показывать вычитающие браши полупрозрачным красным объёмом. Так их можно выбрать, даже если они полностью убрали геометрию."), EditorStyles.miniButton, Width(ref x, 54), GUILayout.Height(18));
+            bool cuts = GUILayout.Toggle(s.showCuts, new GUIContent("Вычеты", "Показывать вычитающие браши полупрозрачным красным объёмом. Так их можно выбрать, даже если они полностью убрали геометрию."), EditorStyles.miniButton, GUILayout.Width(54), GUILayout.Height(18));
             if (cuts != s.showCuts) { s.showCuts = cuts; s.NotifyChanged(); SceneView.RepaintAll(); }
-            bool sizes = GUILayout.Toggle(s.showDimensions, new GUIContent("Размеры", BrushSettings.DimensionsTooltip), EditorStyles.miniButton, Width(ref x, 62), GUILayout.Height(18));
-            if (sizes != s.showDimensions) { s.showDimensions = sizes; s.NotifyChanged(); SceneView.RepaintAll(); }
-            DrawShapeEdit(s, ref x);
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
 
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                DrawCreateMenu();
-                BrushSurfaceGrid.DrawMenu();
-            }
+            DrawDimensionsAndSnapping(s);
+            DrawEditToggles();
+            if (showShapeSelection) DrawShapeEditSelection(s);
             if (BrushCreateTool.Active != null) DrawNewBrush(s, BrushCreateTool.Active);
 
-            // edit mode: one row, Edit brush toggle then Vertex / Edge / Face
-            EditorGUILayout.BeginHorizontal();
-            bool editing = BrushEditContext.IsActive;
-            bool editable = false;
-            foreach (var go in Selection.gameObjects)
-                if (go.TryGetComponent<Brush>(out var b) && (b.shape == BrushShape.Custom || BrushApi.CanConvertToCustom(b.shape))) { editable = true; break; }
-            if (editing && !editable) BrushEditContext.Exit();
-            bool plan = !editable && Selection.activeGameObject != null && Selection.activeGameObject.GetComponent<FloorPlan>() != null;
-            if (plan)
+            var selected = Selection.activeGameObject;
+            if (selected != null && selected.TryGetComponent<FloorPlan>(out _))
             {
                 bool planEditing = FloorPlanEditContext.IsActive;
                 if (GUILayout.Toggle(planEditing, new GUIContent("Правка плана стен", "Перемещение, поворот и масштаб действуют на выделенные точки или стены. Клавиши 1 и 2 меняют режим выбора."), EditorStyles.miniButton) != planEditing)
@@ -174,13 +160,7 @@ namespace CsgBrush.Editor
                     if (planEditing) FloorPlanEditContext.Exit(); else FloorPlanEditContext.Enter();
                 }
             }
-            else using (new EditorGUI.DisabledScope(!editable))
-            {
-                bool wantEditing = GUILayout.Toggle(editing, new GUIContent("Правка браша", editable ? "Перемещение, поворот и масштаб действуют на выделенные вершины, рёбра или грани. Режим выбора меняется на панели инструментов или клавишами 1, 2 и 3." : "Выберите браш."), EditorStyles.miniButton);
-                if (wantEditing != editing) { if (wantEditing) BrushEditContext.Enter(); else BrushEditContext.Exit(); }
-            }
-            EditorGUILayout.EndHorizontal();
-            if (editing) BrushExtrude.DrawPanel();
+            if (BrushEditContext.IsActive) BrushExtrude.DrawPanel();
 
             // lint: parents that rotate or scale brushes off the grid
             var parents = BrushSnap.TransformedParents();

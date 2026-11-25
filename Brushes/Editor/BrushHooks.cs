@@ -24,6 +24,12 @@ namespace CsgBrush.Editor
         /// <summary>Take the mouse for a control of this package.</summary>
         public static void Take(int controlId) { GUIUtility.hotControl = controlId; s_Held = controlId; s_Takes++; }
 
+        internal static void ReleaseOwned()
+        {
+            if (s_Held != 0 && GUIUtility.hotControl == s_Held) GUIUtility.hotControl = 0;
+            s_Held = 0;
+        }
+
         /// <summary>
         /// For a Scene view event: once every handler has had it, tools included (they run after the Scene view's
         /// callbacks), let go of a hold none of them ended. Done on the next editor update, unless the mouse was taken again.

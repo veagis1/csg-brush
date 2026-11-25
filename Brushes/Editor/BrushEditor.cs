@@ -125,7 +125,7 @@ namespace CsgBrush.Editor
             }
             EditorGUI.BeginChangeCheck();
             EditorGUI.showMixedValue = mixedMode;
-            var pickedMode = (PivotMode)EditorGUILayout.EnumPopup(new GUIContent("Режим точки опоры", "Доля от 0 до 1 меняется вместе с размером. При выборе расстояния координаты отсчитываются от левого нижнего заднего угла."), mode);
+            var pickedMode = (PivotMode)EditorGUILayout.EnumPopup(new GUIContent("Режим точки опоры", "Доля меняется вместе с размером. У точки вне габарита она может выходить за диапазон от 0 до 1. Расстояние в метрах отсчитывается от левого нижнего заднего угла."), mode);
             EditorGUI.showMixedValue = false;
             if (EditorGUI.EndChangeCheck()) { foreach (var t in targets) BrushApi.SetPivotMode((Brush)t, pickedMode); return; }
             if (mixedMode) return;
@@ -197,13 +197,10 @@ namespace CsgBrush.Editor
                 using (new EditorGUI.DisabledScope(EditorApplication.isPlayingOrWillChangePlaymode))
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    if (GUILayout.Button(new GUIContent("Привязать к вершине", "Щёлкните по вершине в сцене. Esc отменяет выбор. Гизмо перемещения и вращения перейдёт в эту точку. При привязке к сетке по форме шаг будет отсчитываться от вершины.")))
-                        BrushPivotTool.Begin(single);
+                    if (GUILayout.Button(new GUIContent("Привязать к вершине или ребру", "Выберите вершину или середину ребра в сцене. Esc отменяет выбор. Гизмо перемещения и вращения перейдёт в эту точку. При привязке по форме сетка переключится на опору.")))
+                        BrushPivotTool.Schedule(single, reset: false);
                     if (GUILayout.Button(new GUIContent("Сбросить привязку", "Вернуть точку опоры в центр габарита детали. Геометрия останется на месте.")))
-                    {
-                        BrushApi.ResetPivot(single);
-                        BrushPivotTool.MoveFromPivot();
-                    }
+                        BrushPivotTool.Schedule(single, reset: true);
                 }
             }
             bool snaps = true; foreach (var t in targets) if (((Brush)t).IsOpening || ((Brush)t).IsGenerated) snaps = false; // placed by their wall or plan

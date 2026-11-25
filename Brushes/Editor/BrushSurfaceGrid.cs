@@ -115,7 +115,7 @@ namespace CsgBrush.Editor
         internal static void DrawMenu()
         {
             if (!GUILayout.Button(new GUIContent("Привязки ▾", "Выберите мировую сетку или сетку поверхности."),
-                    EditorStyles.miniButton, GUILayout.ExpandWidth(false))) return;
+                    EditorStyles.miniButton, GUILayout.ExpandWidth(false), GUILayout.Height(18))) return;
             var menu = new GenericMenu();
             menu.AddItem(new GUIContent("Мировая сетка"), !Local, () =>
             {
@@ -140,7 +140,30 @@ namespace CsgBrush.Editor
                     held = default;
                     SceneView.RepaintAll();
                 });
+            menu.AddSeparator("");
+            var pickPivot = new GUIContent("Привязать к вершине или ребру");
+            var resetPivot = new GUIContent("Сбросить точку привязки");
+            if (!EditorApplication.isPlayingOrWillChangePlaymode && Selection.gameObjects.Length == 1 &&
+                Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<Brush>(out var brush) &&
+                brush.gameObject.scene.IsValid() && !EditorUtility.IsPersistent(brush) && BrushApi.CanPickPivot(brush))
+            {
+                menu.AddItem(pickPivot, false, () => BrushPivotTool.Schedule(brush, reset: false));
+                menu.AddItem(resetPivot, false, () => BrushPivotTool.Schedule(brush, reset: true));
+            }
+            else
+            {
+                menu.AddDisabledItem(pickPivot);
+                menu.AddDisabledItem(resetPivot);
+            }
             menu.ShowAsContext();
+        }
+
+        internal static void CancelPicking()
+        {
+            if (pickingView == null) return;
+            pickingView = null;
+            candidate = default;
+            SceneView.RepaintAll();
         }
 
         internal static bool OnSceneGUI(SceneView view)

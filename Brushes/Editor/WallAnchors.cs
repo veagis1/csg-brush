@@ -24,6 +24,7 @@ namespace CsgBrush.Editor
         {
             public Vector3 position; public Quaternion rotation; public Vector3 size;
             internal BrushSurfaceGrid.Frame grid;
+            internal Vector3? drawingPoint;
             /// <summary>The plan whose wall it is on, or null.</summary>
             public FloorPlan plan;
             public FloorPlan.Wall wall; public float distance, sill;
@@ -55,6 +56,7 @@ namespace CsgBrush.Editor
                     p.plan = plan; p.wall = wall; p.sill = sill;
                     p.grid = BrushSurfaceGrid.ForSurface(hit, point, normal);
                     p.distance = ClampOpening(Snap(along), wall.Length, opening.x);
+                    p.drawingPoint = BrushDraw.SnapInPlane(point, p.grid.Origin, p.grid.Rotation, Grid);
                     OpeningPose(plan, wall, p.distance, sill, opening, out p.position, out p.rotation, out p.size);
                     return true;
                 }
@@ -68,8 +70,10 @@ namespace CsgBrush.Editor
                 var along = Vector3.Cross(Vector3.up, n);
                 float g = Grid;
                 var centre = point - n * (thickness * 0.5f);
-                if (g > 0f) centre += along * (Mathf.Round(Vector3.Dot(centre, along) / g) * g - Vector3.Dot(centre, along)); // on a grid line along the face
+                var shift = g > 0f ? along * (Mathf.Round(Vector3.Dot(centre, along) / g) * g - Vector3.Dot(centre, along)) : Vector3.zero;
+                centre += shift; // on a grid line along the face
                 centre.y = bottom + sill + opening.y * 0.5f;
+                p.drawingPoint = point + shift;
                 p.position = centre; p.rotation = Quaternion.LookRotation(n, Vector3.up);
                 p.size = new Vector3(opening.x, opening.y, thickness + 2f * BrushSettings.OpeningMarginMeters);
                 return true;
@@ -84,6 +88,7 @@ namespace CsgBrush.Editor
             var f = -ray.direction; f.y = 0f;
             var facing = Mathf.Abs(f.x) > Mathf.Abs(f.z) ? new Vector3(Mathf.Sign(f.x), 0f, 0f) : new Vector3(0f, 0f, Mathf.Sign(f.z == 0f ? 1f : f.z));
             var at = new Vector3(Snap(point.x), point.y, Snap(point.z));
+            p.drawingPoint = at;
             p.position = at + Vector3.up * (sill + opening.y * 0.5f);
             p.rotation = Quaternion.LookRotation(facing, Vector3.up);
             p.size = new Vector3(opening.x, opening.y, BrushSettings.DefaultOpeningDepthMeters);
@@ -96,8 +101,11 @@ namespace CsgBrush.Editor
             int group = Undo.GetCurrentGroup();
             var parent = p.plan != null ? p.plan.transform : BrushMenu.CreationParent();
             var brush = BrushApi.Create(shape, p.position, p.size, p.rotation, parent);
+            if (p.drawingPoint is Vector3 start) BrushApi.SetDrawingPivot(brush, start);
             if (p.plan != null)
             {
+                // Finish the pre-anchor transform edit before the Undo hook can treat it as a move of the anchor.
+                Undo.FlushUndoRecordObjects();
                 var a = Undo.AddComponent<WallAnchor>(brush.gameObject);
                 a.face = WallFace.Centered;
                 a.startId = p.wall.startId; a.endId = p.wall.endId; a.distance = p.distance; a.height = p.sill; a.wallLength = p.wall.Length;
@@ -151,15 +159,18 @@ namespace CsgBrush.Editor
         internal static void AttachCutToWall(Brush brush, BrushCutTarget target)
         {
             if (!target.TryWall(out var wall)) return;
+            // Recording the drawing pivot is part of creation. Flush it while the object still has no anchor.
+            Undo.FlushUndoRecordObjects();
             var plan = target.Plan;
             var t = brush.transform;
             wall.Project(Local(plan, t), out float distance, out float across);
+            distance = Mathf.Clamp(distance, 0f, wall.Length);
             var face = across < (wall.inner + wall.outer) * 0.5f ? WallFace.Inside : WallFace.Outside;
             Frame(plan, wall, face, distance, out var origin, out var rotation);
             var inverse = Quaternion.Inverse(rotation);
             var offset = inverse * (t.position - origin);
             var anchor = Undo.AddComponent<WallAnchor>(brush.gameObject);
-            Set(anchor, wall, face, distance, offset.y, offset.z, inverse * t.rotation);
+            Set(anchor, wall, face, distance, offset.y, offset.z, inverse * t.rotation, offset.x);
             anchor.MarkBrushes(true);
             Layout(plan);
         }
@@ -373,12 +384,13 @@ namespace CsgBrush.Editor
         /// <summary>New anchors that keep their object's rotation instead of lining up with the wall: brushes drawn on it.</summary>
         static readonly HashSet<WallAnchor> s_KeepPose = new HashSet<WallAnchor>();
 
-        static void Set(WallAnchor a, FloorPlan.Wall wall, WallFace face, float distance, float height, float offset, Quaternion rotation)
+        static void Set(WallAnchor a, FloorPlan.Wall wall, WallFace face, float distance, float height, float offset, Quaternion rotation, float alongOffset = 0f)
         {
             if (a.startId == wall.startId && a.endId == wall.endId && a.face == face && Mathf.Approximately(a.distance, distance) && Mathf.Approximately(a.height, height)
-                && Mathf.Approximately(a.offset, offset) && Quaternion.Angle(a.rotation, rotation) < 1e-3f) return;
+                && Mathf.Approximately(a.offset, offset) && Mathf.Approximately(a.alongOffset, alongOffset) && Quaternion.Angle(a.rotation, rotation) < 1e-3f) return;
             Undo.RecordObject(a, "Переместить вдоль стены");
             a.startId = wall.startId; a.endId = wall.endId; a.face = face; a.distance = distance; a.height = height; a.offset = offset; a.rotation = rotation; a.wallLength = wall.Length;
+            a.alongOffset = alongOffset;
         }
 
         static void SetFree(WallAnchor a)
@@ -454,7 +466,7 @@ namespace CsgBrush.Editor
         static void ObjectPose(FloorPlan plan, FloorPlan.Wall wall, WallAnchor a, float distance, out Vector3 position, out Quaternion rotation)
         {
             Frame(plan, wall, a.face, distance, out var origin, out var frame);
-            position = origin + frame * new Vector3(0f, a.height, a.offset);
+            position = origin + frame * new Vector3(a.alongOffset, a.height, a.offset);
             rotation = frame * a.rotation;
         }
 
@@ -480,6 +492,7 @@ namespace CsgBrush.Editor
             if (old != plan) Undo.SetTransformParent(a.transform, plan.transform, "Сменить стену");
             var walls = new List<FloorPlan.Wall>(); plan.Walls(walls);
             Undo.RecordObject(a, "Сменить стену");
+            a.alongOffset = 0f;
             if (wallIndex < 0 || wallIndex >= walls.Count) a.startId = a.endId = WallAnchor.Free;
             else
             {

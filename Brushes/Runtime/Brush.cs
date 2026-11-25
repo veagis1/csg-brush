@@ -117,6 +117,7 @@ namespace CsgBrush
         public Vector3 pivot = new Vector3(0.5f, 0.5f, 0.5f);
         /// <summary>How <see cref="pivot"/> is measured.</summary>
         public PivotMode pivotMode = PivotMode.Normalized;
+        [SerializeField, HideInInspector] internal bool pivotOutsideBounds;
 
         // Local metres from the transform to the construction axis of a round stair or the centre of an opening.
         [SerializeField, HideInInspector] internal Vector3 shapeOriginOffsetMeters;
@@ -131,10 +132,11 @@ namespace CsgBrush
         internal static bool UsesShapeOriginOffsetFor(BrushShape shape) =>
             shape == BrushShape.CurvedStairs || shape == BrushShape.SpiralStairs || shape == BrushShape.Door || shape == BrushShape.Window;
 
-        /// <summary>The pivot in metres from the box's left, bottom, back corner for a box of <paramref name="boxSize"/>, kept inside the box.</summary>
+        /// <summary>The pivot in metres from the box's minimum corner, for a box of <paramref name="boxSize"/>.</summary>
         public Vector3 PivotDistance(Vector3 boxSize)
         {
             var d = pivotMode == PivotMode.Normalized ? Vector3.Scale(pivot, boxSize) : pivot;
+            if (pivotOutsideBounds) return d;
             return new Vector3(Mathf.Clamp(d.x, 0f, boxSize.x), Mathf.Clamp(d.y, 0f, boxSize.y), Mathf.Clamp(d.z, 0f, boxSize.z));
         }
 

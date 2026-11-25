@@ -120,13 +120,23 @@ namespace CsgBrush.Tests
         [Test]
         public void ABrushCarvedAwayCanNotBeClickedThroughWhatIsSeen()
         {
-            // a block entirely cut away stands in front of a wall: its shape is nearest along the ray, but the wall is seen
-            var block = BrushApi.CreateBox(new Vector3(-1f, 0f, -3f), new Vector3(1f, 2f, -2f), name: "Block");
-            BrushApi.CreateBox(new Vector3(-2f, 0f, -4f), new Vector3(2f, 3f, -1f), name: "Cut", operation: BrushOperation.Subtract);
-            var wall = BrushApi.CreateBox(new Vector3(-3f, 0f, 0f), new Vector3(3f, 3f, 1f), name: "Wall");
-            BrushApi.ForceUpdate();
-            Assert.AreEqual(block, BrushHooks.PickBrushSurface(LookingAtTheWall, out _, out _), "by shapes alone, the hidden block");
-            Assert.AreEqual(wall, Click(LookingAtTheWall), "by what is seen, the wall");
+            var settings = BrushSettings.instance;
+            bool previousCuts = settings.showCuts;
+            try
+            {
+                settings.showCuts = false;
+                // a block entirely cut away stands in front of a wall: its shape is nearest along the ray, but the wall is seen
+                var block = BrushApi.CreateBox(new Vector3(-1f, 0f, -3f), new Vector3(1f, 2f, -2f), name: "Block");
+                BrushApi.CreateBox(new Vector3(-2f, 0f, -4f), new Vector3(2f, 3f, -1f), name: "Cut", operation: BrushOperation.Subtract);
+                var wall = BrushApi.CreateBox(new Vector3(-3f, 0f, 0f), new Vector3(3f, 3f, 1f), name: "Wall");
+                BrushApi.ForceUpdate();
+                Assert.AreEqual(block, BrushHooks.PickBrushSurface(LookingAtTheWall, out _, out _), "by shapes alone, the hidden block");
+                Assert.AreEqual(wall, Click(LookingAtTheWall), "by what is seen, the wall");
+            }
+            finally
+            {
+                settings.showCuts = previousCuts;
+            }
         }
 
         [Test]

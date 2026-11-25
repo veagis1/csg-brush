@@ -47,7 +47,7 @@ namespace CsgBrush.Editor
             public bool fromCentre;
             /// <summary>Apply a drag of <c>distance</c> metres along the direction to a brush, from its state at the drag's start.</summary>
             public System.Action<Brush, State, float, bool, bool> apply;
-            /// <summary>What the handle shows while dragged.</summary>
+            /// <summary>Formatted parameter value for clients that inspect this handle.</summary>
             public System.Func<Brush, string> label;
         }
 
@@ -76,13 +76,35 @@ namespace CsgBrush.Editor
             SceneView.duringSceneGui += OnSceneGUI;
         }
 
+        internal const string SuspendedKey = "CsgBrush.ShapeHandlesSuspendedForCreation";
+
+        internal static bool Enabled
+        {
+            get => BrushSettings.instance.shapeHandles && !SessionState.GetBool(SuspendedKey, false);
+            set
+            {
+                SessionState.EraseBool(SuspendedKey);
+                var settings = BrushSettings.instance;
+                if (settings.shapeHandles != value)
+                {
+                    settings.shapeHandles = value;
+                    settings.NotifyChanged();
+                }
+                SceneView.RepaintAll();
+            }
+        }
+
+        internal static void SuspendForCreation()
+        {
+            if (!Enabled) return;
+            SessionState.SetBool(SuspendedKey, true);
+            SceneView.RepaintAll();
+        }
+
         [Shortcut("Brushes/Toggle Shape Handles", typeof(SceneView), KeyCode.B, displayName = "CSG Brush/Переключить правку формы")]
         static void ToggleShortcut()
         {
-            var s = BrushSettings.instance;
-            s.shapeHandles = !s.shapeHandles;
-            s.NotifyChanged();
-            SceneView.RepaintAll();
+            Enabled = !Enabled;
         }
 
         // ---- the handles of each shape
@@ -669,8 +691,7 @@ namespace CsgBrush.Editor
 
         static bool Showing()
         {
-            var s = BrushSettings.instance;
-            return s.shapeHandles && !BrushEditContext.IsActive && !FloorPlanEditContext.IsActive && WorksWith(Tools.current);
+            return Enabled && !BrushEditContext.IsActive && !PointGraphEditContext.IsActive && WorksWith(Tools.current);
         }
 
         /// <summary>
@@ -692,15 +713,8 @@ namespace CsgBrush.Editor
             var e = Event.current;
             if (s_HotControl != 0 && GUIUtility.hotControl == s_HotControl && e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
             {
-                if (s_Dragging)
-                {
-                    Undo.FlushUndoRecordObjects();
-                    Undo.RevertAllDownToGroup(s_UndoGroup);
-                    s_Dragging = false;
-                }
-                Release();
+                CancelGesture();
                 e.Use();
-                SceneView.RepaintAll();
                 return;
             }
             var brushes = new List<Brush>();
@@ -779,7 +793,7 @@ namespace CsgBrush.Editor
                             }
                             break;
                         case EventType.Repaint:
-                            Draw(id, h, world, dir, dot, polygons, line, b);
+                            Draw(id, h, world, dot, polygons, line);
                             break;
                     }
                 }
@@ -933,7 +947,7 @@ namespace CsgBrush.Editor
             return pieces.ToArray();
         }
 
-        static void Draw(int id, Handle h, Vector3 world, Vector3 dir, float dot, Vector3[][] polygons, Vector3[][] line, Brush b)
+        static void Draw(int id, Handle h, Vector3 world, float dot, Vector3[][] polygons, Vector3[][] line)
         {
             bool hot = GUIUtility.hotControl == id, hover = !hot && GUIUtility.hotControl == 0 && HandleUtility.nearestControl == id;
             Color colour = h.radial ? Handles.xAxisColor : AxisColor(h.direction);
@@ -969,8 +983,6 @@ namespace CsgBrush.Editor
                 Handles.color = hot || hover ? Handles.selectedColor : colour;
                 Handles.DotHandleCap(id, world, Quaternion.identity, dot, EventType.Repaint);
             }
-            if (hot && s_Dragging && h.label != null && b == s_HotBrush)
-                Handles.Label(world + dir * HandleUtility.GetHandleSize(world) * 0.2f, h.label(b), EditorStyles.boldLabel);
         }
 
         static void Begin(List<Brush> brushes)
@@ -982,6 +994,19 @@ namespace CsgBrush.Editor
             Undo.IncrementCurrentGroup();
             Undo.SetCurrentGroupName("Изменить форму браша");
             s_UndoGroup = Undo.GetCurrentGroup();
+        }
+
+        internal static void CancelGesture()
+        {
+            if (s_HotControl == 0) return;
+            if (s_Dragging)
+            {
+                Undo.FlushUndoRecordObjects();
+                Undo.RevertAllDownToGroup(s_UndoGroup);
+                s_Dragging = false;
+            }
+            Release();
+            SceneView.RepaintAll();
         }
 
         static void Release()

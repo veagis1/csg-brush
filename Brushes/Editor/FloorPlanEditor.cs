@@ -315,6 +315,8 @@ namespace CsgBrush.Editor
             }
         }
 
+        public override void OnWillBeDeactivated() => EndStroke();
+
         public override void OnToolGUI(EditorWindow window)
         {
             var plan = target as PointGraph;
@@ -414,6 +416,7 @@ namespace CsgBrush.Editor
         [MenuItem("GameObject/CSG Brush/План стен", false, 40)]
         static void Create()
         {
+            BrushMenu.PrepareObjectCreation();
             var s = BrushSettings.instance;
             Vector3 pivot = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero;
             float g = s.GridMeters;
@@ -432,9 +435,10 @@ namespace CsgBrush.Editor
             var plan = Undo.AddComponent<FloorPlan>(go);
             if (firstPoint) plan.AddPoint(Vector3.zero); // the draw tool starts its first wall here
             Selection.activeGameObject = go;
+            int toolVersion = BrushMenu.ToolVersion;
             EditorApplication.delayCall += () =>
             {
-                if (plan != null && !EditorApplication.isPlayingOrWillChangePlaymode &&
+                if (BrushMenu.ToolVersion == toolVersion && plan != null && !EditorApplication.isPlayingOrWillChangePlaymode &&
                     Selection.gameObjects.Length == 1 && Selection.activeGameObject == go) FloorPlanDrawTool.Begin();
             };
             return plan;
@@ -451,7 +455,7 @@ namespace CsgBrush.Editor
     {
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("FloorPlan"), "План стен");
         [MenuItem("CSG Brush/Создать/План стен", false, 12)]
-        [MenuItem("Tools/CSG Brush/Создать/План стен", false, 12)] static void Menu() => ToolManager.SetActiveTool<CreateFloorPlanTool>();
+        [MenuItem("Tools/CSG Brush/Создать/План стен", false, 12)] static void Menu() => BrushMenu.ActivateCreation<CreateFloorPlanTool>();
 
         Vector3 m_Hover; bool m_HoverValid;
         /// <summary>The plan a click continues, and where: one of its points (index), one of its walls (index and spot), or its floor (spot).</summary>
@@ -459,7 +463,7 @@ namespace CsgBrush.Editor
         /// <summary>The scene's plans, found again only when the hierarchy changes: the pointer looks for them at every move.</summary>
         List<FloorPlan> m_Plans;
 
-        public override void OnActivated() { m_Plans = null; EditorApplication.hierarchyChanged += ForgetPlans; }
+        public override void OnActivated() { BrushMenu.PrepareCreation(); m_Plans = null; EditorApplication.hierarchyChanged += ForgetPlans; }
         public override void OnWillBeDeactivated() => EditorApplication.hierarchyChanged -= ForgetPlans;
         void ForgetPlans() => m_Plans = null;
 
@@ -503,7 +507,12 @@ namespace CsgBrush.Editor
             int start = m_PlanPoint >= 0 ? plan.pointIds[m_PlanPoint] : m_PlanWall >= 0 ? plan.SplitLink(m_PlanWall, m_PlanLocal) : plan.AddPoint(m_PlanLocal);
             BrushGenerators.MarkDirty(plan);
             Selection.activeGameObject = plan.gameObject;
-            EditorApplication.delayCall += () => { if (plan != null && Selection.activeGameObject == plan.gameObject) FloorPlanDrawTool.Begin(start); };
+            int toolVersion = BrushMenu.ToolVersion;
+            EditorApplication.delayCall += () =>
+            {
+                if (BrushMenu.ToolVersion == toolVersion && plan != null && Selection.activeGameObject == plan.gameObject)
+                    FloorPlanDrawTool.Begin(start);
+            };
         }
 
         static float Grid => BrushSettings.instance.snapToGrid ? BrushSettings.instance.GridMeters : 0f;

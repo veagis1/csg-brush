@@ -38,7 +38,11 @@ namespace CsgBrush.Editor
             }
         }
 
-        public override void OnWillBeDeactivated() { BrushExtrude.Active = false; }
+        public override void OnWillBeDeactivated()
+        {
+            BrushEditState.CancelInteraction();
+            BrushExtrude.Active = false;
+        }
 
         public override void OnToolGUI(EditorWindow window)
         {
@@ -74,6 +78,7 @@ namespace CsgBrush.Editor
 
         // drag state shared by the tools
         public static Brush dragBrush; public static BrushPolyhedron dragStart; public static HashSet<int> dragVertices; public static Vector3 dragOrigin; public static bool dragging;
+        static int s_DragControl, s_DragUndoGroup;
 
         static bool marquee; static Vector2 marqueeStart;
 
@@ -93,6 +98,7 @@ namespace CsgBrush.Editor
         public static void OnSceneGUI(EditorToolContext context)
         {
             var e = Event.current;
+            if (dragging && GUIUtility.hotControl == 0) EndDrag();
             if (marquee && GUIUtility.hotControl == 0) marquee = false; // let go without its release (see EditModeMouse)
             HandleKeys(e);
             bool viewTool = Tools.current == Tool.View || Tools.viewToolActive; // the hand tool pans; it never selects
@@ -111,7 +117,7 @@ namespace CsgBrush.Editor
                 if (!viewTool) HandlePicking(brush, poly, sel, e, passive);
             }
             DrawMarquee();
-            if (e.type == EventType.MouseUp) { dragging = false; dragBrush = null; dragStart = null; }
+            if (e.rawType == EventType.MouseUp) EndDrag();
         }
 
         // ------------------------------------------------------------------ keys
@@ -466,6 +472,30 @@ namespace CsgBrush.Editor
         {
             if (dragging && dragBrush == brush) return;
             dragging = true; dragBrush = brush; dragStart = poly.Clone(); dragVertices = vertices; dragOrigin = origin;
+            s_DragControl = GUIUtility.hotControl;
+            Undo.IncrementCurrentGroup();
+            s_DragUndoGroup = Undo.GetCurrentGroup();
+        }
+
+        static void EndDrag()
+        {
+            dragging = false; dragBrush = null; dragStart = null; dragVertices = null; s_DragControl = 0;
+        }
+
+        internal static void CancelInteraction()
+        {
+            if (dragging)
+            {
+                if (s_DragControl != 0 && GUIUtility.hotControl == s_DragControl) GUIUtility.hotControl = 0;
+                int group = s_DragUndoGroup;
+                var brush = dragBrush;
+                EndDrag();
+                Undo.FlushUndoRecordObjects();
+                Undo.RevertAllDownToGroup(group);
+                if (brush != null) s_Selection.Remove(brush);
+            }
+            marquee = false;
+            EditModeMouse.ReleaseOwned();
         }
 
         /// <summary>

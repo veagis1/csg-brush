@@ -58,23 +58,60 @@ namespace CsgBrush.Editor
                 CultureInfo.InvariantCulture, out meters) && float.IsFinite(meters) && (signed || meters >= 0.001f);
         }
 
-        public static void Readout(Vector3 world, float meters) => Field(null, world, "", meters, null);
+        internal readonly struct Edge
+        {
+            internal readonly int Axis;
+            internal readonly Vector3 Midpoint, Direction, Centre;
 
-        public static void Field(string key, Vector3 world, string title, float meters, Action<float> apply,
+            internal Edge(int axis, Vector3 midpoint, Vector3 direction, Vector3 centre)
+            {
+                Axis = axis;
+                Midpoint = midpoint;
+                Direction = direction;
+                Centre = centre;
+            }
+        }
+
+        internal static string FormatDimension(float meters, int axis) =>
+            meters.ToString("0.00###", Russian) + " м (" + "XYZ"[axis] + ")";
+
+        // All geometry below is in GUI points, so zoom and display scaling do not change the gap.
+        internal static Rect BadgeRect(Vector2 midpoint, Vector2 along, Vector2 outward, Vector2 size, List<Rect> occupied)
+        {
+            var normal = along.sqrMagnitude > 0.0001f ? new Vector2(-along.y, along.x).normalized :
+                outward.sqrMagnitude > 0.0001f ? outward.normalized : Vector2.down;
+            if (Vector2.Dot(normal, outward) < 0f) normal = -normal;
+            float extent = (Mathf.Abs(normal.x) * size.x + Mathf.Abs(normal.y) * size.y) * 0.5f;
+            var rect = new Rect(midpoint + normal * (extent + 6f) - size * 0.5f, size);
+            for (int i = 0; i < occupied.Count; i++)
+            {
+                if (!rect.Overlaps(occupied[i])) continue;
+                rect.position += normal * (size.y + 2f);
+                i = -1;
+            }
+            return rect;
+        }
+
+        public static void Readout(Edge edge, float meters) => Field(null, edge, "", meters, null);
+
+        public static void Field(string key, Edge edge, string title, float meters, Action<float> apply,
             Action<float> preview = null, bool signed = false)
         {
             var view = SceneView.currentDrawingSceneView;
             if (view == null || view.camera == null || !float.IsFinite(meters)) return;
-            var point = HandleUtility.WorldToGUIPointWithDepth(view.camera, world);
+            var point = HandleUtility.WorldToGUIPointWithDepth(view.camera, edge.Midpoint);
             if (point.z < view.camera.nearClipPlane || point.z > view.camera.farClipPlane) return;
             var e = Event.current;
             bool editing = key != null && owner == view && activeKey == key;
-            var label = new GUIContent(meters.ToString("0.00###", Russian) + " м", title);
-            float width = editing ? 94f : Badge.CalcSize(label).x + 12f;
-            var r = new Rect(point.x - width / 2f, point.y - 11f, width, 22f);
-            // In a front or top view several dimensions can project to the same pixel.
-            for (int i = 0; i < placedLabels.Count; i++)
-                if (r.Overlaps(placedLabels[i])) { r.y = placedLabels[i].yMax + 2f; i = -1; }
+            var label = new GUIContent(FormatDimension(meters, edge.Axis), title);
+            float width = Badge.CalcSize(label).x + 12f;
+            var direction = edge.Direction.normalized;
+            // Project towards the far end to avoid crossing the camera plane on an edge pointing at the viewer.
+            if (Vector3.Dot(direction, view.camera.transform.forward) < 0f) direction = -direction;
+            var tip = HandleUtility.WorldToGUIPointWithDepth(view.camera, edge.Midpoint + direction);
+            var centre = HandleUtility.WorldToGUIPointWithDepth(view.camera, edge.Centre);
+            var outward = centre.z > 0f ? (Vector2)(point - centre) : Vector2.down;
+            var r = BadgeRect(point, tip - point, outward, new Vector2(editing ? Mathf.Max(108f, width) : width, 22f), placedLabels);
             placedLabels.Add(r);
             bool hover = r.Contains(e.mousePosition);
             if (apply == null && e.type != EventType.Repaint) return;
@@ -108,8 +145,13 @@ namespace CsgBrush.Editor
                         Close();
                         return;
                     }
+                    var number = r;
+                    number.xMax -= 41f;
                     GUI.SetNextControlName(key);
-                    draft = EditorGUI.TextField(r, draft);
+                    draft = EditorGUI.TextField(number, draft);
+                    var suffix = Rect.MinMaxRect(number.xMax, r.yMin, r.xMax, r.yMax);
+                    EditorGUI.DrawRect(suffix, Plate);
+                    GUI.Label(suffix, "м (" + "XYZ"[edge.Axis] + ")", Badge);
                     if (focus)
                     {
                         EditorGUI.FocusTextInControl(key);
@@ -217,10 +259,11 @@ namespace CsgBrush.Editor
             return true;
         }
 
-        internal static void DrawBrushField(Brush brush, int axis, Vector3 world, float meters)
+        internal static void DrawBrushField(Brush brush, Edge edge, float meters)
         {
+            int axis = edge.Axis;
             string label = axis == 0 ? "Ширина" : axis == 1 ? "Высота" : "Глубина";
-            Field("csg.size." + brush.GetEntityId() + "." + axis, world, label + " в метрах. Enter применяет, Esc отменяет.",
+            Field("csg.size." + brush.GetEntityId() + "." + axis, edge, label + " в метрах. Enter применяет, Esc отменяет.",
                 meters, value => Resize(brush, axis, value), value =>
                 {
                     if (ResizeCandidate(brush, axis, value, out var shape, out _, out var move, out _))

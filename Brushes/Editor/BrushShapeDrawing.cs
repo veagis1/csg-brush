@@ -20,11 +20,13 @@ namespace CsgBrush.Editor
         {
             void Label(Vector3 position, Vector3 edge, int axis)
             {
-                float meters = toWorld.MultiplyVector(edge).magnitude;
+                var direction = toWorld.MultiplyVector(edge);
+                float meters = direction.magnitude;
                 if (meters <= 1e-4f) return;
-                var world = toWorld.MultiplyPoint3x4(position);
-                if (BrushDimensionFields.CanResize(editable, axis)) BrushDimensionFields.DrawBrushField(editable, axis, world, meters);
-                else BrushDimensionFields.Readout(world, meters);
+                var line = new BrushDimensionFields.Edge(axis, toWorld.MultiplyPoint3x4(position), direction,
+                    toWorld.MultiplyPoint3x4(bounds.center));
+                if (BrushDimensionFields.CanResize(editable, axis)) BrushDimensionFields.DrawBrushField(editable, line, meters);
+                else BrushDimensionFields.Readout(line, meters);
             }
             var min = bounds.min;
             var center = bounds.center;

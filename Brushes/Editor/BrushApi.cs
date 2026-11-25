@@ -254,7 +254,7 @@ namespace CsgBrush.Editor
         public static Vector3? PivotOf(Brush brush)
         {
             if (!PivotBox(brush, out var size, out var distance)) return null;
-            return brush.pivotMode == PivotMode.Normalized ? new Vector3(Fraction(distance.x, size.x), Fraction(distance.y, size.y), Fraction(distance.z, size.z)) : distance;
+            return brush.pivotMode == PivotMode.Normalized ? Fractions(distance, size, brush.pivotOutsideBounds) : distance;
         }
 
         /// <summary>The brush's box size and its pivot in metres from the box's left, bottom, back corner.</summary>
@@ -268,7 +268,15 @@ namespace CsgBrush.Editor
             return true;
         }
 
-        static float Fraction(float distance, float size) => size > 1e-6f ? Mathf.Clamp01(distance / size) : 0.5f;
+        static float Fraction(float distance, float size, bool outside)
+        {
+            if (size <= 1e-6f) return 0.5f;
+            float value = distance / size;
+            return outside ? value : Mathf.Clamp01(value);
+        }
+
+        static Vector3 Fractions(Vector3 distance, Vector3 size, bool outside) =>
+            new Vector3(Fraction(distance.x, size.x, outside), Fraction(distance.y, size.y, outside), Fraction(distance.z, size.z, outside));
 
         internal static bool CanPickPivot(Brush brush) => brush != null && !brush.IsGenerated &&
             !brush.anchored && (brush.UsesShapeOriginOffset || PivotBox(brush, out _, out _));
@@ -279,14 +287,34 @@ namespace CsgBrush.Editor
             if (!CanPickPivot(brush)) return false;
             var vertices = BrushGeometry.Polyhedron(brush).vertices;
             if (vertexIndex < 0 || vertexIndex >= vertices.Length) return false;
-            SetPivotAtLocalPoint(brush, vertices[vertexIndex]);
+            return SetPickedPivot(brush, vertices[vertexIndex]);
+        }
+
+        /// <summary>Place the transform at the midpoint of an authored edge, without moving the solid or its children.</summary>
+        public static bool SetPivotToEdge(Brush brush, int a, int b)
+        {
+            if (!CanPickPivot(brush) || a == b) return false;
+            if (a > b) (a, b) = (b, a);
+            var shape = BrushGeometry.Polyhedron(brush);
+            if (!shape.Edges().Contains((a, b))) return false;
+            return SetPickedPivot(brush, (shape.vertices[a] + shape.vertices[b]) * 0.5f);
+        }
+
+        static bool SetPickedPivot(Brush brush, Vector3 localPoint)
+        {
+            SetPivotAtLocalPoint(brush, localPoint);
             if (brush.gridSnap == GridSnap.Shape)
             {
-                Undo.RecordObject(brush, "Привязать гизмо к вершине");
+                Undo.RecordObject(brush, "Привязать гизмо к вершине или ребру");
                 brush.gridSnap = GridSnap.Pivot;
                 PrefabUtility.RecordPrefabInstancePropertyModifications(brush);
             }
             return true;
+        }
+
+        internal static void SetDrawingPivot(Brush brush, Vector3 worldPoint)
+        {
+            SetPivotAtLocalPoint(brush, brush.transform.InverseTransformPoint(worldPoint));
         }
 
         /// <summary>Place the pivot at the centre of the authored geometry's local bounds.</summary>
@@ -302,10 +330,13 @@ namespace CsgBrush.Editor
                 if (localPoint.sqrMagnitude >= 1e-12f) MovePivot(brush, brush.pivot, localPoint);
                 return;
             }
-            PivotBox(brush, out var size, out var current);
-            var d = current + localPoint;
-            SetPivot(brush, brush.pivotMode == PivotMode.Absolute ? d :
-                new Vector3(Fraction(d.x, size.x), Fraction(d.y, size.y), Fraction(d.z, size.z)));
+            if (!PivotBox(brush, out var size, out var current)) return;
+            var distance = current + localPoint;
+            bool outside = brush.HasPivot && (distance.x < -1e-5f || distance.y < -1e-5f || distance.z < -1e-5f ||
+                distance.x > size.x + 1e-5f || distance.y > size.y + 1e-5f || distance.z > size.z + 1e-5f);
+            var pivot = brush.pivotMode == PivotMode.Absolute ? distance : Fractions(distance, size, outside);
+            if (localPoint.sqrMagnitude < 1e-12f && outside == brush.pivotOutsideBounds) return;
+            MovePivot(brush, pivot, localPoint, outside);
         }
 
         /// <summary>
@@ -316,15 +347,18 @@ namespace CsgBrush.Editor
         {
             if (!PivotBox(brush, out var size, out var current)) return;
             bool relative = brush.pivotMode == PivotMode.Normalized;
-            if (relative) pivot = new Vector3(Mathf.Clamp01(pivot.x), Mathf.Clamp01(pivot.y), Mathf.Clamp01(pivot.z));
-            else pivot = new Vector3(Mathf.Clamp(pivot.x, 0f, size.x), Mathf.Clamp(pivot.y, 0f, size.y), Mathf.Clamp(pivot.z, 0f, size.z));
+            if (!brush.pivotOutsideBounds)
+            {
+                if (relative) pivot = new Vector3(Mathf.Clamp01(pivot.x), Mathf.Clamp01(pivot.y), Mathf.Clamp01(pivot.z));
+                else pivot = new Vector3(Mathf.Clamp(pivot.x, 0f, size.x), Mathf.Clamp(pivot.y, 0f, size.y), Mathf.Clamp(pivot.z, 0f, size.z));
+            }
             var target = relative ? Vector3.Scale(pivot, size) : pivot;
             var move = target - current; // the new pivot in the old local space, from the old one
             if (move.sqrMagnitude < 1e-12f && (!brush.HasPivot || (brush.pivot - pivot).sqrMagnitude < 1e-12f)) return; // no-op edits must not create undo entries
             MovePivot(brush, pivot, move);
         }
 
-        static void MovePivot(Brush brush, Vector3 pivot, Vector3 move)
+        static void MovePivot(Brush brush, Vector3 pivot, Vector3 move, bool? outside = null)
         {
             var t = brush.transform;
             Undo.RecordObject(brush, "Задать точку опоры браша");
@@ -333,7 +367,11 @@ namespace CsgBrush.Editor
             foreach (Transform c in t)
                 if (!Brush.IsGeneratedChildName(c.name)) { Undo.RecordObject(c, "Задать точку опоры браша"); children.Add((c, c.position, c.rotation)); }
             var world = t.TransformPoint(move);
-            if (brush.HasPivot) brush.pivot = pivot;
+            if (brush.HasPivot)
+            {
+                brush.pivot = pivot;
+                if (outside.HasValue) brush.pivotOutsideBounds = outside.Value;
+            }
             else if (brush.UsesShapeOriginOffset) brush.shapeOriginOffsetMeters -= move;
             else
             {
@@ -344,6 +382,7 @@ namespace CsgBrush.Editor
             }
             t.position = world;
             BrushSnap.Accept(brush); // the transform moved, the shape did not: nothing to snap
+            t.hasChanged = false;
             foreach (var (c, position, rotation) in children)
             {
                 c.SetPositionAndRotation(position, rotation);
@@ -362,7 +401,7 @@ namespace CsgBrush.Editor
             Undo.RecordObject(brush, "Задать режим точки опоры браша");
             bool has = PivotBox(brush, out var size, out var distance) && brush.HasPivot;
             brush.pivotMode = mode;
-            if (has) brush.pivot = mode == PivotMode.Normalized ? new Vector3(Fraction(distance.x, size.x), Fraction(distance.y, size.y), Fraction(distance.z, size.z)) : distance;
+            if (has) brush.pivot = mode == PivotMode.Normalized ? Fractions(distance, size, brush.pivotOutsideBounds) : distance;
             BrushSync.Ensure(brush);
         }
 

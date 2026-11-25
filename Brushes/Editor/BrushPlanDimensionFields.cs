@@ -24,8 +24,11 @@ namespace CsgBrush.Editor
                     Vector2 centre = Vector2.zero;
                     foreach (var point in room.polygon) centre += point;
                     centre /= room.polygon.Length;
-                    var position = transform.TransformPoint(new Vector3(centre.x, room.height, centre.y));
-                    BrushDimensionFields.Field(key + "room/" + index, position, "Высота комнаты, м", room.height * heightScale,
+                    var corner = room.polygon[0];
+                    var position = transform.TransformPoint(new Vector3(corner.x, room.height * 0.5f, corner.y));
+                    var interior = transform.TransformPoint(new Vector3(centre.x, room.height * 0.5f, centre.y));
+                    var edge = new BrushDimensionFields.Edge(1, position, transform.TransformVector(Vector3.up), interior);
+                    BrushDimensionFields.Field(key + "room/" + index, edge, "Высота комнаты, м", room.height * heightScale,
                         meters =>
                         {
                             if (plan == null) return;
@@ -63,17 +66,23 @@ namespace CsgBrush.Editor
         static void DrawWall(FloorPlan plan, FloorPlan.Wall wall, string key, float heightScale)
         {
             var transform = plan.transform;
-            wall.At(wall.Length * 0.75f, out var high, out _, out _);
-            wall.At(wall.Length * 0.25f, out var low, out _, out var normal);
-            var across = new Vector3(normal.x, 0f, normal.y);
+            wall.At(0f, out var start, out _, out var firstNormal);
+            wall.At(wall.Length, out var end, out _, out var lastNormal);
+            var across = new Vector3(firstNormal.x, 0f, firstNormal.y);
             float widthScale = transform.TransformVector(across).magnitude;
-            var top = transform.TransformPoint(new Vector3(high.x, wall.height, high.y));
-            var mid = transform.TransformPoint(new Vector3(low.x, wall.height * 0.5f, low.y) + across * wall.outer);
-            BrushDimensionFields.Field(key + "/height", top, "Высота стены, м", wall.height * heightScale,
+            wall.At(wall.Length * 0.5f, out var middle, out _, out _);
+            var centre = transform.TransformPoint(new Vector3(middle.x, wall.height * 0.5f, middle.y));
+            var upright = end + lastNormal * wall.outer;
+            var halfHeight = transform.TransformPoint(new Vector3(upright.x, wall.height * 0.5f, upright.y));
+            var cap = start + firstNormal * ((wall.inner + wall.outer) * 0.5f);
+            var capTop = transform.TransformPoint(new Vector3(cap.x, wall.height, cap.y));
+            var rise = new BrushDimensionFields.Edge(1, halfHeight, transform.TransformVector(Vector3.up), centre);
+            BrushDimensionFields.Field(key + "/height", rise, "Высота стены, м", wall.height * heightScale,
                 meters => SetWallDimension(plan, wall, meters / heightScale, true),
                 meters => PreviewWall(plan, wall, Mathf.Max(wall.sharedRoomHeight, ToDimension(meters / heightScale)), wall.Thickness));
             if (widthScale >= 1e-6f)
-                BrushDimensionFields.Field(key + "/width", mid, "Толщина стены, м", wall.Thickness * widthScale,
+                BrushDimensionFields.Field(key + "/width", new BrushDimensionFields.Edge(2, capTop, transform.TransformVector(across), centre),
+                    "Толщина поперёк стены, м", wall.Thickness * widthScale,
                     meters => SetWallDimension(plan, wall, meters / widthScale, false),
                     meters => PreviewWall(plan, wall, wall.height, ToDimension(meters / widthScale)));
 
@@ -81,7 +90,8 @@ namespace CsgBrush.Editor
             var b = new Vector3(wall.b.x, 0f, wall.b.y);
             float length = transform.TransformVector(b - a).magnitude;
             string title = wall.Curved ? "Длина хорды стены, м" : "Длина стены, м";
-            BrushDimensionFields.Field(key + "/length", transform.TransformPoint((a + b) * 0.5f), title, length,
+            var span = new BrushDimensionFields.Edge(0, transform.TransformPoint((a + b) * 0.5f), transform.TransformVector(b - a), centre);
+            BrushDimensionFields.Field(key + "/length", span, title, length,
                 value => SetWallLength(plan, wall, value), value => PreviewWallLength(plan, wall, value));
         }
 

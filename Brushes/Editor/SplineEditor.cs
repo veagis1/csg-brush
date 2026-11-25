@@ -153,6 +153,8 @@ namespace CsgBrush.Editor
             if (target is Spline spline && start >= 0 && spline.PointIndex(start) >= 0) { m_Last = start; m_Stroke.Add(start); }
         }
 
+        public override void OnWillBeDeactivated() => EndStroke();
+
         public override void OnToolGUI(EditorWindow window)
         {
             var spline = target as Spline;
@@ -270,6 +272,7 @@ namespace CsgBrush.Editor
         [MenuItem("GameObject/CSG Brush/Сплайн", false, 41)]
         static void Create()
         {
+            BrushMenu.PrepareObjectCreation();
             Vector3 pivot = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero;
             float g = BrushSettings.instance.GridMeters;
             if (g > 0f) pivot = new Vector3(Mathf.Round(pivot.x / g) * g, 0f, Mathf.Round(pivot.z / g) * g);
@@ -287,9 +290,10 @@ namespace CsgBrush.Editor
             var spline = Undo.AddComponent<Spline>(go);
             int first = firstPoint ? spline.AddPoint(Vector3.zero) : -1; // the draw tool starts its first link here
             Selection.activeGameObject = go;
+            int toolVersion = BrushMenu.ToolVersion;
             EditorApplication.delayCall += () =>
             {
-                if (go != null && !EditorApplication.isPlayingOrWillChangePlaymode &&
+                if (BrushMenu.ToolVersion == toolVersion && go != null && !EditorApplication.isPlayingOrWillChangePlaymode &&
                     Selection.gameObjects.Length == 1 && Selection.activeGameObject == go) SplineDrawTool.Begin(first);
             };
             return spline;
@@ -305,7 +309,7 @@ namespace CsgBrush.Editor
     {
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Spline"), "Сплайн");
         [MenuItem("CSG Brush/Создать/Сплайн", false, 13)]
-        [MenuItem("Tools/CSG Brush/Создать/Сплайн", false, 13)] static void Menu() => ToolManager.SetActiveTool<CreateSplineTool>();
+        [MenuItem("Tools/CSG Brush/Создать/Сплайн", false, 13)] static void Menu() => BrushMenu.ActivateCreation<CreateSplineTool>();
 
         Vector3 m_Hover; bool m_HoverValid;
         BrushSurfaceGrid.Frame m_Grid;
@@ -314,7 +318,7 @@ namespace CsgBrush.Editor
         /// <summary>The scene's splines, found again only when the hierarchy changes.</summary>
         List<Spline> m_Splines;
 
-        public override void OnActivated() { m_Splines = null; EditorApplication.hierarchyChanged += Forget; }
+        public override void OnActivated() { BrushMenu.PrepareCreation(); m_Splines = null; EditorApplication.hierarchyChanged += Forget; }
         public override void OnWillBeDeactivated() => EditorApplication.hierarchyChanged -= Forget;
         void Forget() => m_Splines = null;
 
@@ -365,7 +369,12 @@ namespace CsgBrush.Editor
                     int start = SplineDrawTool.AddAt(s, m_Point, m_Point >= 0 ? -1 : m_Link, m_Local);
                     BrushGenerators.MarkDirty(s);
                     Selection.activeGameObject = s.gameObject;
-                    EditorApplication.delayCall += () => { if (s != null && Selection.activeGameObject == s.gameObject) SplineDrawTool.Begin(start); };
+                    int toolVersion = BrushMenu.ToolVersion;
+                    EditorApplication.delayCall += () =>
+                    {
+                        if (BrushMenu.ToolVersion == toolVersion && s != null && Selection.activeGameObject == s.gameObject)
+                            SplineDrawTool.Begin(start);
+                    };
                 }
                 else SplineMenu.Create(m_Hover, BrushMenu.CreationParent(), true);
                 m_HoverValid = false;

@@ -1,14 +1,29 @@
 using System;
 using System.Reflection;
 using UnityEditor;
+using UnityEditor.EditorTools;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace CsgBrush.Editor
 {
+    [InitializeOnLoad]
     public static class BrushMenu
     {
         const string kMenu = "GameObject/CSG Brush/";
+
+        static BrushMenu() => ToolManager.activeToolChanged += OnToolChanged;
+
+        internal static int ToolVersion { get; private set; }
+
+        static void OnToolChanged()
+        {
+            ToolVersion++;
+            var type = ToolManager.activeToolType;
+            if (type == typeof(CreateFloorPlanTool) || type == typeof(CreateSplineTool) ||
+                type != null && typeof(BrushCreateTool).IsAssignableFrom(type))
+                BrushShapeHandles.SuspendForCreation();
+        }
 
         // Unity 6000.6 exposes setters for the Hierarchy default parent but keeps its stage-aware getter internal.
         static readonly Func<Transform> GetDefaultParent = (Func<Transform>)typeof(SceneView)
@@ -34,8 +49,37 @@ namespace CsgBrush.Editor
             return new Vector3(Mathf.Round(p.x / g) * g, Mathf.Round(p.y / g) * g, Mathf.Round(p.z / g) * g);
         }
 
+        internal static void ActivateCreation<T>() where T : EditorTool
+        {
+            if (ToolManager.activeToolType != typeof(T)) ToolManager.SetActiveTool<T>();
+            else
+            {
+                ToolVersion++;
+                PrepareCreation();
+                BrushShapeHandles.SuspendForCreation();
+                BrushCreateTool.Active?.ResetGesture();
+            }
+        }
+
+        internal static void PrepareCreation()
+        {
+            BrushShapeHandles.CancelGesture();
+            BrushSurfaceGrid.CancelPicking();
+            if (ToolManager.activeContextType != typeof(GameObjectToolContext))
+                ToolManager.SetActiveContext<GameObjectToolContext>();
+        }
+
+        internal static void PrepareObjectCreation()
+        {
+            PrepareCreation();
+            if (Tools.current == Tool.Custom) ToolManager.RestorePreviousPersistentTool();
+            ToolVersion++;
+            BrushShapeHandles.SuspendForCreation();
+        }
+
         static Brush CreateAtPivot(BrushShape shape)
         {
+            PrepareObjectCreation();
             var s = BrushSettings.instance;
             var size = s.defaultBoxSize;
             Vector3 pivot = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero;
@@ -60,6 +104,7 @@ namespace CsgBrush.Editor
         /// <summary>A door or window: on the middle of the first wall of a selected floor plan, else standing at the view pivot.</summary>
         static void CreateOpening(BrushShape shape)
         {
+            PrepareObjectCreation();
             var plan = Selection.activeGameObject != null ? Selection.activeGameObject.GetComponent<FloorPlan>() : null;
             var walls = new System.Collections.Generic.List<FloorPlan.Wall>();
             if (plan != null) plan.Walls(walls);

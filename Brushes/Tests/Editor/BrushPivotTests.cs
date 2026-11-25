@@ -210,6 +210,140 @@ namespace CsgBrush.Tests
             Assert.That(Vector3.Distance(expected, actual), Is.LessThan(0.0001f),
                 $"Ожидалось {expected:F5} м, получено {actual:F5} м.");
 
+        [Test]
+        public void AnAuthoredEdgeMidpointIsUndoableAndADiagonalIsRejected()
+        {
+            var brush = BrushApi.Create(BrushShape.Box, new Vector3(2f, 1f, 3f), Vector3.one * 2f, Quaternion.Euler(14f, 26f, 5f), snap: false);
+            var poly = BrushGeometry.Polyhedron(brush);
+            var edges = poly.Edges();
+            var (a, b) = edges[0];
+            int diagonal = Enumerable.Range(a + 1, poly.vertices.Length - a - 1).First(i => !edges.Contains((a, i)));
+            var before = WorldVertices(brush);
+            var pivot = brush.transform.position;
+            Assert.That(BrushApi.SetPivotToEdge(brush, a, diagonal), Is.False);
+            AssertPosition(pivot, brush.transform.position);
+
+            Undo.FlushUndoRecordObjects();
+            Undo.IncrementCurrentGroup();
+            Assert.That(BrushApi.SetPivotToEdge(brush, b, a), Is.True);
+            Undo.FlushUndoRecordObjects();
+            var midpoint = (before[a] + before[b]) * 0.5f;
+            AssertPosition(midpoint, brush.transform.position);
+            AssertVertices(before, brush);
+            Undo.PerformUndo();
+            AssertPosition(pivot, brush.transform.position);
+            Undo.PerformRedo();
+            AssertPosition(midpoint, brush.transform.position);
+            AssertVertices(before, brush);
+
+            brush.transform.Rotate(0f, 35f, 0f, Space.World);
+            var rotated = WorldVertices(brush);
+            AssertPosition(midpoint, (rotated[a] + rotated[b]) * 0.5f);
+        }
+
+        [TestCase(BrushShape.Box, 2f)]
+        [TestCase(BrushShape.Cylinder, -2f)]
+        [TestCase(BrushShape.Wedge, -2f)]
+        [TestCase(BrushShape.Arch, 2f)]
+        [TestCase(BrushShape.CurvedStairs, 2f)]
+        [TestCase(BrushShape.SpiralStairs, -2f)]
+        public void ADrawnBrushUsesTheAcceptedStartAndKeepsThePreview(BrushShape shape, float height)
+        {
+            const float grid = 0.5f;
+            var plane = BrushDraw.SurfaceRotation(new Vector3(0.2f, 0.8f, 0.25f));
+            var frame = new Vector3(1.2f, 3.1f, 4.2f);
+            var start = BrushDraw.SnapInPlane(frame + plane * new Vector3(0.62f, 0f, 0.85f), frame, plane, grid);
+            var end = start + plane * new Vector3(-2.5f, 0f, 3f);
+            Vector3 centre, size;
+            Quaternion rotation;
+            if (BrushCreateTool.IsRadial(shape))
+            {
+                centre = start + plane * Vector3.up * Mathf.Min(0f, height);
+                size = new Vector3(4f, Mathf.Abs(height), 0f);
+                rotation = plane;
+            }
+            else if (BrushCreateTool.IsCentred(shape))
+                BrushDraw.CentredPose(start, end, height, plane, grid, false, out centre, out size, out rotation);
+            else if (shape == BrushShape.Arch)
+                BrushDraw.SpanPose(start, end, -1f, false, height, plane, grid, 15f, out centre, out size, out rotation);
+            else if (BrushCreateTool.IsDirected(shape))
+                BrushDraw.DirectedPose(start, end, -1f, false, height, plane, grid, 15f, out centre, out size, out rotation);
+            else
+                BrushDraw.Pose(start, end, height, plane, grid, out centre, out size, out rotation);
+
+            var settings = BrushSettings.instance;
+            bool previousSnap = settings.snapToGrid;
+            var previousMode = settings.newGridSnap;
+            settings.snapToGrid = true;
+            settings.newGridSnap = GridSnap.Shape;
+            try
+            {
+                var parameters = BrushCreateTool.IsRadial(shape)
+                    ? BrushCreateTool.ParametersForRadial(shape, size.x, size.y) : BrushCreateTool.ParametersFor(shape, size);
+                var preview = BrushGeometry.ShapePolyhedron(shape, parameters).vertices.Select(vertex => centre + rotation * vertex).ToArray();
+                var brush = BrushCreateTool.CreateDrawnBrush(shape, start, centre, size, rotation);
+                BrushSnap.Snap(brush);
+
+                AssertPosition(start, brush.transform.position);
+                Assert.That(Quaternion.Angle(rotation, brush.transform.rotation), Is.LessThan(0.01f));
+                Assert.That(brush.gridSnap, Is.EqualTo(GridSnap.Shape));
+                AssertVertices(preview, brush);
+            }
+            finally
+            {
+                settings.snapToGrid = previousSnap;
+                settings.newGridSnap = previousMode;
+            }
+        }
+
+        [Test]
+        public void DrawingPivotOutsideTheBoundsSurvivesSwitchingNumericMode()
+        {
+            var start = new Vector3(1f, -2f, -3f);
+            var brush = BrushCreateTool.CreateDrawnBrush(BrushShape.Box, start, Vector3.zero, Vector3.one * 2f, Quaternion.identity);
+            AssertPosition(start, brush.transform.position);
+            AssertPosition(Vector3.zero, World(brush).center);
+            BrushApi.SetPivotMode(brush, PivotMode.Absolute);
+            AssertPosition(Vector3.zero, World(brush).center);
+            BrushApi.SetPivotMode(brush, PivotMode.Normalized);
+            AssertPosition(Vector3.zero, World(brush).center);
+            BrushApi.ResetPivot(brush);
+            AssertPosition(Vector3.zero, brush.transform.position);
+        }
+
+        [Test]
+        public void ADrawnCutKeepsTheFirstGridPointBeyondAWallEnd()
+        {
+            var plan = new GameObject("План стены").AddComponent<FloorPlan>();
+            int a = plan.AddPoint(Vector3.zero);
+            int b = plan.AddPoint(Vector3.right * 2.3f);
+            plan.AddWall(a, b, 0.2f);
+            var target = new BrushCutTarget(plan, a, b);
+            var start = BrushDraw.SnapInPlane(new Vector3(2.28f, 0.5f, 0f), Vector3.zero, Quaternion.identity, 0.5f);
+            Assert.That(start.x, Is.EqualTo(2.5f));
+            var cut = BrushCreateTool.CreateDrawnBrush(BrushShape.Box, start, start + new Vector3(-0.5f, 0f, 0f),
+                new Vector3(1f, 0.5f, 0.5f), Quaternion.identity, plan.transform);
+            var before = WorldVertices(cut);
+            AssertPosition(start, cut.transform.position);
+
+            target.Assign(cut);
+            WallAnchors.AttachCutToWall(cut, target);
+            Assert.That(cut.GetComponent<WallAnchor>().onWall, Is.True);
+            AssertPosition(start, cut.transform.position);
+            AssertVertices(before, cut);
+            Undo.FlushUndoRecordObjects();
+            BrushApi.ForceUpdate();
+            AssertPosition(start, cut.transform.position);
+            AssertVertices(before, cut);
+
+            Vector3 move = Vector3.forward * 0.4f;
+            plan.points[0] += move;
+            plan.points[1] += move;
+            WallAnchors.Layout(plan);
+            AssertPosition(start + move, cut.transform.position);
+            AssertVertices(before.Select(point => point + move).ToArray(), cut);
+        }
+
         [TestCase(BrushShape.Door)]
         [TestCase(BrushShape.Window)]
         [TestCase(BrushShape.CurvedStairs)]

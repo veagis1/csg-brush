@@ -35,6 +35,8 @@ namespace CsgBrush.Editor
         protected abstract Type RotateTool { get; }
         protected abstract Type ScaleTool { get; }
 
+        public override void OnWillBeDeactivated() => FloorPlanEditState.CancelInteraction();
+
         protected override Type GetEditorToolType(Tool tool)
         {
             switch (tool)
@@ -292,6 +294,7 @@ namespace CsgBrush.Editor
 
         // drag state shared by the tools: the plan's points when the drag began
         public static PointGraph dragPlan; public static List<Vector3> dragStart; public static HashSet<int> dragMoving; public static Vector3 dragCentre;
+        static int s_DragControl, s_DragUndoGroup;
         public static bool Dragging(PointGraph plan) => dragPlan == plan && dragStart != null;
 
         /// <summary>Start a drag of the plan's moving points; only while a handle holds the mouse, so a stray change never starts one.</summary>
@@ -299,9 +302,28 @@ namespace CsgBrush.Editor
         {
             if (Dragging(plan) || GUIUtility.hotControl == 0) return;
             dragPlan = plan; dragStart = new List<Vector3>(plan.points); dragMoving = moving; dragCentre = Centre(plan.points, moving);
+            s_DragControl = GUIUtility.hotControl;
+            Undo.FlushUndoRecordObjects(); // any point inserted on MouseDown is already committed
+            Undo.IncrementCurrentGroup();
+            s_DragUndoGroup = Undo.GetCurrentGroup();
         }
 
-        public static void EndDrag() { dragPlan = null; dragStart = null; dragMoving = null; }
+        public static void EndDrag() { dragPlan = null; dragStart = null; dragMoving = null; s_DragControl = 0; }
+
+        internal static void CancelInteraction()
+        {
+            if (dragStart != null)
+            {
+                if (GUIUtility.hotControl == s_DragControl) GUIUtility.hotControl = 0;
+                int group = s_DragUndoGroup;
+                EndDrag();
+                Undo.FlushUndoRecordObjects();
+                Undo.RevertAllDownToGroup(group);
+            }
+            marquee = false;
+            s_PressedPoint = -1;
+            EditModeMouse.ReleaseOwned();
+        }
 
         // ------------------------------------------------------------------ scene view
 

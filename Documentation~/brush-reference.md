@@ -63,7 +63,7 @@ Only the sides turned towards you are handles. A side shows a faint outline, and
 | Spiral stairs | The inner and the outer face, as on curved stairs. The top step's tread and the last step's end: more steps, going round further. | | |
 | Door, window | The sides, the top, and the bottom. | | |
 
-Unity's Move, Rotate, and Scale handles take priority when the pointer is over them. The handle shows the new size while you drag. Hold **Shift** to move both sides at once, about the middle. Hold **Ctrl** to move in increments of the current grid step from the start of the drag, including when grid snapping is off. With a 0.125 m step, a 1.03 m block grows to 1.155 m, then 1.28 m. **Ctrl+Shift** moves both sides by the selected step. With ordinary grid snapping, sizes snap to the grid, step heights snap in increments of 0.01 m, and angles follow the rotation snap. Escape cancels the drag. Each completed drag takes one step to undo.
+Unity's Move, Rotate, and Scale handles take priority when the pointer is over them. With Dimensions enabled, the dark badge updates as you drag. Each badge sits just outside its edge and shows the measurement in metres followed by its local axis, for example 2.00 m (X). Hold **Shift** to move both sides at once, about the middle. Hold **Ctrl** to move in increments of the current grid step from the start of the drag, including when grid snapping is off. With a 0.125 m step, a 1.03 m block grows to 1.155 m, then 1.28 m. **Ctrl+Shift** moves both sides by the selected step. With ordinary grid snapping, sizes snap to the grid, step heights snap in increments of 0.01 m, and angles follow the rotation snap. Escape cancels the drag. Each completed drag takes one step to undo.
 
 To turn the handles on or off, use **Shape Edit** in the **Brushes** overlay, or press **B** in the Scene view. While they're on, three buttons beside it set what a drag does to the other selected brushes:
 
@@ -107,7 +107,7 @@ Existing project settings are converted on first use. The former units-per-metre
 
 ## Set a brush's pivot
 
-The pivot is where the brush's transform sits inside the brush. It's measured from the brush's left, bottom, back corner, where the back is the side away from the direction the brush faces (+Z).
+The pivot is the origin for moving and rotating the brush. A primitive drawn in the Scene view starts with its pivot at the first construction point, including any grid snap applied to that point. It's measured from the brush's left, bottom, back corner, where the back is the side away from the direction the brush faces (+Z).
 
 ![The Brush Inspector of a 2 × 2 × 1 m box with its pivot at the bottom of its back face, and Grid snap set to Shape.](images/brush-inspector-pivot.png)
 
@@ -115,7 +115,7 @@ The pivot is where the brush's transform sits inside the brush. It's measured fr
 
 | **Pivot mode** | **Values** | **When you resize the brush** |
 | :--- | :--- | :--- |
-| **Normalized** | 0 to 1 of the brush's size on each axis. 0.5, 0.5, 0.5 is the centre, which is the default. | The pivot stays at the same fraction of the size. |
+| **Normalized** | A fraction of the brush's size on each axis. 0.5, 0.5, 0.5 is the centre. A drawing origin outside the bounds can give a fraction outside 0 to 1. | The pivot stays at the same fraction of the size. |
 | **Absolute** | A distance from the corner in metres. | The pivot stays at the same distance from the corner. |
 
 Useful pivots:
@@ -125,7 +125,7 @@ Useful pivots:
 
 Setting the pivot moves the transform, never the shape. Switching the pivot mode doesn't move anything. On a Custom shape, setting the pivot moves the vertices instead.
 
-Curved and spiral stairs, doors, and windows don't have a pivot setting, because their placement depends on their transform.
+For a single editable brush, choose **Привязать к вершине или ребру** in the Inspector, then click a vertex or a marked edge midpoint in the Scene view. Move and Rotate use the selected point in local axes. **Сбросить привязку** puts the pivot at the centre of the geometry. Generated or wall-anchored brushes are positioned by their owner.
 
 ## Add and subtract
 
