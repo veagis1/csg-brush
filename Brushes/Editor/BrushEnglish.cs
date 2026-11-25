@@ -358,6 +358,7 @@ namespace CsgBrush.Editor
             [" — меш отсутствует"] = " has no mesh",
             [" — меш не сохранён"] = " mesh is not saved",
             [": коллайдер "] = ": collider ",
+            [": требуется восстановить связь триггера"] = ": trigger relay needs repair",
             ["Один браш"] = "Single",
             ["Относительно"] = "Offset",
             ["Одинаковое значение"] = "Match",

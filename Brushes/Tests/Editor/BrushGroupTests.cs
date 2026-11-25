@@ -1,4 +1,5 @@
 using System.Collections;
+using System.IO;
 using System.Reflection;
 using CsgBrush.Editor;
 using NUnit.Framework;
@@ -78,6 +79,70 @@ namespace CsgBrush.Tests
             BrushPrefabBuild.Build(PrefabPath);
             int meshes = 0; foreach (var o in AssetDatabase.LoadAllAssetRepresentationsAtPath(PrefabPath)) if (o is Mesh) meshes++;
             Assert.AreEqual(2, meshes, "one render mesh and one collider mesh");
+        }
+
+        [Test]
+        public void AStoredPrefabRepairsItsLegacyTriggerRelayOnce()
+        {
+            var serialization = EditorSettings.serializationMode;
+            try
+            {
+                EditorSettings.serializationMode = SerializationMode.ForceText;
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                var root = new GameObject("Trigger prefab");
+                root.AddComponent<BrushGroup>();
+                var brush = BrushApi.Create(BrushShape.Box, Vector3.zero, Vector3.one * 2f, Quaternion.identity,
+                    root.transform, "Trigger");
+                BrushApi.SetCollision(brush, Colliders.ColliderKind.Trigger);
+                var authored = brush.gameObject.AddComponent<BoxCollider>();
+                authored.center = Vector3.up;
+                BrushApi.ForceUpdate();
+                Assert.IsNotNull(PrefabUtility.SaveAsPrefabAsset(root, PrefabPath));
+                Object.DestroyImmediate(root);
+                BrushPrefabBuild.Build(PrefabPath);
+                Assert.IsFalse(BrushPrefabBuild.NeedsBuild(PrefabPath));
+
+                var asset = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+                var relays = asset.GetComponentsInChildren<BrushTriggerRelay>(true);
+                Assert.AreEqual(1, relays.Length);
+                var script = MonoScript.FromMonoBehaviour(relays[0]);
+                Assert.IsTrue(AssetDatabase.TryGetGUIDAndLocalFileIdentifier(script, out string guid, out long fileId));
+                string scriptReference = $"m_Script: {{fileID: {fileId}, guid: {guid}, type: 3}}";
+                string yaml = File.ReadAllText(PrefabPath);
+                int referenceStart = yaml.IndexOf(scriptReference, System.StringComparison.Ordinal);
+                Assert.GreaterOrEqual(referenceStart, 0);
+                Assert.AreEqual(referenceStart, yaml.LastIndexOf(scriptReference, System.StringComparison.Ordinal));
+                File.WriteAllText(PrefabPath, yaml.Remove(referenceStart, scriptReference.Length)
+                    .Insert(referenceStart, "m_Script: {fileID: 0}"));
+                AssetDatabase.ImportAsset(PrefabPath, ImportAssetOptions.ForceSynchronousImport);
+
+                asset = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+                var piece = asset.GetComponentInChildren<Colliders.ConvexPiece>(true);
+                var components = piece.GetComponents<Component>();
+                Assert.AreEqual(4, components.Length);
+                Assert.AreSame(piece.transform, components[0]);
+                Assert.IsTrue(((Collider)components[1]).isTrigger);
+                Assert.AreSame(piece, components[2]);
+                Assert.IsNull(components[3]);
+                Assert.IsTrue(BrushPrefabBuild.NeedsBuild(PrefabPath));
+
+                BrushPrefabBuild.BuildIfNeeded(PrefabPath);
+                asset = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+                var savedBrush = asset.GetComponentInChildren<Brush>(true);
+                var savedRelay = asset.GetComponentInChildren<BrushTriggerRelay>(true);
+                Assert.IsNotNull(savedRelay);
+                Assert.AreEqual(savedBrush, savedRelay.brush);
+                Assert.AreEqual(Colliders.ColliderKind.Trigger, savedBrush.collision);
+                Assert.IsTrue(savedRelay.GetComponent<Collider>().isTrigger);
+                Assert.AreEqual(0, GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(savedRelay.gameObject));
+                Assert.AreEqual(Vector3.up, savedBrush.GetComponent<BoxCollider>().center);
+                Assert.IsFalse(BrushPrefabBuild.NeedsBuild(PrefabPath));
+
+                var repaired = File.ReadAllBytes(PrefabPath);
+                BrushPrefabBuild.BuildIfNeeded(PrefabPath);
+                CollectionAssert.AreEqual(repaired, File.ReadAllBytes(PrefabPath));
+            }
+            finally { EditorSettings.serializationMode = serialization; }
         }
 
         [Test]

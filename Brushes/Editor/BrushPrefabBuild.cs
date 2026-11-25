@@ -1,5 +1,6 @@
 using static CsgBrush.Editor.BrushLanguage;
 using System.Collections.Generic;
+using CsgBrush.Colliders;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -62,6 +63,8 @@ namespace CsgBrush.Editor
             foreach (var group in root.GetComponentsInChildren<BrushGroup>(true))
             {
                 if (BrushesOf(group).Count == 0) continue;
+                foreach (var piece in LegacyTriggerPieces(group))
+                    return piece.name + Tr(": требуется восстановить связь триггера");
                 var meshes = MeshChildren(group);
                 if (meshes.Count == 0) return group.name + Tr(": нет дочернего объекта с мешем");
                 foreach (var mf in meshes)
@@ -104,6 +107,24 @@ namespace CsgBrush.Editor
 
         static bool HasGroup(string path) => path != null && path.EndsWith(".prefab") && AssetDatabase.LoadAssetAtPath<GameObject>(path)?.GetComponentInChildren<BrushGroup>(true) != null;
 
+        // 0.6.0 wrote a null script reference for the relay declared inside BrushModule.cs.
+        // Its slot followed the collider and ConvexPiece, before any brush module added components.
+        static IEnumerable<GameObject> LegacyTriggerPieces(BrushGroup group)
+        {
+            var container = group.transform.Find(ConvexColliderSettings.ContainerName);
+            if (container == null) yield break;
+            foreach (Transform child in container)
+            {
+                if (!child.TryGetComponent<ConvexPiece>(out var piece) || !piece.trigger ||
+                    child.TryGetComponent<BrushTriggerRelay>(out _) ||
+                    GameObjectUtility.GetMonoBehavioursWithMissingScriptCount(child.gameObject) != 1) continue;
+                var components = child.GetComponents<Component>();
+                if (components.Length >= 4 && components[1] is Collider collider && collider.isTrigger &&
+                    components[2] == piece && components[3] == null)
+                    yield return child.gameObject;
+            }
+        }
+
         [MenuItem("Assets/CSG Brush/Перестроить префаб", false, 2000)]
         static void RebuildSelected()
         {
@@ -141,13 +162,19 @@ namespace CsgBrush.Editor
                 var contents = PrefabUtility.LoadPrefabContents(path);
                 try
                 {
-                    foreach (var group in contents.GetComponentsInChildren<BrushGroup>(true)) BrushCsg.Rebuild(group, BrushesOf(group));
+                    foreach (var group in contents.GetComponentsInChildren<BrushGroup>(true))
+                    {
+                        foreach (var piece in LegacyTriggerPieces(group))
+                            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(piece);
+                        BrushCsg.Rebuild(group, BrushesOf(group));
+                    }
                     // the meshes the contents now reference, by the sibling-index path of the object that holds them
                     var built = new Dictionary<string, (Mesh render, Mesh collider)>();
                     foreach (var mf in contents.GetComponentsInChildren<MeshFilter>(true)) if (mf.sharedMesh != null) built[PathOf(mf.transform, contents.transform)] = (mf.sharedMesh, null);
                     foreach (var mc in contents.GetComponentsInChildren<MeshCollider>(true))
                         if (mc.sharedMesh != null) { var key = PathOf(mc.transform, contents.transform); built.TryGetValue(key, out var e); built[key] = (e.render, mc.sharedMesh); }
-                    PrefabUtility.SaveAsPrefabAsset(contents, path);
+                    PrefabUtility.SaveAsPrefabAsset(contents, path, out bool saved);
+                    if (!saved) return;
                     // the saved prefab has the same hierarchy: give its components the meshes, stored in its own file
                     var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
                     var used = new HashSet<Mesh>();
