@@ -143,8 +143,7 @@ namespace CsgBrush.Colliders.Editor
                 foreach (Transform child in container)
                 {
                     if (!child.TryGetComponent<ConvexPiece>(out var id) || id.planes == null) { unknown.Add(child.gameObject); continue; }
-                    if (!pool.TryGetValue(id.hash, out var list)) pool[id.hash] = list = new List<ConvexPiece>();
-                    list.Add(id);
+                    AddCandidate(pool, id);
                 }
             }
 
@@ -230,6 +229,7 @@ namespace CsgBrush.Colliders.Editor
                 bool reusable = was != null && was.origin.Equals(input.origin) && Alive(was);
                 long partKeyBase;
                 unchecked { partKeyBase = (((long)input.fingerprint * 31 + (int)input.kind) * 31 + input.layer) * 31 + (input.name != null ? input.name.GetHashCode() : 0); partKeyBase = partKeyBase * 31 + settings.minPieceVolume.GetHashCode(); }
+                var changedParts = new List<(ConvexPolytope part, List<ConvexPolytope> cutters, long key)>();
                 foreach (var part in Own(i))
                 {
                     var partBounds = PartBounds(part);
@@ -258,23 +258,30 @@ namespace CsgBrush.Colliders.Editor
                         LastReusedPieces += kept.pieces.Count;
                         continue;
                     }
-                    var pieces = new List<ConvexPolytope> { part };
-                    foreach (var cutter in reaching)
-                    {
-                        var next = new List<ConvexPolytope>();
-                        foreach (var p in pieces) ConvexPolytope.Subtract(p, cutter, next);
-                        pieces = next;
-                    }
-                    var made = new PartPieces();
+                    entry.parts.Add(partKey, new PartPieces());
+                    changedParts.Add((part, reaching, partKey));
+                }
+                // Reserve intact parts first. A piece of a changed part may still have exactly the old planes.
+                var candidates = pool;
+                if (reusable && changedParts.Count > 0 && was.pieces.Count > 1)
+                {
+                    candidates = new Dictionary<int, List<ConvexPiece>>();
+                    foreach (var oldPart in was.parts.Values)
+                        foreach (var go in oldPart.pieces)
+                            if (go.TryGetComponent<ConvexPiece>(out var id)) AddCandidate(candidates, id);
+                }
+                foreach (var change in changedParts)
+                {
+                    var pieces = Carve(change.part, change.cutters);
+                    var made = entry.parts[change.key];
                     foreach (var piece in pieces)
                     {
                         if (piece.IsEmpty || (!trigger && piece.Volume() < settings.minPieceVolume)) continue;
                         var tag = piece.tag as BrushTag;
                         int boxes = 0, meshes = 0;
-                        var go = ClaimOrMake(pool, container, piece, input.origin, input.layer, (trigger ? "trigger " : "solid ") + (tag != null ? tag.name : "?"), trigger, tag, ref boxes, ref meshes);
+                        var go = ClaimOrMake(candidates, container, piece, input.origin, input.layer, (trigger ? "trigger " : "solid ") + (tag != null ? tag.name : "?"), trigger, tag, ref boxes, ref meshes);
                         made.pieces.Add(go); made.boxes += boxes; made.meshes += meshes;
                     }
-                    entry.parts[partKey] = made;
                     entry.pieces.AddRange(made.pieces); entry.boxes += made.boxes; entry.meshes += made.meshes;
                     if (trigger) entry.triggers += made.pieces.Count; else entry.solids += made.pieces.Count;
                 }
@@ -314,6 +321,45 @@ namespace CsgBrush.Colliders.Editor
             settings.triggerVolumes = triggerCount;
             settings.buildMilliseconds = (float)sw.Elapsed.TotalMilliseconds;
             if (changed) EditorUtility.SetDirty(settings);
+        }
+
+        // Measure the bounds of a surviving fragment once. With many cuts most fragment/cutter pairs are disjoint.
+        static List<ConvexPolytope> Carve(ConvexPolytope part, List<ConvexPolytope> cutters)
+        {
+            var pieces = new List<ConvexPolytope> { part };
+            if (cutters.Count == 0) return pieces;
+            var next = new List<ConvexPolytope>();
+            var bounds = new List<Bounds> { part.GetBounds() };
+            var nextBounds = new List<Bounds>();
+            foreach (var cutter in cutters)
+            {
+                var cutterBounds = cutter.GetBounds();
+                for (int i = 0; i < pieces.Count; i++)
+                {
+                    if (!bounds[i].Intersects(cutterBounds))
+                    {
+                        next.Add(pieces[i]);
+                        nextBounds.Add(bounds[i]);
+                        continue;
+                    }
+                    int start = next.Count;
+                    ConvexPolytope.Subtract(pieces[i], cutter, next);
+                    for (int j = start; j < next.Count; j++)
+                        nextBounds.Add(ReferenceEquals(next[j], pieces[i]) ? bounds[i] : next[j].GetBounds());
+                }
+                (pieces, next) = (next, pieces);
+                (bounds, nextBounds) = (nextBounds, bounds);
+                next.Clear();
+                nextBounds.Clear();
+                if (pieces.Count == 0) break;
+            }
+            return pieces;
+        }
+
+        static void AddCandidate(Dictionary<int, List<ConvexPiece>> pool, ConvexPiece id)
+        {
+            if (!pool.TryGetValue(id.hash, out var list)) pool[id.hash] = list = new List<ConvexPiece>();
+            list.Add(id);
         }
 
         static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ConvexPolytope, object> s_PartBounds = new System.Runtime.CompilerServices.ConditionalWeakTable<ConvexPolytope, object>();

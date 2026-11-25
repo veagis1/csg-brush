@@ -105,9 +105,12 @@ namespace CsgBrush.Editor
             foreach (var mf in Missing(group))
             {
                 var mesh = mf.sharedMesh;
-                if (HasLightmapUVs(mesh)) mesh.uv2 = null; // made with other settings: from the mesh as built
-                if (mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 && mesh.vertexCount > 30000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32; // room for the vertices the unwrap may add
-                if (!Unwrapping.GenerateSecondaryUVSet(mesh, param)) { Debug.LogWarning(Tr("CSG Brush: не удалось создать UV для карт освещения у ") + mf.transform.parent?.name + "/" + mf.name + ".", mf); continue; }
+                if (mesh.vertexCount < 4096 || !BrushPlanarLightmapUVs.TryGenerate(mesh, param.hardAngle, param.packMargin))
+                {
+                    if (HasLightmapUVs(mesh)) mesh.uv2 = null; // made with other settings: from the mesh as built
+                    if (mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 && mesh.vertexCount > 30000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32; // room for the vertices the unwrap may add
+                    if (!Unwrapping.GenerateSecondaryUVSet(mesh, param)) { Debug.LogWarning(Tr("CSG Brush: не удалось создать UV для карт освещения у ") + mf.transform.parent?.name + "/" + mf.name + ".", mf); continue; }
+                }
                 if (!mf.TryGetComponent<BrushMeshSources>(out var saved)) saved = mf.gameObject.AddComponent<BrushMeshSources>();
                 saved.lightmapUVSettings = settings;
                 EditorSceneManager.MarkSceneDirty(mf.gameObject.scene);

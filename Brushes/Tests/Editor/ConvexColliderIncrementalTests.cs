@@ -230,6 +230,57 @@ namespace CsgBrush.Tests
             AssertSameAsFromScratch("after moving the subtract brush");
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void MovingOneOfManyCutsPreservesSlabOccupancy(bool angledCut)
+        {
+            var slabCenter = new Vector3(1200f, 4f, 1200f);
+            var slab = BrushApi.Create(BrushShape.Box, slabCenter, new Vector3(110f, 4f, 18f), Quaternion.identity, name: "Slab", snap: false);
+            var target = new BrushCutTarget(slab);
+            var cuts = new Brush[10];
+            for (int i = 0; i < cuts.Length; i++)
+            {
+                var center = slabCenter + Vector3.right * (i * 10f - 45f);
+                var rotation = i == 5 && angledCut ? Quaternion.Euler(0f, 17f, 0f) : Quaternion.identity;
+                cuts[i] = BrushApi.Create(BrushShape.Box, center, new Vector3(2f, 8f, 4f), rotation, slab.transform, snap: false);
+                target.Assign(cuts[i]);
+            }
+            BrushApi.ForceUpdate();
+
+            var moved = cuts[5];
+            var oldCenter = moved.transform.position;
+            var newCenter = oldCenter + Vector3.right * 3.5f;
+            var oldBoxes = Container().GetComponentsInChildren<BoxCollider>();
+            var unchangedOpenings = cuts.Where(cut => cut != moved).Select(cut => cut.transform.position).ToArray();
+            var samples = new[] { oldCenter, newCenter, slabCenter + Vector3.forward * 5f }.Concat(unchangedOpenings).ToArray();
+
+            bool[] Occupancy()
+            {
+                Physics.SyncTransforms();
+                var colliders = Container().GetComponentsInChildren<Collider>();
+                return samples.Select(point => colliders.Any(collider => collider.Raycast(new Ray(point + Vector3.up * 10f, Vector3.down), out _, 20f))).ToArray();
+            }
+
+            var before = Occupancy();
+            Assert.IsFalse(before[0], "the original opening is clear");
+            Assert.IsTrue(before[1], "the new position is still solid");
+            BrushApi.Move(moved, newCenter);
+            BrushApi.ForceUpdate();
+            var incremental = Occupancy();
+            Assert.IsTrue(incremental[0], "the released volume is solid");
+            Assert.IsFalse(incremental[1], "the moved cutter clears the new position");
+            Assert.IsTrue(incremental[2], "the side of the slab remains solid");
+            Assert.IsFalse(incremental.Skip(3).Any(occupied => occupied), "the other openings remain clear");
+            if (!angledCut)
+            {
+                var currentBoxes = Container().GetComponentsInChildren<BoxCollider>();
+                Assert.Greater(currentBoxes.Intersect(oldBoxes).Count(), oldBoxes.Length / 2, "most slab collider objects are reused");
+            }
+
+            AssertSameAsFromScratch("after moving a cutter through a slab with many openings");
+            CollectionAssert.AreEqual(incremental, Occupancy(), "incremental and rebuilt colliders fill the same sample volumes");
+        }
+
         [Test]
         public void UndoAndRedoMatchABuildFromScratch()
         {

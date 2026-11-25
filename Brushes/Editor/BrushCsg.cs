@@ -494,9 +494,37 @@ namespace CsgBrush.Editor
             }
             unchecked
             {
+                var materialKeys = new Dictionary<Material, int>();
+                int? defaultKey = null;
+                int KeyFor(Material material)
+                {
+                    if (material == null)
+                    {
+                        defaultKey ??= MaterialKey(DefaultMaterial());
+                        return defaultKey.Value;
+                    }
+                    if (!materialKeys.TryGetValue(material, out int key))
+                    {
+                        key = MaterialKey(material);
+                        materialKeys.Add(material, key);
+                    }
+                    return key;
+                }
                 int meshKey = 17 * 31 + MeshFormat;
-                for (int i = 0; i < job.pieceKeys.Count; i++) { var pr = job.records[job.pieceRecord[i]]; meshKey = meshKey * 31 + job.pieceKeys[i].GetHashCode(); var mat = pr.brush.material; if (mat == null) mat = DefaultMaterial(); meshKey = meshKey * 31 + MaterialKey(mat); meshKey = meshKey * 31 + pr.layer; meshKey = meshKey * 31 + StaticFlags(pr.brush);
-                    foreach (int c in job.pieceCutters[i]) { var cb = job.records[c].brush; var cm = cb.material; meshKey = meshKey * 31 + MaterialKey(cm != null ? cm : DefaultMaterial()); meshKey = meshKey * 31 + (int)cb.cutFaces; } } // static flags: which mesh its triangles go to; carved faces take the cutter's material, or the cut solid's
+                for (int i = 0; i < job.pieceKeys.Count; i++)
+                {
+                    var record = job.records[job.pieceRecord[i]];
+                    meshKey = meshKey * 31 + job.pieceKeys[i].GetHashCode();
+                    meshKey = meshKey * 31 + KeyFor(record.brush.material);
+                    meshKey = meshKey * 31 + record.layer;
+                    meshKey = meshKey * 31 + StaticFlags(record.brush);
+                    foreach (int index in job.pieceCutters[i])
+                    {
+                        var cutter = job.records[index].brush;
+                        meshKey = meshKey * 31 + KeyFor(cutter.material);
+                        meshKey = meshKey * 31 + (int)cutter.cutFaces;
+                    }
+                }
                 job.meshKey = meshKey;
             }
             bool anyMesh = false; foreach (var t in MeshObjects(model)) if (t.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null) { anyMesh = true; break; }
@@ -1120,8 +1148,9 @@ namespace CsgBrush.Editor
                 float ax = Mathf.Abs(n.x), ay = Mathf.Abs(n.y), az = Mathf.Abs(n.z);
                 Vector2 UV(Vector3 p) => ax >= ay && ax >= az ? new Vector2(p.z, p.y) : ay >= az ? new Vector2(p.x, p.z) : new Vector2(p.x, p.y);
                 int fkey = byFace ? faceOf[tri] : -1 - tri; // a triangle with its own normal has its own vertices
-                foreach (var p in new[] { a, b, c })
+                for (int corner = 0; corner < 3; corner++)
                 {
+                    var p = data.vertices[data.triangles[tri * 3 + corner]];
                     var key = (p, fkey, mi);
                     if (!part.lookup.TryGetValue(key, out int vi))
                     {
