@@ -14,3 +14,8 @@ __pycache__/
 /Development~/Sandbox/Logs/
 /Development~/Sandbox/obj/
 /Development~/Sandbox/UserSettings/
+
+# Chisel generates these files in the local Unity sandbox.
+/Development~/Sandbox/Assets/Chisel/
+/Development~/Sandbox/Assets/Chisel.meta
+/Development~/Sandbox/ProjectSettings/Packages/com.chisel/

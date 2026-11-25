@@ -64,4 +64,4 @@ A world unit is one metre throughout the fork. Existing project settings convert
 
 Editor scripts can set a brush origin with `BrushApi.SetPivotToVertex`, `BrushApi.SetPivotToEdge` and `BrushApi.ResetPivot`. The former unit-preset API has been removed. Pass lengths in metres to `BrushGridMaterial.Generate(int, float[])`. The legacy `ToMeters` and `ToUnits` methods now return their input.
 
-For contributors, the [development sandbox](https://github.com/veagis1/csg-brush/tree/main/Development~/Sandbox) includes a URP setup, a first-person controller using Unity’s Input System, and a Chisel sample for comparison. These dependencies are scoped to the sandbox.
+The [development sandbox](https://github.com/veagis1/csg-brush/tree/main/Development~/Sandbox) opens this checkout as a local package in Unity 6000.6.8f1. Its URP setup and first-person controller let you walk through the geometry you build.

@@ -6,4 +6,6 @@
 
 Из корня репозитория запустите `powershell -NoProfile -ExecutionPolicy Bypass -File Development~/Tools/Check-Knowledge.ps1` для проверки базы.
 
-Инструменты разработки используют Caveman 4.1.0. [Лицензия](Tools/Caveman/LICENSE) · [Уведомления поставщика](Tools/Caveman/NOTICE). Лицензия стороннего примера Chisel хранится вместе с его сценой.
+Инструменты разработки используют Caveman 4.1.0. [Лицензия](Tools/Caveman/LICENSE) · [Уведомления поставщика](Tools/Caveman/NOTICE).
+
+Для сравнения в стенде установлен Chisel. Package Manager загружает его из репозитория поставщика. Импортированный пример, его лицензия и ресурсы `Assets/Chisel` остаются на локальном диске. [Как открыть или импортировать пример](Knowledge/Системы/Chisel.md)
