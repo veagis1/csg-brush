@@ -218,6 +218,20 @@ namespace CsgBrush.Editor
         static long Key(int a, int b) => ((long)Mathf.Min(a, b) << 32) | (uint)Mathf.Max(a, b);
 
         /// <summary>Why the last <see cref="ExtrudeFaces"/> returned null although the faces were valid (the result would not have been a sound shape), or null.</summary>
+        internal static string DescribeProblem(string reason)
+        {
+            switch (reason)
+            {
+                case "not enough vertices or faces": return "недостаточно вершин или граней";
+                case "open": return "форма не замкнута";
+                case "no volume": return "отсутствует объём";
+                case "degenerate face": return "вырожденная грань";
+                case "non-planar face": return "грань не лежит в одной плоскости";
+                case "self-intersecting": return "самопересечение";
+                default: return reason ?? "неизвестная причина";
+            }
+        }
+
         public static string LastRefusal;
 
         /// <summary>How far a prism reaches past the face it extrudes, and how much wider it is.</summary>

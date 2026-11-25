@@ -167,7 +167,7 @@ namespace CsgBrush.Editor
         public static BrushCreateTool Active { get; private set; }
 
         public abstract BrushShape Shape { get; }
-        /// <summary>Exactly what the toolbar shows: "Box Brush", "Curved Stairs Brush".</summary>
+        /// <summary>Exactly what the toolbar shows: "Браш «Блок»", "Браш «Изогнутая лестница»".</summary>
         public abstract string Title { get; }
 
         enum State { Idle, Base, Width, Height }
@@ -484,18 +484,8 @@ namespace CsgBrush.Editor
             foreach (var face in poly.faces)
                 for (int i = 0; i < face.indices.Length; i++)
                     Handles.DrawLine(m.MultiplyPoint3x4(poly.vertices[face.indices[i]]), m.MultiplyPoint3x4(poly.vertices[face.indices[(i + 1) % face.indices.Length]]), 2f);
-            if (BrushSettings.instance.showDimensions) DrawDimensions(poly, m, state == State.Height);
-        }
-
-        /// <summary>The drawn brush's width and depth along two edges of its base, and its height once it has one, as the floor plan shows a wall's length.</summary>
-        static void DrawDimensions(BrushPolyhedron poly, Matrix4x4 m, bool withHeight)
-        {
-            var b = poly.Bounds();
-            var s = BrushSettings.instance;
-            void Label(Vector3 local, float value) { if (value > 1e-4f) Handles.Label(m.MultiplyPoint3x4(local), s.FormatUnits(value), EditorStyles.whiteMiniLabel); }
-            Label(new Vector3(b.center.x, b.min.y, b.min.z), b.size.x);
-            Label(new Vector3(b.max.x, b.min.y, b.center.z), b.size.z);
-            if (withHeight) Label(new Vector3(b.min.x, b.center.y, b.min.z), b.size.y); // on the other side from the depth
+            if (BrushSettings.instance.showDimensions)
+                BrushShapeDrawing.DrawDimensions(poly.Bounds(), m, state == State.Height);
         }
 
         void Finish()
@@ -503,10 +493,10 @@ namespace CsgBrush.Editor
             CurrentPose(out var centre, out var size, out var rotation);
             var s = BrushSettings.instance;
             int group = Undo.GetCurrentGroup();
-            var brush = BrushApi.Create(Shape, centre, size, rotation, null);
+            var brush = BrushApi.Create(Shape, centre, size, rotation, BrushMenu.CreationParent());
             NewBrushParameters(out _, out float wall);
             var p = CurrentParameters(size);
-            Undo.RecordObject(brush, "Create brush");
+            Undo.RecordObject(brush, "Создать браш");
             brush.sides = p.sides; brush.tessellation = p.tessellation;
             brush.stepHeight = Shape == BrushShape.Stairs ? p.stepHeight : p.stairs.stepHeight;
             brush.innerRadius = p.stairs.innerRadius; brush.stepWidth = p.stairs.stepWidth; brush.stepThickness = p.stairs.stepThickness;
@@ -548,91 +538,91 @@ namespace CsgBrush.Editor
         static readonly System.Collections.Generic.Dictionary<string, Texture2D> s_Loaded = new System.Collections.Generic.Dictionary<string, Texture2D>();
     }
 
-    [EditorTool("Box Brush", variantGroup = typeof(BrushCreateTool), variantPriority = 0)]
+    [EditorTool("Браш «Блок»", variantGroup = typeof(BrushCreateTool), variantPriority = 0)]
     public sealed class CreateBoxBrushTool : BrushCreateTool
     {
         public override BrushShape Shape => BrushShape.Box;
-        public override string Title => "Box Brush";
-        [MenuItem("Tools/CSG Brush/Create/Box", false, 1)] static void Menu() => ToolManager.SetActiveTool<CreateBoxBrushTool>();
+        public override string Title => "Браш «Блок»";
+        [MenuItem("Tools/CSG Brush/Создать/Блок", false, 1)] static void Menu() => ToolManager.SetActiveTool<CreateBoxBrushTool>();
     }
 
-    [EditorTool("Wedge Brush", variantGroup = typeof(BrushCreateTool), variantPriority = 1)]
+    [EditorTool("Браш «Клин»", variantGroup = typeof(BrushCreateTool), variantPriority = 1)]
     public sealed class CreateWedgeBrushTool : BrushCreateTool
     {
         public override BrushShape Shape => BrushShape.Wedge;
-        public override string Title => "Wedge Brush";
-        [MenuItem("Tools/CSG Brush/Create/Wedge", false, 2)] static void Menu() => ToolManager.SetActiveTool<CreateWedgeBrushTool>();
+        public override string Title => "Браш «Клин»";
+        [MenuItem("Tools/CSG Brush/Создать/Клин", false, 2)] static void Menu() => ToolManager.SetActiveTool<CreateWedgeBrushTool>();
     }
 
-    [EditorTool("Cylinder Brush", variantGroup = typeof(BrushCreateTool), variantPriority = 2)]
+    [EditorTool("Браш «Цилиндр»", variantGroup = typeof(BrushCreateTool), variantPriority = 2)]
     public sealed class CreateCylinderBrushTool : BrushCreateTool
     {
         public override BrushShape Shape => BrushShape.Cylinder;
-        public override string Title => "Cylinder Brush";
-        [MenuItem("Tools/CSG Brush/Create/Cylinder", false, 3)] static void Menu() => ToolManager.SetActiveTool<CreateCylinderBrushTool>();
+        public override string Title => "Браш «Цилиндр»";
+        [MenuItem("Tools/CSG Brush/Создать/Цилиндр", false, 3)] static void Menu() => ToolManager.SetActiveTool<CreateCylinderBrushTool>();
     }
 
-    [EditorTool("Cone Brush", variantGroup = typeof(BrushCreateTool), variantPriority = 3)]
+    [EditorTool("Браш «Конус»", variantGroup = typeof(BrushCreateTool), variantPriority = 3)]
     public sealed class CreateConeBrushTool : BrushCreateTool
     {
         public override BrushShape Shape => BrushShape.Cone;
-        public override string Title => "Cone Brush";
-        [MenuItem("Tools/CSG Brush/Create/Cone", false, 4)] static void Menu() => ToolManager.SetActiveTool<CreateConeBrushTool>();
+        public override string Title => "Браш «Конус»";
+        [MenuItem("Tools/CSG Brush/Создать/Конус", false, 4)] static void Menu() => ToolManager.SetActiveTool<CreateConeBrushTool>();
     }
 
-    [EditorTool("Sphere Brush", variantGroup = typeof(BrushCreateTool), variantPriority = 4)]
+    [EditorTool("Браш «Сфера»", variantGroup = typeof(BrushCreateTool), variantPriority = 4)]
     public sealed class CreateSphereBrushTool : BrushCreateTool
     {
         public override BrushShape Shape => BrushShape.Sphere;
-        public override string Title => "Sphere Brush";
-        [MenuItem("Tools/CSG Brush/Create/Sphere", false, 5)] static void Menu() => ToolManager.SetActiveTool<CreateSphereBrushTool>();
+        public override string Title => "Браш «Сфера»";
+        [MenuItem("Tools/CSG Brush/Создать/Сфера", false, 5)] static void Menu() => ToolManager.SetActiveTool<CreateSphereBrushTool>();
     }
 
-    [EditorTool("Linear Stairs Brush", variantGroup = typeof(BrushCreateTool), variantPriority = 5)]
+    [EditorTool("Браш «Прямая лестница»", variantGroup = typeof(BrushCreateTool), variantPriority = 5)]
     public sealed class CreateStairsBrushTool : BrushCreateTool
     {
         public override BrushShape Shape => BrushShape.Stairs;
-        public override string Title => "Linear Stairs Brush";
-        [MenuItem("Tools/CSG Brush/Create/Linear Stairs", false, 6)] static void Menu() => ToolManager.SetActiveTool<CreateStairsBrushTool>();
+        public override string Title => "Браш «Прямая лестница»";
+        [MenuItem("Tools/CSG Brush/Создать/Прямая лестница", false, 6)] static void Menu() => ToolManager.SetActiveTool<CreateStairsBrushTool>();
     }
 
-    [EditorTool("Curved Stairs Brush", variantGroup = typeof(BrushCreateTool), variantPriority = 6)]
+    [EditorTool("Браш «Изогнутая лестница»", variantGroup = typeof(BrushCreateTool), variantPriority = 6)]
     public sealed class CreateCurvedStairsBrushTool : BrushCreateTool
     {
         public override BrushShape Shape => BrushShape.CurvedStairs;
-        public override string Title => "Curved Stairs Brush";
-        [MenuItem("Tools/CSG Brush/Create/Curved Stairs", false, 7)] static void Menu() => ToolManager.SetActiveTool<CreateCurvedStairsBrushTool>();
+        public override string Title => "Браш «Изогнутая лестница»";
+        [MenuItem("Tools/CSG Brush/Создать/Изогнутая лестница", false, 7)] static void Menu() => ToolManager.SetActiveTool<CreateCurvedStairsBrushTool>();
     }
 
-    [EditorTool("Spiral Stairs Brush", variantGroup = typeof(BrushCreateTool), variantPriority = 7)]
+    [EditorTool("Браш «Винтовая лестница»", variantGroup = typeof(BrushCreateTool), variantPriority = 7)]
     public sealed class CreateSpiralStairsBrushTool : BrushCreateTool
     {
         public override BrushShape Shape => BrushShape.SpiralStairs;
-        public override string Title => "Spiral Stairs Brush";
-        [MenuItem("Tools/CSG Brush/Create/Spiral Stairs", false, 8)] static void Menu() => ToolManager.SetActiveTool<CreateSpiralStairsBrushTool>();
+        public override string Title => "Браш «Винтовая лестница»";
+        [MenuItem("Tools/CSG Brush/Создать/Винтовая лестница", false, 8)] static void Menu() => ToolManager.SetActiveTool<CreateSpiralStairsBrushTool>();
     }
 
-    [EditorTool("Arch Brush", variantGroup = typeof(BrushCreateTool), variantPriority = 8)]
+    [EditorTool("Браш «Арка»", variantGroup = typeof(BrushCreateTool), variantPriority = 8)]
     public sealed class CreateArchBrushTool : BrushCreateTool
     {
         public override BrushShape Shape => BrushShape.Arch;
-        public override string Title => "Arch Brush";
-        [MenuItem("Tools/CSG Brush/Create/Arch", false, 9)] static void Menu() => ToolManager.SetActiveTool<CreateArchBrushTool>();
+        public override string Title => "Браш «Арка»";
+        [MenuItem("Tools/CSG Brush/Создать/Арка", false, 9)] static void Menu() => ToolManager.SetActiveTool<CreateArchBrushTool>();
     }
 
-    [EditorTool("Door Brush", variantGroup = typeof(BrushCreateTool), variantPriority = 9)]
+    [EditorTool("Браш «Дверь»", variantGroup = typeof(BrushCreateTool), variantPriority = 9)]
     public sealed class CreateDoorBrushTool : BrushCreateTool
     {
         public override BrushShape Shape => BrushShape.Door;
-        public override string Title => "Door Brush";
-        [MenuItem("Tools/CSG Brush/Create/Door", false, 10)] static void Menu() => ToolManager.SetActiveTool<CreateDoorBrushTool>();
+        public override string Title => "Браш «Дверь»";
+        [MenuItem("Tools/CSG Brush/Создать/Дверь", false, 10)] static void Menu() => ToolManager.SetActiveTool<CreateDoorBrushTool>();
     }
 
-    [EditorTool("Window Brush", variantGroup = typeof(BrushCreateTool), variantPriority = 10)]
+    [EditorTool("Браш «Окно»", variantGroup = typeof(BrushCreateTool), variantPriority = 10)]
     public sealed class CreateWindowBrushTool : BrushCreateTool
     {
         public override BrushShape Shape => BrushShape.Window;
-        public override string Title => "Window Brush";
-        [MenuItem("Tools/CSG Brush/Create/Window", false, 11)] static void Menu() => ToolManager.SetActiveTool<CreateWindowBrushTool>();
+        public override string Title => "Браш «Окно»";
+        [MenuItem("Tools/CSG Brush/Создать/Окно", false, 11)] static void Menu() => ToolManager.SetActiveTool<CreateWindowBrushTool>();
     }
 }

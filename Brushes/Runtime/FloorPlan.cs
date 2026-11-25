@@ -12,16 +12,16 @@ namespace CsgBrush
     /// generated (see <see cref="BrushGenerator"/>): change the plan and the brushes follow. Door and window brushes under
     /// it ride on its walls (see <see cref="WallAnchor"/>).
     /// </summary>
-    [AddComponentMenu("CSG Brush/Floor Plan")]
+    [AddComponentMenu("CSG Brush/План стен")]
     [Icon("Packages/digital.dream.csgbrush/Brushes/Editor/Icons/FloorPlan.png")]
     [DisallowMultipleComponent]
     public sealed class FloorPlan : PointGraph
     {
         public enum Side
         {
-            [Tooltip("Outside walls stand outside the line: the line is the rooms' inner face.")] Outside,
-            [Tooltip("Outside walls are centred on the line.")] Centered,
-            [Tooltip("Outside walls stand inside the line.")] Inside,
+            [Tooltip("Наружные стены строятся с внешней стороны линии. Линия совпадает с внутренней гранью стены."), InspectorName("Снаружи")] Outside,
+            [Tooltip("Осевая линия проходит посередине наружной стены."), InspectorName("По центру")] Centered,
+            [Tooltip("Наружные стены строятся с внутренней стороны линии."), InspectorName("Внутри")] Inside,
         }
 
         /// <summary>
@@ -33,9 +33,13 @@ namespace CsgBrush
         public sealed class RoomSettings
         {
             public List<int> boundary = new List<int>();
+            [InspectorName("Создавать пол")]
             public bool floor = true;
+            [InspectorName("Материал пола")]
             public Material floorMaterial;
+            [InspectorName("Создавать потолок")]
             public bool ceiling;
+            [InspectorName("Материал потолка")]
             public Material ceilingMaterial;
         }
 
@@ -47,20 +51,20 @@ namespace CsgBrush
         /// <summary>Plans from before wall networks were an outline through the points in order: closed joined the last to the first. Read once, when they are converted.</summary>
         [HideInInspector] public bool closed;
 
-        [Header("Walls")]
-        [Tooltip("Thickness of walls on the outside of the building, metres.")] public float wallThickness = 0.2f;
-        [Tooltip("Thickness of walls between rooms and of free-standing walls, metres.")] public float interiorWallThickness = 0.1f;
-        [Tooltip("Metres.")] public float wallHeight = 3f;
-        [Tooltip("Where outside walls stand relative to the drawn line; other walls are centred on it.")] public Side side = Side.Outside;
-        [Tooltip("Empty uses the project's default material.")] public Material wallMaterial;
+        [Header("Стены")]
+        [InspectorName("Толщина наружных стен, м"), Tooltip("Толщина наружных стен здания в метрах. При увеличении стены занимают больше места.")] public float wallThickness = 0.2f;
+        [InspectorName("Толщина внутренних стен, м"), Tooltip("Толщина внутренних и отдельно стоящих стен в метрах. При увеличении стена шире по обе стороны линии.")] public float interiorWallThickness = 0.1f;
+        [InspectorName("Высота стен, м"), Tooltip("Высота стены от уровня плана, в метрах.")] public float wallHeight = 3f;
+        [InspectorName("Положение наружной стены"), Tooltip("Положение наружных стен относительно начерченной линии. Внутренние стены всегда центрируются на линии.")] public Side side = Side.Outside;
+        [InspectorName("Материал стен"), Tooltip("Пустое поле использует материал проекта по умолчанию.")] public Material wallMaterial;
 
-        [Header("Floors and ceilings")]
-        [Tooltip("Rooms get a floor slab unless set otherwise per room.")] public bool floor = true;
-        [Tooltip("Metres, down from the bottom of the walls.")] public float floorThickness = 0.2f;
-        [Tooltip("Empty uses the project's default material.")] public Material floorMaterial;
-        [Tooltip("Rooms get a ceiling slab unless set otherwise per room.")] public bool ceiling;
-        [Tooltip("Metres, up from the top of the walls.")] public float ceilingThickness = 0.2f;
-        [Tooltip("Empty uses the project's default material.")] public Material ceilingMaterial;
+        [Header("Пол и потолок")]
+        [InspectorName("Создавать пол"), Tooltip("Создавать плиту пола в каждой комнате. Для отдельной комнаты можно задать своё значение.")] public bool floor = true;
+        [InspectorName("Толщина пола, м"), Tooltip("Толщина пола в метрах. Плита растёт вниз от основания стен.")] public float floorThickness = 0.2f;
+        [InspectorName("Материал пола"), Tooltip("Пустое поле использует материал проекта по умолчанию.")] public Material floorMaterial;
+        [InspectorName("Создавать потолок"), Tooltip("Создавать плиту потолка в каждой комнате. Для отдельной комнаты можно задать своё значение.")] public bool ceiling;
+        [InspectorName("Толщина потолка, м"), Tooltip("Толщина потолка в метрах. Плита растёт вверх от верха стен.")] public float ceilingThickness = 0.2f;
+        [InspectorName("Материал потолка"), Tooltip("Пустое поле использует материал проекта по умолчанию.")] public Material ceilingMaterial;
 
         // ------------------------------------------------------------------ points and walls
 

@@ -9,16 +9,16 @@ namespace CsgBrush
     /// takes the nearest place on the spline. The object stands on the surface: its up points out of it, its forward
     /// along the path. When its link is gone the object stays where it was.
     /// </summary>
-    [AddComponentMenu("CSG Brush/Spline Anchor")]
+    [AddComponentMenu("CSG Brush/Привязка к сплайну")]
     [DisallowMultipleComponent]
     [ExecuteAlways]
     public sealed class SplineAnchor : MonoBehaviour
     {
         [HideInInspector] public int startId = WallAnchor.Unplaced, endId = WallAnchor.Unplaced;
-        [Tooltip("Metres along the link from its first point.")] public float distance;
-        [Tooltip("Degrees around the profile: 0 on top, 90 on the right, 180 underneath.")] public float angle;
-        [Tooltip("Metres from the profile's surface to the pivot, out of it.")] public float offset;
-        [Tooltip("Keep the profile's up instead of standing out of the surface: posts and lamps on a road's edge.")] public bool upright;
+        [InspectorName("Расстояние вдоль звена"), Tooltip("Расстояние в метрах от начала звена до точки привязки. Ноль — начало звена, увеличение сдвигает объект вдоль него.")] public float distance;
+        [InspectorName("Угол вокруг сечения"), Tooltip("Угол в градусах вокруг сечения. Ноль — сверху, 90° — справа, 180° — снизу.")] public float angle;
+        [InspectorName("Отступ от поверхности"), Tooltip("Расстояние в метрах от поверхности до опорной точки объекта. Ноль — на поверхности, положительное значение сдвигает наружу.")] public float offset;
+        [InspectorName("Вертикально относительно сечения"), Tooltip("Ориентирует верх объекта по верху сечения. При отключении верх направлен наружу вдоль нормали поверхности.")] public bool upright;
         /// <summary>The object's rotation relative to the surface: identity stands on it, facing along the path.</summary>
         [HideInInspector] public Quaternion rotation = Quaternion.identity;
         /// <summary>The link's length when last placed: finds the place again from the far end if the first point is gone.</summary>

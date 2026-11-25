@@ -1,11 +1,32 @@
+using System;
+using System.Reflection;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace CsgBrush.Editor
 {
     public static class BrushMenu
     {
-        const string kMenu = "GameObject/Brush/";
+        const string kMenu = "GameObject/CSG Brush/";
+
+        // Unity 6000.6 exposes setters for the Hierarchy default parent but keeps its stage-aware getter internal.
+        static readonly Func<Transform> GetDefaultParent = (Func<Transform>)typeof(SceneView)
+            .GetMethod("GetDefaultParentObjectIfSet", BindingFlags.Static | BindingFlags.NonPublic, null, Type.EmptyTypes, null)
+            ?.CreateDelegate(typeof(Func<Transform>));
+
+        internal static Transform CreationParent(bool useSelection = false)
+        {
+            var parent = GetDefaultParent?.Invoke();
+            if (parent != null) return parent;
+
+            var selected = Selection.activeTransform;
+            if (useSelection && selected != null && !selected.TryGetComponent<Brush>(out _) &&
+                StageUtility.GetCurrentStageHandle().Contains(selected.gameObject))
+                return selected;
+
+            return PrefabStageUtility.GetCurrentPrefabStage()?.prefabContentsRoot.transform;
+        }
 
         static Vector3 Snap(Vector3 p, float g)
         {
@@ -19,23 +40,22 @@ namespace CsgBrush.Editor
             var size = s.ToMeters(s.defaultBoxSize);
             Vector3 pivot = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero;
             pivot = Snap(pivot, s.GridMeters);
-            Transform parent = Selection.activeTransform != null && Selection.activeTransform.GetComponent<Brush>() == null ? Selection.activeTransform : null;
-            var brush = BrushApi.Create(shape, pivot, size, Quaternion.identity, parent);
+            var brush = BrushApi.Create(shape, pivot, size, Quaternion.identity, CreationParent(useSelection: true));
             Selection.activeGameObject = brush.gameObject;
             return brush;
         }
 
-        [MenuItem(kMenu + "Box", false, 10)] static void Box() => CreateAtPivot(BrushShape.Box);
-        [MenuItem(kMenu + "Wedge (ramp)", false, 11)] static void Wedge() => CreateAtPivot(BrushShape.Wedge);
-        [MenuItem(kMenu + "Cylinder", false, 12)] static void Cylinder() => CreateAtPivot(BrushShape.Cylinder);
-        [MenuItem(kMenu + "Cone", false, 13)] static void Cone() => CreateAtPivot(BrushShape.Cone);
-        [MenuItem(kMenu + "Sphere", false, 14)] static void Sphere() => CreateAtPivot(BrushShape.Sphere);
-        [MenuItem(kMenu + "Linear Stairs", false, 15)] static void Stairs() => CreateAtPivot(BrushShape.Stairs);
-        [MenuItem(kMenu + "Curved Stairs", false, 16)] static void CurvedStairs() => CreateAtPivot(BrushShape.CurvedStairs);
-        [MenuItem(kMenu + "Spiral Stairs", false, 17)] static void SpiralStairs() => CreateAtPivot(BrushShape.SpiralStairs);
-        [MenuItem(kMenu + "Arch", false, 18)] static void Arch() => CreateAtPivot(BrushShape.Arch);
-        [MenuItem(kMenu + "Door", false, 19)] static void Door() => CreateOpening(BrushShape.Door);
-        [MenuItem(kMenu + "Window", false, 20)] static void Window() => CreateOpening(BrushShape.Window);
+        [MenuItem(kMenu + "Блок", false, 10)] static void Box() => CreateAtPivot(BrushShape.Box);
+        [MenuItem(kMenu + "Клин (пандус)", false, 11)] static void Wedge() => CreateAtPivot(BrushShape.Wedge);
+        [MenuItem(kMenu + "Цилиндр", false, 12)] static void Cylinder() => CreateAtPivot(BrushShape.Cylinder);
+        [MenuItem(kMenu + "Конус", false, 13)] static void Cone() => CreateAtPivot(BrushShape.Cone);
+        [MenuItem(kMenu + "Сфера", false, 14)] static void Sphere() => CreateAtPivot(BrushShape.Sphere);
+        [MenuItem(kMenu + "Прямая лестница", false, 15)] static void Stairs() => CreateAtPivot(BrushShape.Stairs);
+        [MenuItem(kMenu + "Изогнутая лестница", false, 16)] static void CurvedStairs() => CreateAtPivot(BrushShape.CurvedStairs);
+        [MenuItem(kMenu + "Винтовая лестница", false, 17)] static void SpiralStairs() => CreateAtPivot(BrushShape.SpiralStairs);
+        [MenuItem(kMenu + "Арка", false, 18)] static void Arch() => CreateAtPivot(BrushShape.Arch);
+        [MenuItem(kMenu + "Дверь", false, 19)] static void Door() => CreateOpening(BrushShape.Door);
+        [MenuItem(kMenu + "Окно", false, 20)] static void Window() => CreateOpening(BrushShape.Window);
 
         /// <summary>A door or window: on the middle of the first wall of a selected floor plan, else standing at the view pivot.</summary>
         static void CreateOpening(BrushShape shape)
@@ -50,12 +70,12 @@ namespace CsgBrush.Editor
                 var s = BrushSettings.instance;
                 var opening = s.NewOpeningSize(shape);
                 Vector3 pivot = Snap(SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero, s.GridMeters);
-                brush = BrushApi.Create(shape, pivot + Vector3.up * (s.NewOpeningSill(shape) + opening.y * 0.5f), new Vector3(opening.x, opening.y, BrushSettings.DefaultOpeningDepthMeters), Quaternion.identity);
+                brush = BrushApi.Create(shape, pivot + Vector3.up * (s.NewOpeningSill(shape) + opening.y * 0.5f), new Vector3(opening.x, opening.y, BrushSettings.DefaultOpeningDepthMeters), Quaternion.identity, CreationParent());
             }
             Selection.activeGameObject = brush.gameObject;
         }
 
-        [MenuItem(kMenu + "Hollow room", false, 30)]
+        [MenuItem(kMenu + "Полая комната", false, 30)]
         static void Room()
         {
             var brush = CreateAtPivot(BrushShape.Box);
@@ -68,14 +88,14 @@ namespace CsgBrush.Editor
         // order: right-click a brush in the Hierarchy (GameObject menu) or in the Scene view / Inspector (component context)
         static Brush[] SelectedBrushes() => Selection.GetFiltered<Brush>(SelectionMode.Editable | SelectionMode.ExcludePrefab);
 
-        [MenuItem(kMenu + "To First", false, 50)] static void ToFirst() { foreach (var b in SelectedBrushes()) BrushApi.ToFirst(b); }
-        [MenuItem(kMenu + "To First", true)] static bool CanToFirst() => SelectedBrushes().Length > 0;
-        [MenuItem(kMenu + "To Last", false, 51)] static void ToLast() { foreach (var b in SelectedBrushes()) BrushApi.ToLast(b); }
-        [MenuItem(kMenu + "To Last", true)] static bool CanToLast() => SelectedBrushes().Length > 0;
-        [MenuItem(kMenu + "Move Up", false, 52)] static void Up() => StepSelected(-1);
-        [MenuItem(kMenu + "Move Up", true)] static bool CanUp() => SelectedBrushes().Length > 0;
-        [MenuItem(kMenu + "Move Down", false, 53)] static void Down() => StepSelected(1);
-        [MenuItem(kMenu + "Move Down", true)] static bool CanDown() => SelectedBrushes().Length > 0;
+        [MenuItem(kMenu + "В начало", false, 50)] static void ToFirst() { foreach (var b in SelectedBrushes()) BrushApi.ToFirst(b); }
+        [MenuItem(kMenu + "В начало", true)] static bool CanToFirst() => SelectedBrushes().Length > 0;
+        [MenuItem(kMenu + "В конец", false, 51)] static void ToLast() { foreach (var b in SelectedBrushes()) BrushApi.ToLast(b); }
+        [MenuItem(kMenu + "В конец", true)] static bool CanToLast() => SelectedBrushes().Length > 0;
+        [MenuItem(kMenu + "Переместить выше", false, 52)] static void Up() => StepSelected(-1);
+        [MenuItem(kMenu + "Переместить выше", true)] static bool CanUp() => SelectedBrushes().Length > 0;
+        [MenuItem(kMenu + "Переместить ниже", false, 53)] static void Down() => StepSelected(1);
+        [MenuItem(kMenu + "Переместить ниже", true)] static bool CanDown() => SelectedBrushes().Length > 0;
 
         /// <summary>Step every selected brush, the one furthest in the direction first; one that cannot move holds back those behind it, so the selection keeps its order.</summary>
         static void StepSelected(int direction)
@@ -91,12 +111,12 @@ namespace CsgBrush.Editor
             }
         }
 
-        [MenuItem("CONTEXT/Brush/To First")] static void ContextToFirst(MenuCommand c) => BrushApi.ToFirst((Brush)c.context);
-        [MenuItem("CONTEXT/Brush/To Last")] static void ContextToLast(MenuCommand c) => BrushApi.ToLast((Brush)c.context);
-        [MenuItem("CONTEXT/Brush/Move Up")] static void ContextUp(MenuCommand c) => BrushApi.Step((Brush)c.context, -1);
-        [MenuItem("CONTEXT/Brush/Move Down")] static void ContextDown(MenuCommand c) => BrushApi.Step((Brush)c.context, 1);
+        [MenuItem("CONTEXT/Brush/В начало")] static void ContextToFirst(MenuCommand c) => BrushApi.ToFirst((Brush)c.context);
+        [MenuItem("CONTEXT/Brush/В конец")] static void ContextToLast(MenuCommand c) => BrushApi.ToLast((Brush)c.context);
+        [MenuItem("CONTEXT/Brush/Переместить выше")] static void ContextUp(MenuCommand c) => BrushApi.Step((Brush)c.context, -1);
+        [MenuItem("CONTEXT/Brush/Переместить ниже")] static void ContextDown(MenuCommand c) => BrushApi.Step((Brush)c.context, 1);
 
-        [MenuItem("Brushes/Rebuild Now")]
+        [MenuItem("CSG Brush/Перестроить сейчас")]
         static void Rebuild() => BrushApi.ForceUpdate();
     }
 }

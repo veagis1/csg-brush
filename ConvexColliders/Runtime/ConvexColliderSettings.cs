@@ -9,26 +9,35 @@ namespace CsgBrush.Colliders
     ///
     /// Pieces live under a child named by <see cref="ContainerName"/> and are rebuilt with the model's mesh (editor only).
     /// </summary>
-    [AddComponentMenu("CSG Brush/Convex Colliders")]
+    [AddComponentMenu("CSG Brush/Выпуклые коллайдеры")]
     [DisallowMultipleComponent]
     public sealed class ConvexColliderSettings : MonoBehaviour
     {
         public const string ContainerName = "<[convex colliders]>";
 
-        [Tooltip("Rebuild after every model update in the editor.")]
+        [Tooltip("Перестраивать коллайдеры после каждого изменения модели в редакторе. При отключении они не обновляются автоматически.")]
+        [InspectorName("Автоматически перестраивать")]
         public bool autoRebuild = true;
-        [Tooltip("Pieces with a smaller volume (cubic meters) are dropped as slivers.")]
+        [Tooltip("Части с меньшим объёмом отбрасываются. Порог в кубических метрах. При увеличении отсеивается больше мелких частей. При 0 порог не отсекает части положительного объёма.")]
+        [InspectorName("Минимальный объём части, м³")]
         public float minPieceVolume = 1e-6f;
-        [Tooltip("Show the generated pieces in the hierarchy.")]
+        [Tooltip("Показывать сгенерированные части коллайдера в иерархии. Скрытие не меняет столкновения.")]
+        [InspectorName("Показывать части в иерархии")]
         public bool showInHierarchy = true;
 
-        [Header("Last build")]
+        [Header("Последнее перестроение")]
         [HideInInspector] public int lastGeometryHash;
+        [InspectorName("Число брашей")]
         public int brushCount;
+        [InspectorName("Число частей")]
         public int pieceCount;
+        [InspectorName("Прямоугольные коллайдеры")]
         public int boxColliders;
+        [InspectorName("Выпуклые коллайдеры-меши")]
         public int meshColliders;
+        [InspectorName("Триггерные объёмы")]
         public int triggerVolumes;
+        [InspectorName("Время построения, мс")]
         public float buildMilliseconds;
     }
 }

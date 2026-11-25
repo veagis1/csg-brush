@@ -49,10 +49,12 @@ namespace CsgBrush
     /// so a door or a checkpoint can be wired in the Inspector without code. Code can implement
     /// <see cref="IBrushTriggerListener"/> on the same object, or subscribe to the brush's events, instead.
     /// </summary>
-    [AddComponentMenu("CSG Brush/Brush Trigger")]
+    [AddComponentMenu("CSG Brush/Триггер браша")]
     public sealed class BrushTrigger : BrushModule, IBrushTriggerListener
     {
+        [InspectorName("Вход в триггер"), Tooltip("Событие при входе коллайдера в объём браша. Передаёт коллайдер, вошедший в объём.")]
         public UnityEvent<Collider> onEnter = new UnityEvent<Collider>();
+        [InspectorName("Выход из триггера"), Tooltip("Событие при выходе коллайдера из объёма браша. Передаёт коллайдер, вышедший из объёма.")]
         public UnityEvent<Collider> onExit = new UnityEvent<Collider>();
 
         public override int Fingerprint() => 1;

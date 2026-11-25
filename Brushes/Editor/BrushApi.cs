@@ -20,8 +20,8 @@ namespace CsgBrush.Editor
             var group = parent != null ? parent.GetComponentInParent<BrushGroup>(true) : null;
             // static unless made otherwise: its meshes and colliders follow it; a moving group's brushes move with it
             GameObjectUtility.SetStaticEditorFlags(go, group != null && group.moving ? 0 : BrushSettings.instance.defaultModelStaticFlags);
-            Undo.RegisterCreatedObjectUndo(go, "Create brush");
-            if (parent != null) Undo.SetTransformParent(go.transform, parent, "Create brush");
+            Undo.RegisterCreatedObjectUndo(go, "Создать браш");
+            if (parent != null) Undo.SetTransformParent(go.transform, parent, "Создать браш");
             go.transform.SetPositionAndRotation(position, rotation);
             go.transform.localScale = BrushSnap.CounterScale(go.transform); // world scale one, whatever the parent
             var brush = Undo.AddComponent<Brush>(go);
@@ -54,7 +54,7 @@ namespace CsgBrush.Editor
         {
             if (BrushSettings.instance.snapToGrid && !brush.IsOpening) sizeMeters = BrushSnap.SnapSize(sizeMeters, BrushSettings.instance.GridMeters);
             if (brush.size == sizeMeters) return; // no-op edits must not create undo entries
-            Undo.RecordObject(brush, "Resize brush");
+            Undo.RecordObject(brush, "Изменить размер браша");
             brush.size = sizeMeters;
             BrushSync.Ensure(brush);
         }
@@ -62,7 +62,7 @@ namespace CsgBrush.Editor
         public static void SetShape(Brush brush, BrushShape shape)
         {
             if (brush.shape == shape) return;
-            Undo.RecordObject(brush, "Change brush shape");
+            Undo.RecordObject(brush, "Изменить форму браша");
             brush.shape = shape;
             BrushSync.Ensure(brush);
         }
@@ -70,7 +70,7 @@ namespace CsgBrush.Editor
         public static void SetOperation(Brush brush, BrushOperation operation)
         {
             if (brush.operation == operation) return;
-            Undo.RecordObject(brush, "Change brush operation");
+            Undo.RecordObject(brush, "Изменить операцию браша");
             BrushSync.RequestFullUpdate(brush);
             brush.operation = operation;
             BrushSync.Ensure(brush);
@@ -80,7 +80,7 @@ namespace CsgBrush.Editor
         public static void SetStaticFlags(Brush brush, StaticEditorFlags flags)
         {
             if (GameObjectUtility.GetStaticEditorFlags(brush.gameObject) == flags) return;
-            Undo.RecordObject(brush.gameObject, "Change static flags");
+            Undo.RecordObject(brush.gameObject, "Изменить флаги статичности");
             GameObjectUtility.SetStaticEditorFlags(brush.gameObject, flags);
             BrushCache.Forget(brush);
             BrushCsg.MarkDirty(brush);
@@ -89,7 +89,7 @@ namespace CsgBrush.Editor
         public static void SetCollision(Brush brush, Colliders.ColliderKind kind)
         {
             if (brush.collision == kind) return;
-            Undo.RecordObject(brush, "Change brush collision");
+            Undo.RecordObject(brush, "Изменить столкновения браша");
             brush.collision = kind;
             BrushSync.Ensure(brush);
         }
@@ -118,7 +118,7 @@ namespace CsgBrush.Editor
         public static void SetHollow(Brush brush, bool hollow, float wallThicknessMeters)
         {
             if (brush.hollow == hollow && Mathf.Approximately(brush.wallThickness, wallThicknessMeters)) return;
-            Undo.RecordObject(brush, "Change brush hollow");
+            Undo.RecordObject(brush, "Изменить полость браша");
             brush.hollow = hollow;
             brush.wallThickness = wallThicknessMeters;
             BrushSync.Ensure(brush);
@@ -127,7 +127,7 @@ namespace CsgBrush.Editor
         public static void SetMaterial(Brush brush, Material material)
         {
             if (brush.material == material) return;
-            Undo.RecordObject(brush, "Change brush material");
+            Undo.RecordObject(brush, "Изменить материал браша");
             brush.material = material;
             BrushSync.Ensure(brush);
         }
@@ -136,14 +136,14 @@ namespace CsgBrush.Editor
         public static void SetCutFaces(Brush brush, CutFaces cutFaces)
         {
             if (brush.cutFaces == cutFaces) return;
-            Undo.RecordObject(brush, "Change cut faces");
+            Undo.RecordObject(brush, "Изменить материал граней среза");
             brush.cutFaces = cutFaces;
             BrushSync.Ensure(brush);
         }
 
         public static void SetStairs(Brush brush, float stepHeightMeters)
         {
-            Undo.RecordObject(brush, "Change stairs");
+            Undo.RecordObject(brush, "Изменить лестницу");
             brush.stepHeight = Mathf.Max(BrushPolyhedron.MinStepHeight, stepHeightMeters);
             BrushSync.Ensure(brush);
         }
@@ -151,7 +151,7 @@ namespace CsgBrush.Editor
         public static void Move(Brush brush, Vector3 position)
         {
             if (brush.transform.position == position) return;
-            Undo.RecordObject(brush.transform, "Move brush");
+            Undo.RecordObject(brush.transform, "Переместить браш");
             brush.transform.position = position;
             BrushSync.NotifyTransformChanged(brush);
         }
@@ -159,7 +159,7 @@ namespace CsgBrush.Editor
         public static void Rotate(Brush brush, Quaternion rotation)
         {
             if (brush.transform.rotation == rotation) return;
-            Undo.RecordObject(brush.transform, "Rotate brush");
+            Undo.RecordObject(brush.transform, "Повернуть браш");
             brush.transform.rotation = rotation;
             BrushSync.NotifyTransformChanged(brush);
         }
@@ -167,7 +167,7 @@ namespace CsgBrush.Editor
         public static void ToFirst(Brush brush)
         {
             if (brush.transform.GetSiblingIndex() == 0) return;
-            Undo.SetSiblingIndex(brush.transform, 0, "Brush to first");
+            Undo.SetSiblingIndex(brush.transform, 0, "Переместить браш в начало");
             BrushSync.RequestFullUpdate(brush);
         }
 
@@ -176,7 +176,7 @@ namespace CsgBrush.Editor
             var t = brush.transform;
             int last = t.parent != null ? t.parent.childCount - 1 : t.gameObject.scene.rootCount - 1;
             if (t.GetSiblingIndex() == last) return;
-            Undo.SetSiblingIndex(t, last, "Brush to last");
+            Undo.SetSiblingIndex(t, last, "Переместить браш в конец");
             BrushSync.RequestFullUpdate(brush);
         }
 
@@ -199,7 +199,7 @@ namespace CsgBrush.Editor
         {
             var neighbour = VisibleNeighbour(brush, direction);
             if (neighbour == null) return;
-            Undo.SetSiblingIndex(brush.transform, neighbour.GetSiblingIndex(), direction < 0 ? "Brush up" : "Brush down");
+            Undo.SetSiblingIndex(brush.transform, neighbour.GetSiblingIndex(), direction < 0 ? "Переместить браш выше" : "Переместить браш ниже");
             BrushSync.RequestFullUpdate(brush);
         }
 
@@ -219,7 +219,7 @@ namespace CsgBrush.Editor
         {
             if (brush.shape == BrushShape.Custom) return true;
             if (!CanConvertToCustom(brush.shape)) return false;
-            Undo.RecordObject(brush, "Edit brush shape");
+            Undo.RecordObject(brush, "Изменить форму браша");
             brush.customFrom = brush.shape;
             brush.polyhedron = BrushGeometry.Polyhedron(brush).Clone();
             brush.hollow = false;
@@ -232,7 +232,7 @@ namespace CsgBrush.Editor
         public static void ResetShape(Brush brush)
         {
             if (brush.shape != BrushShape.Custom) return;
-            Undo.RecordObject(brush, "Reset brush shape");
+            Undo.RecordObject(brush, "Сбросить форму браша");
             var custom = PivotOf(brush);
             brush.size = brush.polyhedron != null && brush.polyhedron.IsValid ? brush.polyhedron.Bounds().size : brush.size;
             if (custom.HasValue) brush.pivot = custom.Value; // the shape stays where it was
@@ -279,11 +279,11 @@ namespace CsgBrush.Editor
             var move = target - current; // the new pivot in the old local space, from the old one
             if (move.sqrMagnitude < 1e-12f && (!brush.HasPivot || (brush.pivot - pivot).sqrMagnitude < 1e-12f)) return; // no-op edits must not create undo entries
             var t = brush.transform;
-            Undo.RecordObject(brush, "Set brush pivot");
-            Undo.RecordObject(t, "Set brush pivot");
+            Undo.RecordObject(brush, "Задать точку опоры браша");
+            Undo.RecordObject(t, "Задать точку опоры браша");
             var children = new List<(Transform child, Vector3 position, Quaternion rotation)>();
             foreach (Transform c in t)
-                if (!Brush.IsGeneratedChildName(c.name)) { Undo.RecordObject(c, "Set brush pivot"); children.Add((c, c.position, c.rotation)); }
+                if (!Brush.IsGeneratedChildName(c.name)) { Undo.RecordObject(c, "Задать точку опоры браша"); children.Add((c, c.position, c.rotation)); }
             var world = t.TransformPoint(move);
             if (brush.HasPivot) brush.pivot = pivot;
             else
@@ -303,7 +303,7 @@ namespace CsgBrush.Editor
         public static void SetPivotMode(Brush brush, PivotMode mode)
         {
             if (brush.pivotMode == mode) return;
-            Undo.RecordObject(brush, "Set brush pivot mode");
+            Undo.RecordObject(brush, "Задать режим точки опоры браша");
             bool has = PivotBox(brush, out var size, out var distance) && brush.HasPivot;
             brush.pivotMode = mode;
             if (has) brush.pivot = mode == PivotMode.Normalized ? new Vector3(Fraction(distance.x, size.x), Fraction(distance.y, size.y), Fraction(distance.z, size.z)) : distance;
@@ -314,7 +314,7 @@ namespace CsgBrush.Editor
         public static void SetPolyhedron(Brush brush, BrushPolyhedron polyhedron)
         {
             if (polyhedron == null || !polyhedron.IsValid) return;
-            Undo.RecordObject(brush, "Edit brush shape");
+            Undo.RecordObject(brush, "Изменить форму браша");
             if (brush.shape != BrushShape.Custom) { brush.customFrom = brush.shape; brush.hollow = false; brush.shape = BrushShape.Custom; }
             brush.polyhedron = polyhedron;
             BrushSync.Ensure(brush);
@@ -326,7 +326,7 @@ namespace CsgBrush.Editor
             if (!ConvertToCustom(brush)) return;
             if (BrushSettings.instance.snapToGrid) distanceMeters = BrushSnap.Round(distanceMeters, BrushSettings.instance.GridMeters);
             if (Mathf.Abs(distanceMeters) < 1e-6f) return;
-            Undo.RecordObject(brush, "Push face");
+            Undo.RecordObject(brush, "Сдвинуть грань");
             brush.polyhedron.PushFace(face, distanceMeters);
             BrushSync.Ensure(brush);
         }
@@ -343,7 +343,7 @@ namespace CsgBrush.Editor
             if (Mathf.Abs(distanceMeters) < 1e-6f) return null;
             var result = BrushBoolean.ExtrudeFaces(brush.polyhedron, faces, distanceMeters, individual, out var remap);
             if (result == null || !result.IsValid) return null;
-            Undo.RecordObject(brush, "Extrude faces");
+            Undo.RecordObject(brush, "Вытянуть грани");
             brush.polyhedron = result;
             BrushSync.Ensure(brush);
             return remap;
@@ -359,7 +359,7 @@ namespace CsgBrush.Editor
             if (!ConvertToCustom(brush)) return null;
             var result = BrushBoolean.BridgeFaces(brush.polyhedron, faceA, faceB, out var remap);
             if (result == null || !result.IsValid) return null;
-            Undo.RecordObject(brush, "Bridge faces");
+            Undo.RecordObject(brush, "Соединить грани");
             brush.polyhedron = result;
             BrushSync.Ensure(brush);
             return remap;
@@ -372,7 +372,7 @@ namespace CsgBrush.Editor
             if (BrushSettings.instance.snapToGrid) worldPosition = BrushSnap.Round(worldPosition, BrushSettings.instance.GridMeters);
             var local = brush.transform.InverseTransformPoint(worldPosition);
             if ((brush.polyhedron.vertices[vertex] - local).sqrMagnitude < 1e-10f) return;
-            Undo.RecordObject(brush, "Move vertex");
+            Undo.RecordObject(brush, "Переместить вершину");
             brush.polyhedron.MoveVertex(vertex, local);
             BrushSync.Ensure(brush);
         }
@@ -381,8 +381,8 @@ namespace CsgBrush.Editor
         public static void ApplyScale(Brush brush)
         {
             var t = brush.transform;
-            Undo.RecordObject(brush, "Apply scale to size");
-            Undo.RecordObject(t, "Apply scale to size");
+            Undo.RecordObject(brush, "Применить масштаб к размеру");
+            Undo.RecordObject(t, "Применить масштаб к размеру");
             var s = t.localScale;
             brush.size = new Vector3(brush.size.x * Mathf.Abs(s.x), brush.size.y * Mathf.Abs(s.y), brush.size.z * Mathf.Abs(s.z));
             t.localScale = Vector3.one;

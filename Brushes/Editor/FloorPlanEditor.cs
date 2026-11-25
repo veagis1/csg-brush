@@ -153,12 +153,12 @@ namespace CsgBrush.Editor
             so.Update();
             var on = so.FindProperty("overrideTolerance"); var value = so.FindProperty("tolerance");
             EditorGUI.BeginChangeCheck();
-            EditorGUILayout.PropertyField(on, new GUIContent("Override tolerance", "Use a curve tolerance of its own instead of the project's."));
+            EditorGUILayout.PropertyField(on, new GUIContent("Задать свой допуск", "Использует допуск этого объекта. При отключении берётся допуск кривых из настроек проекта."));
             if (EditorGUI.EndChangeCheck() && on.boolValue) value.floatValue = PointGraph.ProjectTolerance; // starts from the project's
             if (on.boolValue)
             {
                 EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(value, new GUIContent("Tolerance (m)", "How far the straight pieces of its curves may stray from the true curve."));
+                EditorGUILayout.PropertyField(value, new GUIContent("Допуск (м)", "Максимальное отклонение прямых сегментов от кривой в метрах. Меньше — плавнее контур и больше сегментов. Минимум 0,01 м."));
                 if (value.floatValue < PointGraph.MinTolerance) value.floatValue = PointGraph.MinTolerance;
                 EditorGUI.indentLevel--;
             }
@@ -176,18 +176,18 @@ namespace CsgBrush.Editor
         public override void OnInspectorGUI()
         {
             var plan = (FloorPlan)target;
-            DrawDefaultInspector();
+            BrushEditor.DrawNamedProperties(serializedObject);
             PointGraphGUI.Tolerance(serializedObject);
             plan.EnsureGraph();
-            EditorGUILayout.LabelField("Plan", plan.points.Count + " points, " + plan.links.Count + " walls, " + FloorPlanEditState.RoomsOf(plan).Count + " rooms");
+            EditorGUILayout.LabelField("План стен", $"Точек {plan.points.Count} · стен {plan.links.Count} · комнат {FloorPlanEditState.RoomsOf(plan).Count}");
             EditorGUILayout.BeginHorizontal();
             bool editing = FloorPlanEditContext.IsActive;
-            if (GUILayout.Toggle(editing, new GUIContent("Edit", "Move, Rotate and Scale act on the selected points or walls (1, 2)"), EditorStyles.miniButton) != editing)
+            if (GUILayout.Toggle(editing, new GUIContent("Редактировать", "Перемещайте, поворачивайте и масштабируйте выбранные точки или стены. Клавиши 1 и 2 меняют режим выделения."), EditorStyles.miniButton) != editing)
             {
                 if (editing) FloorPlanEditContext.Exit(); else FloorPlanEditContext.Enter();
             }
             bool drawing = ToolManager.activeToolType == typeof(FloorPlanDrawTool);
-            if (GUILayout.Toggle(drawing, new GUIContent("Draw", "Click on the floor to add walls; Enter or Escape finishes"), EditorStyles.miniButton) != drawing)
+            if (GUILayout.Toggle(drawing, new GUIContent("Рисовать", "Щёлкайте по полу, чтобы добавить стены. Enter или Escape завершает рисование."), EditorStyles.miniButton) != drawing)
             {
                 if (drawing) ToolManager.RestorePreviousPersistentTool();
                 else { FloorPlanEditContext.Exit(); ToolManager.SetActiveTool<FloorPlanDrawTool>(); }
@@ -203,16 +203,16 @@ namespace CsgBrush.Editor
             if (FloorPlanEditState.Mode == BrushEditMode.Edge && sel.edges.Count > 0)
             {
                 EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Selected walls (" + sel.edges.Count + ")", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("Выбранные стены (" + sel.edges.Count + ")", EditorStyles.boldLabel);
                 float first = -1f; bool mixed = false;
                 foreach (var w in sel.edges) { float t = plan.links[w].thickness; if (first < 0f) first = t; else if (!Mathf.Approximately(first, t)) mixed = true; }
                 EditorGUI.showMixedValue = mixed;
                 EditorGUI.BeginChangeCheck();
-                float value = EditorGUILayout.FloatField(new GUIContent("Thickness", "Metres; 0 uses the plan's outside or interior thickness."), first);
+                float value = EditorGUILayout.FloatField(new GUIContent("Толщина", "Толщина выбранных стен в метрах. При 0 используется толщина наружных или внутренних стен из плана."), first);
                 EditorGUI.showMixedValue = false;
                 if (EditorGUI.EndChangeCheck())
                 {
-                    Undo.RecordObject(plan, "Wall thickness");
+                    Undo.RecordObject(plan, "Изменить толщину стен");
                     foreach (var w in sel.edges) { var link = plan.links[w]; link.thickness = Mathf.Max(0f, value); plan.links[w] = link; }
                     BrushGenerators.MarkDirty(plan);
                 }
@@ -220,7 +220,7 @@ namespace CsgBrush.Editor
             else if (FloorPlanEditState.Mode == BrushEditMode.Face && sel.rooms.Count > 0)
             {
                 EditorGUILayout.Space();
-                EditorGUILayout.LabelField("Selected rooms (" + sel.rooms.Count + ")", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField("Выбранные комнаты (" + sel.rooms.Count + ")", EditorStyles.boldLabel);
                 var rooms = new List<FloorPlan.Room>(FloorPlanEditState.RoomsOf(plan));
                 var chosen = new List<FloorPlan.Room>(); foreach (var r in sel.rooms) if (r < rooms.Count) chosen.Add(rooms[r]);
                 if (chosen.Count == 0) return;
@@ -228,17 +228,17 @@ namespace CsgBrush.Editor
                 bool Mixed<T>(System.Func<FloorPlan.Room, T> get) { foreach (var c in chosen) if (!Equals(get(c), get(shown))) return true; return false; }
                 EditorGUI.BeginChangeCheck();
                 EditorGUI.showMixedValue = Mixed(r => r.floor);
-                bool floor = EditorGUILayout.Toggle(new GUIContent("Floor", "A floor slab under the room."), shown.floor);
+                bool floor = EditorGUILayout.Toggle(new GUIContent("Пол", "Создавать плиту пола под комнатой."), shown.floor);
                 EditorGUI.showMixedValue = Mixed(r => r.floorMaterial);
-                var floorMaterial = (Material)EditorGUILayout.ObjectField(new GUIContent("Floor material", "Empty uses the project's default material."), shown.floorMaterial, typeof(Material), false);
+                var floorMaterial = (Material)EditorGUILayout.ObjectField(new GUIContent("Материал пола", "Пустое поле использует материал проекта по умолчанию."), shown.floorMaterial, typeof(Material), false);
                 EditorGUI.showMixedValue = Mixed(r => r.ceiling);
-                bool ceiling = EditorGUILayout.Toggle(new GUIContent("Ceiling", "A ceiling slab over the room."), shown.ceiling);
+                bool ceiling = EditorGUILayout.Toggle(new GUIContent("Потолок", "Создавать плиту потолка над комнатой."), shown.ceiling);
                 EditorGUI.showMixedValue = Mixed(r => r.ceilingMaterial);
-                var ceilingMaterial = (Material)EditorGUILayout.ObjectField(new GUIContent("Ceiling material", "Empty uses the project's default material."), shown.ceilingMaterial, typeof(Material), false);
+                var ceilingMaterial = (Material)EditorGUILayout.ObjectField(new GUIContent("Материал потолка", "Пустое поле использует материал проекта по умолчанию."), shown.ceilingMaterial, typeof(Material), false);
                 EditorGUI.showMixedValue = false;
                 if (EditorGUI.EndChangeCheck())
                 {
-                    Undo.RecordObject(plan, "Room settings");
+                    Undo.RecordObject(plan, "Изменить параметры комнат");
                     foreach (var room in chosen)
                     {
                         var s = plan.SettingsOf(room);
@@ -249,9 +249,9 @@ namespace CsgBrush.Editor
                     }
                     BrushGenerators.MarkDirty(plan);
                 }
-                if (GUILayout.Button(new GUIContent("Use Plan Defaults", "The selected rooms take the plan's floor and ceiling settings.")))
+                if (GUILayout.Button(new GUIContent("Взять настройки плана", "Восстановить для выбранных комнат пол, потолок и материалы из настроек плана.")))
                 {
-                    Undo.RecordObject(plan, "Room settings");
+                    Undo.RecordObject(plan, "Изменить параметры комнат");
                     foreach (var room in chosen) if (room.settings >= 0 && room.settings < plan.rooms.Count) plan.rooms[room.settings] = null;
                     plan.rooms.RemoveAll(r => r == null);
                     BrushGenerators.MarkDirty(plan);
@@ -273,10 +273,10 @@ namespace CsgBrush.Editor
     /// one ends, ready for the next. Backspace takes back the last wall; Escape or a double click ends the stroke, Enter or
     /// a second Escape leaves the tool.
     /// </summary>
-    [EditorTool("Draw Floor Plan", typeof(FloorPlan))]
+    [EditorTool("Рисовать план стен", typeof(FloorPlan))]
     public sealed class FloorPlanDrawTool : EditorTool
     {
-        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("FloorPlan"), "Draw Floor Plan");
+        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("FloorPlan"), "Рисовать план стен");
 
         enum Hover { None, Free, Point, Wall }
         Hover m_Kind; Vector3 m_Hover; int m_HoverPoint = -1, m_HoverWall = -1;
@@ -329,7 +329,7 @@ namespace CsgBrush.Editor
             {
                 e.Use();
                 if (e.clickCount == 2) { EndStroke(); return; }
-                Undo.RecordObject(plan, "Draw floor plan");
+                Undo.RecordObject(plan, "Рисовать план стен");
                 int point; bool joined = m_Kind != Hover.Free;
                 if (m_Kind == Hover.Point) point = plan.pointIds[m_HoverPoint];
                 else if (m_Kind == Hover.Wall) point = plan.SplitLink(m_HoverWall, m_Hover);
@@ -344,7 +344,7 @@ namespace CsgBrush.Editor
             {
                 if (e.keyCode == KeyCode.Backspace && m_Stroke.Count >= 2)
                 {
-                    Undo.RecordObject(plan, "Remove floor plan wall");
+                    Undo.RecordObject(plan, "Удалить стену из плана");
                     int last = m_Stroke[m_Stroke.Count - 1], prev = m_Stroke[m_Stroke.Count - 2];
                     plan.links.RemoveAll(w => (w.start == prev && w.end == last) || (w.start == last && w.end == prev));
                     plan.RemoveLonePoints();
@@ -361,7 +361,7 @@ namespace CsgBrush.Editor
         {
             var plan = target as PointGraph;
             // a lone start point (clicked, then ended) is not kept
-            if (plan != null && m_Stroke.Count == 1) { int lone = m_Stroke[0]; if (!plan.links.Exists(w => w.start == lone || w.end == lone)) { Undo.RecordObject(plan, "Draw floor plan"); plan.RemoveLonePoints(); } }
+            if (plan != null && m_Stroke.Count == 1) { int lone = m_Stroke[0]; if (!plan.links.Exists(w => w.start == lone || w.end == lone)) { Undo.RecordObject(plan, "Рисовать план стен"); plan.RemoveLonePoints(); } }
             m_Last = -1; m_Stroke.Clear(); SceneView.RepaintAll();
         }
 
@@ -411,15 +411,14 @@ namespace CsgBrush.Editor
 
     static class FloorPlanMenu
     {
-        [MenuItem("GameObject/Brush/Floor Plan", false, 40)]
+        [MenuItem("GameObject/CSG Brush/План стен", false, 40)]
         static void Create()
         {
             var s = BrushSettings.instance;
             Vector3 pivot = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.pivot : Vector3.zero;
             float g = s.GridMeters;
             if (g > 0f) pivot = new Vector3(Mathf.Round(pivot.x / g) * g, 0f, Mathf.Round(pivot.z / g) * g);
-            var parent = Selection.activeTransform != null && Selection.activeTransform.GetComponent<Brush>() == null ? Selection.activeTransform : null;
-            Create(pivot, parent, false);
+            Create(pivot, BrushMenu.CreationParent(useSelection: true), false);
         }
 
         /// <summary>A new plan at a position, selected, drawing; with <paramref name="firstPoint"/> its first point is there.</summary>
@@ -427,8 +426,8 @@ namespace CsgBrush.Editor
         {
             var go = new GameObject("Floor Plan");
             GameObjectUtility.SetStaticEditorFlags(go, BrushSettings.instance.defaultModelStaticFlags); // its walls take the plan's flags
-            Undo.RegisterCreatedObjectUndo(go, "Create floor plan");
-            if (parent != null) Undo.SetTransformParent(go.transform, parent, "Create floor plan");
+            Undo.RegisterCreatedObjectUndo(go, "Создать план стен");
+            if (parent != null) Undo.SetTransformParent(go.transform, parent, "Создать план стен");
             go.transform.position = position;
             var plan = Undo.AddComponent<FloorPlan>(go);
             if (firstPoint) plan.AddPoint(Vector3.zero); // the draw tool starts its first wall here
@@ -443,11 +442,11 @@ namespace CsgBrush.Editor
     /// point or wall continues that plan from there (the selected plan first), and a click on the selected plan's floor
     /// adds walls to it, so new walls join its walls as when it was first drawn.
     /// </summary>
-    [EditorTool("Floor Plan", variantGroup = typeof(BrushCreateTool), variantPriority = 11)]
+    [EditorTool("План стен", variantGroup = typeof(BrushCreateTool), variantPriority = 11)]
     public sealed class CreateFloorPlanTool : EditorTool
     {
-        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("FloorPlan"), "Floor Plan");
-        [MenuItem("Tools/CSG Brush/Create/Floor Plan", false, 12)] static void Menu() => ToolManager.SetActiveTool<CreateFloorPlanTool>();
+        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("FloorPlan"), "План стен");
+        [MenuItem("Tools/CSG Brush/Создать/План стен", false, 12)] static void Menu() => ToolManager.SetActiveTool<CreateFloorPlanTool>();
 
         Vector3 m_Hover; bool m_HoverValid;
         /// <summary>The plan a click continues, and where: one of its points (index), one of its walls (index and spot), or its floor (spot).</summary>
@@ -467,7 +466,7 @@ namespace CsgBrush.Editor
             if (m_Plans == null)
             {
                 m_Plans = new List<FloorPlan>();
-                foreach (var plan in Object.FindObjectsByType<FloorPlan>(FindObjectsSortMode.None)) if (plan.gameObject.scene.IsValid()) m_Plans.Add(plan);
+                foreach (var plan in Object.FindObjectsByType<FloorPlan>()) if (plan.gameObject.scene.IsValid()) m_Plans.Add(plan);
             }
             for (int i = -1; i < m_Plans.Count; i++)
             {
@@ -495,7 +494,7 @@ namespace CsgBrush.Editor
         void ContinuePlan()
         {
             var plan = m_Plan;
-            Undo.RecordObject(plan, "Draw floor plan");
+            Undo.RecordObject(plan, "Рисовать план стен");
             int start = m_PlanPoint >= 0 ? plan.pointIds[m_PlanPoint] : m_PlanWall >= 0 ? plan.SplitLink(m_PlanWall, m_PlanLocal) : plan.AddPoint(m_PlanLocal);
             BrushGenerators.MarkDirty(plan);
             Selection.activeGameObject = plan.gameObject;
@@ -528,7 +527,7 @@ namespace CsgBrush.Editor
             if (e.type == EventType.MouseDown && e.button == 0 && m_HoverValid && HandleUtility.nearestControl == id)
             {
                 if (m_Plan != null) ContinuePlan();
-                else FloorPlanMenu.Create(m_Hover, null, true);
+                else FloorPlanMenu.Create(m_Hover, BrushMenu.CreationParent(), true);
                 m_HoverValid = false;
                 e.Use();
             }

@@ -41,31 +41,54 @@ namespace CsgBrush.Editor
             var s = BrushSettings.instance;
             int faces = SelectedFaces();
             EditorGUILayout.BeginHorizontal();
-            bool active = GUILayout.Toggle(Active, new GUIContent("Extrude", "Shows the extrude settings and previews the extrusion of the selected faces; Apply makes it"), EditorStyles.miniButton);
+            bool active = GUILayout.Toggle(Active, new GUIContent("Выдавить", "Показывает настройки и предварительный результат выдавливания выбранных граней. Кнопка «Применить» создаёт геометрию."), EditorStyles.miniButton);
             if (active != Active) Active = active;
             using (new EditorGUI.DisabledScope(BrushEditState.Mode != BrushEditMode.Face || BridgeCandidate() == null))
             {
-                if (GUILayout.Button(new GUIContent("Bridge", "Connect the two selected faces of one brush with a block between them"), EditorStyles.miniButton))
+                if (GUILayout.Button(new GUIContent("Соединить", "Создаёт блок между двумя выбранными гранями одного браша."), EditorStyles.miniButton))
                     BridgeSelection();
             }
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
-            if (!Active) { if (!string.IsNullOrEmpty(lastRefusal)) EditorGUILayout.HelpBox(lastRefusal, MessageType.Info); return; }
+            if (!Active) { if (!string.IsNullOrEmpty(lastRefusal)) EditorGUILayout.HelpBox(TranslateRefusal(lastRefusal), MessageType.Info); return; }
 
             float labelWidth = EditorGUIUtility.labelWidth; EditorGUIUtility.labelWidth = 96;
             EditorGUI.BeginChangeCheck();
-            float d = EditorGUILayout.FloatField(new GUIContent("Distance (" + s.unitLabel + ")", "Negative cuts a pocket; 0 uses one grid step"), s.extrudeDistance != 0f ? s.extrudeDistance : s.ToUnits(s.GridMeters));
-            int mode = EditorGUILayout.Popup(new GUIContent("Faces", "Extrude the whole selection as one block, or each face on its own"), s.extrudeIndividual ? 1 : 0, new[] { "Whole selection", "Individual" });
+            float d = EditorGUILayout.FloatField(new GUIContent("Расстояние (" + s.unitLabel + ")", "Расстояние выдавливания. Отрицательное значение создаёт углубление, ноль соответствует шагу сетки."), s.extrudeDistance != 0f ? s.extrudeDistance : s.ToUnits(s.GridMeters));
+            int mode = EditorGUILayout.Popup(new GUIContent("Грани", "Выдавить всё выделение одним блоком или каждую грань отдельно."), s.extrudeIndividual ? 1 : 0, new[] { "Всё выделение", "По отдельности" });
             if (EditorGUI.EndChangeCheck()) { s.extrudeDistance = d; s.extrudeIndividual = mode == 1; SceneView.RepaintAll(); }
             EditorGUIUtility.labelWidth = labelWidth;
             string refusal = PreviewRefusal();
             using (new EditorGUI.DisabledScope(faces == 0 || refusal != null))
             {
-                if (GUILayout.Button(new GUIContent("Apply", faces > 0 ? "Extrude " + faces + (faces == 1 ? " face" : " faces") : "Select faces first"), EditorStyles.miniButton))
+                if (GUILayout.Button(new GUIContent("Применить", faces > 0 ? "Выдавить граней: " + faces : "Сначала выберите грани."), EditorStyles.miniButton))
                     Apply();
             }
-            if (faces == 0) EditorGUILayout.HelpBox("Select the faces to extrude.", MessageType.None);
-            else if (refusal != null) EditorGUILayout.HelpBox(refusal, MessageType.Info);
+            if (faces == 0) EditorGUILayout.HelpBox("Выберите грани для выдавливания.", MessageType.None);
+            else if (refusal != null) EditorGUILayout.HelpBox(TranslateRefusal(refusal), MessageType.Info);
+        }
+
+        static string TranslateRefusal(string message)
+        {
+            switch (message)
+            {
+                case "The prism could not be built.": return "Не удалось построить призму.";
+                case "Select two faces of one brush.": return "Выберите две грани одного браша.";
+                case "The brush could not be built.": return "Не удалось построить браш.";
+                case "These two faces cannot be bridged.": return "Эти грани нельзя соединить.";
+                case "Nothing would be left of the brush.": return "От браша ничего не останется.";
+            }
+            const string corners = "Both faces need the same number of corners (";
+            if (message.StartsWith(corners))
+                return "У граней должно быть одинаковое число углов (" + message.Substring(corners.Length).Replace(" and ", " и ");
+            const string result = "The result would be ";
+            const string suffix = ". Try another distance or other faces.";
+            if (message.StartsWith(result) && message.EndsWith(suffix))
+            {
+                string reason = message.Substring(result.Length, message.Length - result.Length - suffix.Length);
+                return "Некорректная форма: " + BrushBoolean.DescribeProblem(reason) + ". Измените расстояние или выберите другие грани.";
+            }
+            return message;
         }
 
         // ------------------------------------------------------------------ preview
@@ -90,11 +113,11 @@ namespace CsgBrush.Editor
             }
             if (s_Previews.TryGetValue(b, out var p) && p.key == key) return p;
             p = new Preview { key = key };
-            if (Mathf.Abs(meters) < 1e-6f) p.refusal = "The distance rounds to zero on this grid.";
+            if (Mathf.Abs(meters) < 1e-6f) p.refusal = "Расстояние округляется до нуля при текущем шаге сетки.";
             else
             {
                 p.result = BrushBoolean.ExtrudeFaces(shape, sel.faces, meters, individual, out _);
-                if (p.result == null || !p.result.IsValid) { p.result = null; p.refusal = BrushBoolean.LastRefusal ?? "These faces can't be extruded by this distance."; }
+                if (p.result == null || !p.result.IsValid) { p.result = null; p.refusal = BrushBoolean.LastRefusal ?? "Эти грани нельзя выдавить на указанное расстояние."; }
             }
             s_Previews[b] = p;
             return p;

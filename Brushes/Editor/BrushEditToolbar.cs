@@ -37,9 +37,9 @@ namespace CsgBrush.Editor
             this.mode = mode;
             switch (mode)
             {
-                case BrushEditMode.Vertex: icon = BrushIcons.Get("Mode_Vertex"); tooltip = "Vertex Selection (1)"; break;
-                case BrushEditMode.Edge: icon = BrushIcons.Get("Mode_Edge"); tooltip = "Edge Selection (2)"; break;
-                default: icon = BrushIcons.Get("Mode_Face"); tooltip = "Face Selection (3)"; break;
+                case BrushEditMode.Vertex: icon = BrushIcons.Get("Mode_Vertex"); tooltip = "Выбор вершин (1)"; break;
+                case BrushEditMode.Edge: icon = BrushIcons.Get("Mode_Edge"); tooltip = "Выбор рёбер (2)"; break;
+                default: icon = BrushIcons.Get("Mode_Face"); tooltip = "Выбор граней (3)"; break;
             }
             RegisterCallback<AttachToPanelEvent>(evt => { BrushEditState.Changed += Refresh; Refresh(); });
             RegisterCallback<DetachFromPanelEvent>(evt => BrushEditState.Changed -= Refresh);
@@ -68,7 +68,7 @@ namespace CsgBrush.Editor
         public BrushSelectHiddenToggle()
         {
             icon = BrushIcons.Get("SelectHidden");
-            tooltip = "Select Hidden: also pick vertices, edges and faces that look away from the camera";
+            tooltip = "Выбирать скрытые элементы. Включите, чтобы выбирать вершины, рёбра и грани, отвёрнутые от камеры.";
             RegisterCallback<AttachToPanelEvent>(evt => { BrushEditState.Changed += Refresh; Refresh(); });
             RegisterCallback<DetachFromPanelEvent>(evt => BrushEditState.Changed -= Refresh);
             this.RegisterValueChangedCallback(evt => BrushEditState.SelectHidden = evt.newValue);
@@ -84,7 +84,7 @@ namespace CsgBrush.Editor
         public BrushDragRectModeToggle()
         {
             icon = BrushIcons.Get("DragRect");
-            tooltip = "Drag Rectangle Mode: on selects only what is completely inside the rectangle, off everything it touches";
+            tooltip = "Выбор рамкой. Включено — только элементы целиком внутри рамки. Выключено — все элементы, которых касается рамка.";
             RegisterCallback<AttachToPanelEvent>(evt => { BrushEditState.Changed += Refresh; Refresh(); });
             RegisterCallback<DetachFromPanelEvent>(evt => BrushEditState.Changed -= Refresh);
             this.RegisterValueChangedCallback(evt => BrushEditState.RectComplete = evt.newValue);
@@ -103,9 +103,9 @@ namespace CsgBrush.Editor
         public BrushHandleOrientationDropdown()
         {
             name = "Handle Rotation";
-            options[0] = new GUIContent("Global", EditorGUIUtility.IconContent("ToolHandleGlobal").image, "The gizmo is aligned with the world axes");
-            options[1] = new GUIContent("Local", EditorGUIUtility.IconContent("ToolHandleLocal").image, "The gizmo is aligned with the brush's axes");
-            options[2] = new GUIContent("Element", BrushIcons.Get("ToolHandleElement"), "The gizmo is aligned with the selected face, edge or vertex: blue along the normal");
+            options[0] = new GUIContent("Мир", EditorGUIUtility.IconContent("ToolHandleGlobal").image, "Манипулятор ориентирован по осям сцены.");
+            options[1] = new GUIContent("Браш", EditorGUIUtility.IconContent("ToolHandleLocal").image, "Манипулятор ориентирован по осям браша.");
+            options[2] = new GUIContent("Элемент", BrushIcons.Get("ToolHandleElement"), "Манипулятор ориентирован по выбранной грани, ребру или вершине. Синяя ось направлена по нормали.");
             clicked += () =>
             {
                 var menu = new GenericMenu();

@@ -62,16 +62,16 @@ namespace CsgBrush.Editor
             {
                 if (BrushesOf(group).Count == 0) continue;
                 var meshes = MeshChildren(group);
-                if (meshes.Count == 0) return group.name + ": no mesh child";
+                if (meshes.Count == 0) return group.name + ": нет дочернего объекта с мешем";
                 foreach (var mf in meshes)
                 {
-                    if (mf.sharedMesh == null) return group.name + ": " + mf.name + " has no mesh";
-                    if (!EditorUtility.IsPersistent(mf.sharedMesh)) return group.name + ": " + mf.name + " mesh is not saved";
+                    if (mf.sharedMesh == null) return group.name + ": " + mf.name + " — меш отсутствует";
+                    if (!EditorUtility.IsPersistent(mf.sharedMesh)) return group.name + ": " + mf.name + " — меш не сохранён";
                 }
                 foreach (var mc in group.GetComponentsInChildren<MeshCollider>(true))
                 {
-                    if (mc.sharedMesh == null) return group.name + ": collider " + mc.name + " has no mesh";
-                    if (!EditorUtility.IsPersistent(mc.sharedMesh)) return group.name + ": collider " + mc.name + " mesh is not saved";
+                    if (mc.sharedMesh == null) return group.name + ": коллайдер " + mc.name + " — меш отсутствует";
+                    if (!EditorUtility.IsPersistent(mc.sharedMesh)) return group.name + ": коллайдер " + mc.name + " — меш не сохранён";
                 }
             }
             return null;
@@ -103,7 +103,7 @@ namespace CsgBrush.Editor
 
         static bool HasGroup(string path) => path != null && path.EndsWith(".prefab") && AssetDatabase.LoadAssetAtPath<GameObject>(path)?.GetComponentInChildren<BrushGroup>(true) != null;
 
-        [MenuItem("Assets/CSG Brush/Rebuild Prefab", false, 2000)]
+        [MenuItem("Assets/CSG Brush/Перестроить префаб", false, 2000)]
         static void RebuildSelected()
         {
             foreach (var o in Selection.objects)
@@ -113,14 +113,14 @@ namespace CsgBrush.Editor
             }
         }
 
-        [MenuItem("Assets/CSG Brush/Rebuild Prefab", true)]
+        [MenuItem("Assets/CSG Brush/Перестроить префаб", true)]
         static bool CanRebuildSelected()
         {
             foreach (var o in Selection.objects) if (HasGroup(AssetDatabase.GetAssetPath(o))) return true;
             return false;
         }
 
-        [MenuItem("Tools/CSG Brush/Rebuild All Prefabs")]
+        [MenuItem("Tools/CSG Brush/Перестроить все префабы")]
         static void BuildAll()
         {
             foreach (var guid in AssetDatabase.FindAssets("t:Prefab"))

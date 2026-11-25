@@ -17,7 +17,7 @@ namespace CsgBrush.Editor
     /// the mode gives the normal tools back. Selection (click, Shift add, Ctrl remove, marquee) is handled here
     /// so it works with any of the three tools.
     /// </summary>
-    [EditorToolContext("Edit Brush", typeof(Brush))]
+    [EditorToolContext("Правка браша", typeof(Brush))]
     [Icon(BrushIcons.Folder + "EditBrush.png")]
     public sealed class BrushEditContext : EditorToolContext
     {
@@ -104,7 +104,7 @@ namespace CsgBrush.Editor
                 var poly = ShapeOf(brush);
                 if (poly == null || !poly.IsValid)
                 {
-                    Handles.Label(brush.transform.position, brush.shape + " brushes cannot be edited by hand yet", EditorStyles.helpBox);
+                    Handles.Label(brush.transform.position, "Ручная правка этой формы пока недоступна", EditorStyles.helpBox);
                     continue;
                 }
                 var sel = Sel(brush);
@@ -222,15 +222,15 @@ namespace CsgBrush.Editor
             else if (e.type == EventType.ContextClick && GUIUtility.hotControl == 0) // a right click, not the end of a fly-through (right drag)
             {
                 var menu = new GenericMenu();
-                menu.AddItem(new GUIContent("Select All"), false, SelectAll);
-                menu.AddItem(new GUIContent("Invert Selection"), false, Invert);
-                menu.AddItem(new GUIContent("Clear Selection"), false, ClearSelection);
+                menu.AddItem(new GUIContent("Выбрать всё"), false, SelectAll);
+                menu.AddItem(new GUIContent("Инвертировать выбор"), false, Invert);
+                menu.AddItem(new GUIContent("Снять выделение"), false, ClearSelection);
                 menu.AddSeparator("");
-                menu.AddItem(new GUIContent("Vertex mode  1"), Mode == BrushEditMode.Vertex, () => { Mode = BrushEditMode.Vertex; SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent("Edge mode  2"), Mode == BrushEditMode.Edge, () => { Mode = BrushEditMode.Edge; SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent("Face mode  3"), Mode == BrushEditMode.Face, () => { Mode = BrushEditMode.Face; SceneView.RepaintAll(); });
+                menu.AddItem(new GUIContent("Вершины  1"), Mode == BrushEditMode.Vertex, () => { Mode = BrushEditMode.Vertex; SceneView.RepaintAll(); });
+                menu.AddItem(new GUIContent("Рёбра  2"), Mode == BrushEditMode.Edge, () => { Mode = BrushEditMode.Edge; SceneView.RepaintAll(); });
+                menu.AddItem(new GUIContent("Грани  3"), Mode == BrushEditMode.Face, () => { Mode = BrushEditMode.Face; SceneView.RepaintAll(); });
                 menu.AddSeparator("");
-                menu.AddItem(new GUIContent("Stop Editing"), false, BrushEditContext.Exit);
+                menu.AddItem(new GUIContent("Завершить правку"), false, BrushEditContext.Exit);
                 menu.ShowAsContext();
                 e.Use();
             }
@@ -529,7 +529,7 @@ namespace CsgBrush.Editor
     }
 
     /// <summary>Move tool inside brush edit mode: Unity's position gizmo on the selection, world-grid snapped.</summary>
-    [EditorTool("Move brush selection", typeof(Brush), typeof(BrushEditContext))]
+    [EditorTool("Переместить выделенные элементы браша", typeof(Brush), typeof(BrushEditContext))]
     /// <summary>The three tools of the edit context share the Tool Settings toolbar (see BrushEditToolbar).</summary>
     public abstract class BrushSelectionTool : EditorTool { }
 
@@ -566,7 +566,7 @@ namespace CsgBrush.Editor
     }
 
     /// <summary>Rotate tool inside brush edit mode: the selection turns about its centre in rotation-snap steps; positions land on the grid.</summary>
-    [EditorTool("Rotate brush selection", typeof(Brush), typeof(BrushEditContext))]
+    [EditorTool("Повернуть выделенные элементы браша", typeof(Brush), typeof(BrushEditContext))]
     public sealed class BrushRotateTool : BrushSelectionTool
     {
         Quaternion start = Quaternion.identity, current = Quaternion.identity;
@@ -597,7 +597,7 @@ namespace CsgBrush.Editor
     }
 
     /// <summary>Scale tool inside brush edit mode: the selection scales about its centre; positions land on the grid.</summary>
-    [EditorTool("Scale brush selection", typeof(Brush), typeof(BrushEditContext))]
+    [EditorTool("Масштабировать выделенные элементы браша", typeof(Brush), typeof(BrushEditContext))]
     public sealed class BrushScaleTool : BrushSelectionTool
     {
         Vector3 current = Vector3.one; Quaternion frame = Quaternion.identity;

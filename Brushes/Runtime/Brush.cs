@@ -9,53 +9,53 @@ namespace CsgBrush
     /// <summary>What of a brush goes onto the grid when it is moved or resized (a rotation never moves it).</summary>
     public enum GridSnap
     {
-        [Tooltip("The brush's outermost vertices go onto grid lines, so brushes meet cleanly: the classic brush workflow.")] Shape,
-        [Tooltip("The brush's pivot goes onto the grid and the shape follows: the ProBuilder workflow.")] Pivot,
-        [Tooltip("Never moved or resized onto the grid: placed exactly, as a level built from measured numbers is.")] Off,
+        [Tooltip("Крайние вершины ложатся на линии сетки, чтобы соседние браши стыковались без зазоров."), InspectorName("По форме")] Shape,
+        [Tooltip("К сетке привязывается точка опоры, а форма перемещается вместе с ней."), InspectorName("По точке опоры")] Pivot,
+        [Tooltip("Положение и размеры сохраняют введённые значения без округления по сетке."), InspectorName("Отключено")] Off,
     }
 
     /// <summary>How a brush's pivot is measured.</summary>
     public enum PivotMode
     {
-        [Tooltip("0 to 1 of the size: follows the brush when resized.")] Normalized,
-        [Tooltip("Distance from the brush's left, bottom, back corner: stays put when resized.")] Absolute,
+        [Tooltip("Координата от 0 до 1 по каждой оси. Точка опоры смещается вместе с изменением размера."), InspectorName("Доля размера")] Normalized,
+        [Tooltip("Расстояние от левого нижнего заднего угла. При изменении размера сохраняется в метрах."), InspectorName("Расстояние")] Absolute,
     }
 
     /// <summary>Which material the faces a subtractive brush cuts take.</summary>
     public enum CutFaces
     {
-        [Tooltip("The cutting brush's material: a doorway lined with its own frame material.")] CutterMaterial,
-        [Tooltip("The material of the solid it cuts: a hole in a wall looks like the wall inside.")] CutSolidMaterial,
+        [Tooltip("Материал вычитающего браша. Например, проём можно облицевать материалом дверной рамы."), InspectorName("Материал вычитающего браша")] CutterMaterial,
+        [Tooltip("Материал вырезаемого объёма. Например, внутренние поверхности проёма получают материал стены."), InspectorName("Материал вырезаемого объёма")] CutSolidMaterial,
     }
 
     public enum BrushShape
     {
-        Box = 0,
+        [InspectorName("Блок")] Box = 0,
         /// <summary>Ramp: rises along the local Z axis.</summary>
-        Wedge = 1,
-        Cylinder = 2,
-        Cone = 3,
-        Sphere = 4,
+        [InspectorName("Клин (пандус)")] Wedge = 1,
+        [InspectorName("Цилиндр")] Cylinder = 2,
+        [InspectorName("Конус")] Cone = 3,
+        [InspectorName("Сфера")] Sphere = 4,
         /// <summary>Linear stairs climbing along the local Z axis.</summary>
-        [InspectorName("Linear Stairs")] Stairs = 5,
+        [InspectorName("Прямая лестница")] Stairs = 5,
         /// <summary>Edited by hand: the shape is the polyhedron on the brush, decomposed into convex pieces.</summary>
-        Custom = 6,
+        [InspectorName("Произвольная форма")] Custom = 6,
         /// <summary>Steps wrapping around an inner column over an angle; each step a solid block from the floor.</summary>
-        [InspectorName("Curved Stairs")] CurvedStairs = 7,
+        [InspectorName("Изогнутая лестница")] CurvedStairs = 7,
         /// <summary>Separate step slabs wrapping around an inner column, possibly several turns.</summary>
-        [InspectorName("Spiral Stairs")] SpiralStairs = 8,
+        [InspectorName("Винтовая лестница")] SpiralStairs = 8,
         /// <summary>An arch filling its box: a ring of segments between an outer and an inner ellipse, standing on the floor.</summary>
-        Arch = 9,
+        [InspectorName("Арка")] Arch = 9,
         /// <summary>A doorway to cut into a wall: a box of the opening's size, subtract by new. On a floor plan it rides on a wall (see <see cref="WallAnchor"/>).</summary>
-        Door = 10,
+        [InspectorName("Дверь")] Door = 10,
         /// <summary>A window to cut into a wall: as <see cref="Door"/>, standing on a sill.</summary>
-        Window = 11,
+        [InspectorName("Окно")] Window = 11,
     }
 
     public enum BrushOperation
     {
-        Add = 0,
-        Subtract = 1,
+        [InspectorName("Добавить")] Add = 0,
+        [InspectorName("Вычесть")] Subtract = 1,
     }
 
     /// <summary>
@@ -64,7 +64,7 @@ namespace CsgBrush
     /// generated automatically (CSG through the Manifold library, one convex collider per piece). Sizes are stored in
     /// metres; the Inspector shows them in the world preset's units.
     /// </summary>
-    [AddComponentMenu("Brush")]
+    [AddComponentMenu("Браш")]
     [Icon("Packages/digital.dream.csgbrush/Brushes/Editor/Icons/Brush.png")]
     [DisallowMultipleComponent]
     [SelectionBase]
@@ -87,17 +87,17 @@ namespace CsgBrush
 
         public BrushShape shape = BrushShape.Box;
         public BrushOperation operation = BrushOperation.Add;
-        [Tooltip("Solid geometry, a trigger volume, or no collider at all. A module on the brush (water, say) may override it.")]
+        [Tooltip("Твёрдое тело блокирует движение. Триггер посылает события при пересечении. В режиме «Нет» коллайдеры не создаются. Модуль браша может переопределить режим.")]
         public ColliderKind collision = ColliderKind.Solid;
-        [Tooltip("On every collider piece of the brush, triggers included: friction and bounce, and a handle for sounds or other lookups.")]
+        [Tooltip("Физический материал всех частей браша, включая триггеры. Задаёт трение и упругость, а также может использоваться для выбора звука.")]
         public PhysicsMaterial physicsMaterial;
-        [Tooltip("The pieces provide contact data to OnCollision callbacks (Unity's Provide Contacts).")]
+        [Tooltip("Передавать данные о контактах частей браша в обработчики OnCollision.")]
         public bool provideContacts;
         // the surface kind and fall-damage flag of earlier versions, migrated into modules on the next sync (see LegacySurfaceMigration)
         [SerializeField, HideInInspector, FormerlySerializedAs("surface")] int legacySurface;
         [SerializeField, HideInInspector, FormerlySerializedAs("noFallDamage")] bool legacyNoFallDamage;
 
-        [Tooltip("Metres.")]
+        [Tooltip("Габариты по осям X, Y и Z, в метрах.")]
         public Vector3 size = new Vector3(2f, 2f, 2f);
 
         /// <summary>
@@ -108,7 +108,7 @@ namespace CsgBrush
         public Vector3 pivot = new Vector3(0.5f, 0.5f, 0.5f);
         /// <summary>How <see cref="pivot"/> is measured.</summary>
         public PivotMode pivotMode = PivotMode.Normalized;
-        [Tooltip("What goes onto the grid when the brush is moved or resized: its outermost vertices, or its pivot. A rotation never moves it.")]
+        [Tooltip("Привязывает к сетке крайние вершины или точку опоры при перемещении и масштабировании. Поворот не вызывает привязку.")]
         public GridSnap gridSnap = GridSnap.Shape;
 
         /// <summary>Box-like shapes whose geometry follows <see cref="pivot"/>.</summary>
@@ -127,42 +127,43 @@ namespace CsgBrush
         /// <summary>How far the shape sits from the transform in local space: none at the centre.</summary>
         public Vector3 PivotShift => PivotShiftFor(ClampedSize);
 
-        [Tooltip("Box and cylinder: keep only the walls.")]
+        [Tooltip("У блока или цилиндра остаются только стенки. При отключении весь объём сплошной.")]
         public bool hollow;
-        [Tooltip("Hollow walls, and the thickness of an arch: metres.")]
+        [Tooltip("Толщина стенок полого браша или пояса арки в метрах. Чем больше значение, тем меньше внутренний проём.")]
         public float wallThickness = 0.5f;
 
-        [Tooltip("Cylinder and cone; segments of an arch.")]
+        [Tooltip("Число граней цилиндра или конуса либо сегментов арки. Больше граней дают более гладкий контур. Минимум 3.")]
         [Min(3)] public int sides = 16;
-        [Tooltip("Sphere: 1 is coarse, 5 is smooth.")]
+        [Tooltip("Детализация сферы. При 1 граней меньше, при 5 поверхность наиболее гладкая.")]
         [Range(1, 5)] public int tessellation = 2;
-        [Tooltip("Stairs: height of a step, metres, at least 0.1. The number of steps comes from the stairs' height.")]
+        [Tooltip("Высота ступени в метрах, минимум 0,1 м. При фиксированной высоте лестницы увеличение уменьшает число ступеней.")]
         public float stepHeight = 0.25f;
-        [Tooltip("Curved and spiral stairs: radius of the inner column the steps wrap around, metres.")]
+        [Tooltip("Радиус внутренней колонны изогнутой или винтовой лестницы в метрах. При увеличении ступени располагаются дальше от оси.")]
         public float innerRadius = 0.5f;
-        [Tooltip("Curved and spiral stairs: width of the steps out from the column, metres.")]
+        [Tooltip("Ширина ступени от внутренней колонны до внешнего края, в метрах. При увеличении лестница становится шире.")]
         public float stepWidth = 1.5f;
-        [Tooltip("Spiral stairs, and stairs without support under the steps: thickness of each step slab, metres.")]
+        [Tooltip("Толщина каждой плиты ступени в метрах. Применяется к винтовой лестнице и лестнице без опоры под ступенями.")]
         public float stepThickness = 0.1f;
-        [Tooltip("Linear and curved stairs: the steps stand on solid support down to the floor.")]
+        [Tooltip("У прямой или изогнутой лестницы пространство под ступенями заполнено до пола. При отключении остаются отдельные плиты ступеней.")]
         public bool supportUnderSteps = true;
-        [Tooltip("Curved stairs: total angle the steps cover; arch: the angle it spans, up to 180. Degrees.")]
+        [Tooltip("Размах изогнутой лестницы или арки в градусах. Чем больше угол, тем длиннее дуга. Для арки максимум 180°.")]
         public float curveAngle = 90f;
-        [Tooltip("Curved and spiral stairs.")]
+        [Tooltip("Число ступеней изогнутой или винтовой лестницы. Минимум 1.")]
         [Min(1)] public int numSteps = 8;
-        [Tooltip("Spiral stairs: steps in one full turn.")]
+        [Tooltip("Число ступеней на полный оборот 360° винтовой лестницы. При увеличении угол между ступенями уменьшается. Минимум 1.")]
         [Min(1)] public int stepsPer360 = 16;
-        [Tooltip("Curved and spiral stairs: extra height under the first step (negative lowers it), metres.")]
+        [Tooltip("Поправка высоты первой ступени изогнутой или винтовой лестницы в метрах. Отрицательное число опускает её, 0 оставляет исходную высоту.")]
         public float addToFirstStep = 0f;
+        [Tooltip("При взгляде сверху ступени идут против часовой стрелки. При отключении лестница закручивается по часовой стрелке.")]
         public bool counterClockwise;
-        [Tooltip("Spiral stairs: the treads slope instead of stepping (a spiral ramp).")]
+        [Tooltip("Верх винтовой лестницы образует наклонный пандус. При отключении верх остаётся ступенчатым.")]
         public bool slopedFloor;
-        [Tooltip("Spiral stairs: the underside slopes instead of stepping.")]
+        [Tooltip("Нижняя поверхность винтовой лестницы образует непрерывный уклон. При отключении низ остаётся ступенчатым.")]
         public bool slopedCeiling;
 
-        [Tooltip("Applied to every face. Dropping a material onto the brush in the Scene view sets it too.")]
+        [Tooltip("Материал всех граней браша. Его также можно перетащить на браш в окне сцены.")]
         public Material material;
-        [Tooltip("Subtract only: the faces it cuts take this brush's material, or the material of the solid they were cut from.")]
+        [Tooltip("Для операции «Вычесть». Выбирает, получают срезы материал вычитающего браша или вырезаемого объёма.")]
         public CutFaces cutFaces = CutFaces.CutterMaterial;
 
         /// <summary>Set by the editor layer; called when the component needs to push its values into the generated structure.</summary>

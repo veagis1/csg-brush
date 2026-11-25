@@ -9,9 +9,9 @@ namespace CsgBrush.Editor
 {
     /// <summary>
     /// Lightmap UVs for the brush meshes that contribute to global illumination, as ProBuilder makes them: unwrapping is slow
-    /// on big meshes, so it is not done while you edit. With Auto lightmap UVs (Project Settings > Brushes, on by default)
-    /// they are made once an edit is finished; otherwise the Brush Group's Generate Lightmap UVs button or
-    /// Tools > CSG Brush > Generate Lightmap UVs makes them. Any change to a mesh drops its UVs. The meshes are saved in the
+    /// on big meshes, so it is not done while you edit. With «Автоматические UV карт освещения» (Project Settings > CSG Brush, on by default)
+    /// they are made once an edit is finished; otherwise the Brush Group's Создать UV-развёртки для карт освещения button or
+    /// Tools > CSG Brush > Создать UV-развёртки для карт освещения makes them. Any change to a mesh drops its UVs. The meshes are saved in the
     /// scene with their UVs and kept as they are when it opens again, so a bake stays valid until the brushes are edited.
     /// After a bake, the lit brush meshes that had no UVs are listed in the Console.
     /// </summary>
@@ -52,7 +52,7 @@ namespace CsgBrush.Editor
             if (sw.Elapsed.TotalSeconds > SlowSeconds && !s_WarnedSlow)
             {
                 s_WarnedSlow = true;
-                Debug.Log($"CSG Brush: making lightmap UVs took {sw.Elapsed.TotalSeconds:0.0} s. For large groups, turn off Auto lightmap UVs in Project Settings > Brushes and generate them before baking.");
+                Debug.Log($"CSG Brush: развёртка UV для карт освещения заняла {sw.Elapsed.TotalSeconds:0.0} с. Для крупных групп можно отключить автоматические UV в Project Settings → CSG Brush и создавать развёртки перед запеканием.");
             }
         }
 
@@ -106,7 +106,7 @@ namespace CsgBrush.Editor
                 var mesh = mf.sharedMesh;
                 if (HasLightmapUVs(mesh)) mesh.uv2 = null; // made with other settings: from the mesh as built
                 if (mesh.indexFormat == UnityEngine.Rendering.IndexFormat.UInt16 && mesh.vertexCount > 30000) mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32; // room for the vertices the unwrap may add
-                if (!Unwrapping.GenerateSecondaryUVSet(mesh, param)) { Debug.LogWarning("CSG Brush: lightmap UVs could not be made for " + mf.transform.parent?.name + "/" + mf.name + ".", mf); continue; }
+                if (!Unwrapping.GenerateSecondaryUVSet(mesh, param)) { Debug.LogWarning("CSG Brush: не удалось создать UV для карт освещения у " + mf.transform.parent?.name + "/" + mf.name + ".", mf); continue; }
                 if (!mf.TryGetComponent<BrushMeshSources>(out var saved)) saved = mf.gameObject.AddComponent<BrushMeshSources>();
                 saved.lightmapUVSettings = settings;
                 EditorSceneManager.MarkSceneDirty(mf.gameObject.scene);
@@ -136,11 +136,11 @@ namespace CsgBrush.Editor
             }
         }
 
-        [MenuItem("Tools/CSG Brush/Generate Lightmap UVs", false, 200)]
+        [MenuItem("Tools/CSG Brush/Создать UV-развёртки для карт освещения", false, 200)]
         static void Menu()
         {
             int made = Generate();
-            Debug.Log(made == 0 ? "CSG Brush: every lit brush mesh already has lightmap UVs." : "CSG Brush: lightmap UVs made for " + made + " brush mesh" + (made == 1 ? "." : "es."));
+            Debug.Log(made == 0 ? "CSG Brush. Все освещаемые меши брашей уже имеют UV-развёртки для карт освещения." : $"CSG Brush. Количество мешей брашей с новыми UV-развёртками для карт освещения — {made}.");
         }
 
         static void OnBakeCompleted()
@@ -148,7 +148,7 @@ namespace CsgBrush.Editor
             var missing = new List<string>();
             foreach (var mf in LitMeshes()) if (!HasLightmapUVs(mf.sharedMesh)) missing.Add(mf.transform.parent?.name + "/" + mf.name);
             if (missing.Count == 0) return;
-            Debug.LogWarning("CSG Brush: these lit brush meshes have no lightmap UVs, so the bake left them out: " + string.Join(", ", missing) + ". Choose Tools > CSG Brush > Generate Lightmap UVs and bake again.");
+            Debug.LogWarning("CSG Brush: эти меши брашей пропущены при запекании из-за отсутствия UV для карт освещения: " + string.Join(", ", missing) + ". Выполните Tools → CSG Brush → Создать UV-развёртки для карт освещения и повторите запекание.");
         }
     }
 }

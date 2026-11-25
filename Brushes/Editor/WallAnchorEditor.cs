@@ -23,21 +23,27 @@ namespace CsgBrush.Editor
         public override void OnInspectorGUI()
         {
             var a = (WallAnchor)target;
-            if (a.Plan == null) EditorGUILayout.HelpBox("Not on a floor plan: pick a wall to put it on one.", MessageType.Info);
-            bool picking = GUILayout.Toggle(Picking, new GUIContent("Pick Wall", "Click a wall in the Scene view to put this on it; Escape cancels"), EditorStyles.miniButton);
+            if (a.Plan == null) EditorGUILayout.HelpBox("Объект свободен. Чтобы привязать его к плану, выберите стену.", MessageType.Info);
+            bool picking = GUILayout.Toggle(Picking, new GUIContent("Выбрать стену", "Щёлкните по стене в окне сцены, чтобы привязать объект. Escape отменяет выбор."), EditorStyles.miniButton);
             if (picking != Picking) { Picking = picking; m_HoverPlan = null; SceneView.RepaintAll(); }
             if (a.Plan == null) return;
             serializedObject.Update();
-            EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(WallAnchor.distance)));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(WallAnchor.height)));
+            DrawAnchorProperty(nameof(WallAnchor.distance));
+            DrawAnchorProperty(nameof(WallAnchor.height));
             bool opening = a.TryGetComponent<Brush>(out var brush) && brush.IsOpening;
             if (!opening) // a door or window always goes through, in the middle of the wall
             {
                 FaceField(serializedObject.FindProperty(nameof(WallAnchor.face)));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty(nameof(WallAnchor.offset)));
+                DrawAnchorProperty(nameof(WallAnchor.offset));
             }
             serializedObject.ApplyModifiedProperties();
             if (!opening) RotationField();
+        }
+
+        void DrawAnchorProperty(string name)
+        {
+            var property = serializedObject.FindProperty(name);
+            EditorGUILayout.PropertyField(property, BrushEditor.PropertyLabel(typeof(WallAnchor), property));
         }
 
         static readonly WallFace[] s_FaceOrder = { WallFace.Outside, WallFace.Centered, WallFace.Inside }; // as the floor plan's Side
@@ -45,9 +51,9 @@ namespace CsgBrush.Editor
 
         static void FaceField(SerializedProperty face)
         {
-            s_FaceNames ??= System.Array.ConvertAll(s_FaceOrder, f => new GUIContent(f.ToString()));
+            s_FaceNames ??= System.Array.ConvertAll(s_FaceOrder, f => BrushEditor.EnumOption(f));
             var rect = EditorGUILayout.GetControlRect();
-            var label = EditorGUI.BeginProperty(rect, new GUIContent("Face", "On the wall's outside face, in its middle, or on its inside face."), face);
+            var label = EditorGUI.BeginProperty(rect, new GUIContent("Плоскость стены", "Выбирает внешнюю, среднюю или внутреннюю плоскость стены."), face);
             EditorGUI.showMixedValue = face.hasMultipleDifferentValues;
             EditorGUI.BeginChangeCheck();
             int picked = EditorGUI.Popup(rect, label, System.Array.IndexOf(s_FaceOrder, (WallFace)face.intValue), s_FaceNames);
@@ -66,13 +72,13 @@ namespace CsgBrush.Editor
             if (Quaternion.Angle(m_EulerOf, first.rotation) > 1e-3f || m_EulerOf == new Quaternion(0f, 0f, 0f, 0f)) { m_Euler = Tidy(first.rotation.eulerAngles); m_EulerOf = first.rotation; }
             EditorGUI.BeginChangeCheck();
             EditorGUI.showMixedValue = mixed;
-            var euler = EditorGUILayout.Vector3Field(new GUIContent("Rotation", "Relative to the wall: 0, 0, 0 faces out of it, up is up."), m_Euler);
+            var euler = EditorGUILayout.Vector3Field(new GUIContent("Поворот, °", "Углы относительно стены в градусах. При (0, 0, 0) объект направлен наружу от стены, его верх обращён вверх."), m_Euler);
             EditorGUI.showMixedValue = false;
-            if (EditorGUI.EndChangeCheck()) { m_Euler = euler; m_EulerOf = Quaternion.Euler(euler); SetRotation(_ => Quaternion.Euler(euler), "Rotate on wall"); }
+            if (EditorGUI.EndChangeCheck()) { m_Euler = euler; m_EulerOf = Quaternion.Euler(euler); SetRotation(_ => Quaternion.Euler(euler), "Повернуть объект на стене"); }
             EditorGUILayout.BeginHorizontal();
             GUILayout.Space(EditorGUIUtility.labelWidth + 2f);
-            if (GUILayout.Button(new GUIContent("Turn around", "Turns the object 180 degrees about the wall's up axis."), EditorStyles.miniButton))
-                SetRotation(r => Quaternion.Euler(0f, 180f, 0f) * r, "Turn around on wall");
+            if (GUILayout.Button(new GUIContent("Развернуть", "Развернуть объект на 180° вокруг вертикальной оси стены."), EditorStyles.miniButton))
+                SetRotation(r => Quaternion.Euler(0f, 180f, 0f) * r, "Развернуть объект на стене");
             EditorGUILayout.EndHorizontal();
         }
 

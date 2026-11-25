@@ -746,7 +746,7 @@ namespace CsgBrush.Editor
                 if (s_Solids.TryGetValue(r.brush, out var old)) old.solid?.Dispose();
                 var data = job.newSolidData[n];
                 var entry = new SolidEntry { key = r.key, solid = job.newSolids[n], bounds = data.bounds, blocks = data.blocks, polyhedron = data.polyhedron };
-                if (entry.solid == null) r.brush.problem = "The shape could not be built.";
+                if (entry.solid == null) r.brush.problem = "Не удалось построить форму.";
                 s_Solids[r.brush] = entry;
                 r.solid = entry; job.records[job.newSolidIndices[n]] = r;
             }

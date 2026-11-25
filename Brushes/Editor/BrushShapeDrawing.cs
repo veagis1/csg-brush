@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using CsgBrush.Colliders;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Pool;
 
 namespace CsgBrush.Editor
 {
@@ -13,6 +15,94 @@ namespace CsgBrush.Editor
     public static class BrushShapeDrawing
     {
         public static readonly Color EdgeColor = new Color(0.3f, 0.8f, 1f, 0.9f);
+
+        internal static void DrawDimensions(Bounds bounds, Matrix4x4 toWorld, bool withHeight = true)
+        {
+            void Label(Vector3 position, Vector3 edge)
+            {
+                float meters = toWorld.MultiplyVector(edge).magnitude;
+                if (meters > 1e-4f)
+                    Handles.Label(toWorld.MultiplyPoint3x4(position), BrushSettings.instance.FormatUnits(meters), EditorStyles.whiteMiniLabel);
+            }
+            var min = bounds.min;
+            var center = bounds.center;
+            Label(new Vector3(center.x, min.y, min.z), Vector3.right * bounds.size.x);
+            Label(new Vector3(bounds.max.x, min.y, center.z), Vector3.forward * bounds.size.z);
+            if (withHeight) Label(new Vector3(min.x, center.y, min.z), Vector3.up * bounds.size.y);
+        }
+
+        internal static void DrawSelectionDimensions()
+        {
+            var stage = StageUtility.GetCurrentStageHandle();
+            foreach (var go in Selection.gameObjects)
+            {
+                if (!go.scene.IsValid() || !stage.Contains(go) || SceneVisibilityManager.instance.IsHidden(go)) continue;
+                if (go.TryGetComponent<Brush>(out var brush))
+                {
+                    if (BrushHooks.LocalShape(brush, out var bounds) != null)
+                        DrawDimensions(bounds, BrushGeometry.LocalToWorld(brush));
+                    continue;
+                }
+                if (go.TryGetComponent<PointGraph>(out var graph))
+                    DrawPathLengths(graph);
+                DrawObjectBounds(go);
+            }
+        }
+
+        static void DrawPathLengths(PointGraph graph)
+        {
+            for (int link = 0; link < graph.links.Count; link++)
+            {
+                var path = FloorPlanTools.WorldPath(graph, link);
+                float meters = PointGraph.PathLength(path);
+                if (meters <= 1e-4f) continue;
+                PointGraph.PathPoint(path, meters * 0.5f, out var midpoint, out _);
+                Handles.Label(midpoint, BrushSettings.instance.FormatUnits(meters), EditorStyles.whiteMiniLabel);
+            }
+        }
+
+        // Project each part into the selected object's axes so rotating the whole assembly keeps its dimensions.
+        static void DrawObjectBounds(GameObject go)
+        {
+            var root = go.transform;
+            var toLocal = root.worldToLocalMatrix;
+            Bounds? combined = null;
+            void Include(Vector3 point)
+            {
+                if (combined is Bounds bounds) { bounds.Encapsulate(point); combined = bounds; }
+                else combined = new Bounds(point, Vector3.zero);
+            }
+
+            using var rendererLease = ListPool<Renderer>.Get(out var renderers);
+            go.GetComponentsInChildren(false, renderers);
+            foreach (var renderer in renderers)
+            {
+                if (!renderer.enabled || !(renderer is MeshRenderer || renderer is SkinnedMeshRenderer)) continue;
+                var bounds = renderer.localBounds;
+                var matrix = toLocal * renderer.localToWorldMatrix;
+                var min = bounds.min;
+                var max = bounds.max;
+                for (int corner = 0; corner < 8; corner++)
+                    Include(matrix.MultiplyPoint3x4(new Vector3((corner & 1) == 0 ? min.x : max.x,
+                        (corner & 2) == 0 ? min.y : max.y, (corner & 4) == 0 ? min.z : max.z)));
+            }
+
+            // A plan or spline owns its generated brushes, even when a different GameObject renders their CSG mesh.
+            if (!combined.HasValue || go.GetComponent<BrushGenerator>() != null)
+            {
+                using var brushLease = ListPool<Brush>.Get(out var brushes);
+                go.GetComponentsInChildren(false, brushes);
+                foreach (var part in brushes)
+                {
+                    if (!part.enabled || part.operation != BrushOperation.Add) continue;
+                    var poly = BrushHooks.LocalShape(part, out _);
+                    if (poly == null) continue;
+                    var matrix = toLocal * BrushGeometry.LocalToWorld(part);
+                    foreach (var vertex in poly.vertices) Include(matrix.MultiplyPoint3x4(vertex));
+                }
+            }
+            if (combined is Bounds result) DrawDimensions(result, root.localToWorldMatrix);
+        }
 
         /// <summary>Convex parts and cut faces of a brush's shape (cached per polyhedron instance and edit).</summary>
         public static int Parts(Brush brush, List<Vector3[]> cutFaces)

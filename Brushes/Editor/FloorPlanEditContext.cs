@@ -53,7 +53,7 @@ namespace CsgBrush.Editor
         }
     }
 
-    [EditorToolContext("Edit Floor Plan", typeof(FloorPlan))]
+    [EditorToolContext("Редактировать план стен", typeof(FloorPlan))]
     [Icon(BrushIcons.Folder + "FloorPlan.png")]
     public sealed class FloorPlanEditContext : PointGraphEditContext
     {
@@ -63,7 +63,7 @@ namespace CsgBrush.Editor
     }
 
     /// <summary>Spline edit mode: the floor plan's, on a spline's points and links (Move also moves them up and down).</summary>
-    [EditorToolContext("Edit Spline", typeof(Spline))]
+    [EditorToolContext("Редактировать сплайн", typeof(Spline))]
     [Icon(BrushIcons.Folder + "Spline.png")]
     public sealed class SplineEditContext : PointGraphEditContext
     {
@@ -255,7 +255,7 @@ namespace CsgBrush.Editor
                 var p = local(start[i]); if (plan.Flat) p.y = 0f;
                 if (g > 0f) { p.x = Mathf.Round(p.x / g) * g; p.z = Mathf.Round(p.z / g) * g; if (!plan.Flat) p.y = Mathf.Round(p.y / g) * g; }
                 if (p == plan.points[i]) continue;
-                if (!recorded) { Undo.RecordObject(plan, "Edit floor plan"); recorded = true; }
+                if (!recorded) { Undo.RecordObject(plan, "Изменить план стен"); recorded = true; }
                 plan.points[i] = p;
             }
             if (recorded) BrushGenerators.MarkDirty(plan);
@@ -382,7 +382,7 @@ namespace CsgBrush.Editor
         {
             bool allSmooth = true;
             foreach (var i in pointIndices) if (i < plan.points.Count && !plan.IsSmooth(plan.pointIds[i])) allSmooth = false;
-            Undo.RecordObject(plan, allSmooth ? "Corner points" : "Smooth points");
+            Undo.RecordObject(plan, allSmooth ? "Сделать точки угловыми" : "Сделать точки плавными");
             foreach (var i in pointIndices) if (i < plan.points.Count) plan.SetSmooth(plan.pointIds[i], !allSmooth);
             BrushGenerators.MarkDirty(plan);
             return !allSmooth;
@@ -423,7 +423,7 @@ namespace CsgBrush.Editor
         {
             plan.EnsureGraph();
             if (walls.Count >= plan.links.Count) { bool all = true; for (int w = 0; w < plan.links.Count; w++) if (!walls.Contains(w)) all = false; if (all) return false; }
-            Undo.RecordObject(plan, "Delete floor plan walls");
+            Undo.RecordObject(plan, "Удалить стены плана");
             var keep = new List<PointGraph.Link>();
             for (int w = 0; w < plan.links.Count; w++) if (!walls.Contains(w)) keep.Add(plan.links[w]);
             plan.links = keep;
@@ -453,7 +453,7 @@ namespace CsgBrush.Editor
                 walls.Add(new PointGraph.Link(a, b, w0.thickness));
             }
             if (walls.Count == 0) return false;
-            Undo.RecordObject(plan, "Remove floor plan points");
+            Undo.RecordObject(plan, "Удалить точки плана стен");
             plan.links = walls;
             plan.RemoveLonePoints();
             BrushGenerators.MarkDirty(plan);
@@ -606,7 +606,7 @@ namespace CsgBrush.Editor
                     case EventType.MouseDown:
                         if (e.button == 0 && !e.alt && HandleUtility.nearestControl == id)
                         {
-                            Undo.RecordObject(plan, "Add floor plan point");
+                            Undo.RecordObject(plan, "Добавить точку плана стен");
                             plan.SplitLink(w, plan.Curve(w).Length > 2 ? midLocal : FloorPlanTools.SnapLocal(plan, mid)); // a grid point would leave the curve
                             int added = plan.points.Count - 1;
                             sel.Clear(); sel.vertices.Add(added);
@@ -677,17 +677,17 @@ namespace CsgBrush.Editor
             else if (e.type == EventType.ContextClick && GUIUtility.hotControl == 0) // a right click, not the end of a fly-through (right drag)
             {
                 var menu = new GenericMenu();
-                menu.AddItem(new GUIContent("Select All"), false, () => { foreach (var p in SelectedPlans()) SelectAll(p); SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent("Invert Selection"), false, () => { foreach (var p in SelectedPlans()) Invert(p); SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent("Clear Selection"), false, ClearSelection);
-                if (CanDelete()) menu.AddItem(new GUIContent("Delete  ⌫"), false, DeleteSelection); else menu.AddDisabledItem(new GUIContent("Delete  ⌫"));
-                if (CanToggleSmooth()) menu.AddItem(new GUIContent("Smooth / Corner  S"), false, ToggleSmoothSelection); else menu.AddDisabledItem(new GUIContent("Smooth / Corner  S"));
+                menu.AddItem(new GUIContent("Выделить всё"), false, () => { foreach (var p in SelectedPlans()) SelectAll(p); SceneView.RepaintAll(); });
+                menu.AddItem(new GUIContent("Инвертировать выделение"), false, () => { foreach (var p in SelectedPlans()) Invert(p); SceneView.RepaintAll(); });
+                menu.AddItem(new GUIContent("Снять выделение"), false, ClearSelection);
+                if (CanDelete()) menu.AddItem(new GUIContent("Удалить  ⌫"), false, DeleteSelection); else menu.AddDisabledItem(new GUIContent("Удалить  ⌫"));
+                if (CanToggleSmooth()) menu.AddItem(new GUIContent("Плавная / угловая точка  S"), false, ToggleSmoothSelection); else menu.AddDisabledItem(new GUIContent("Плавная / угловая точка  S"));
                 menu.AddSeparator("");
-                menu.AddItem(new GUIContent("Vertex mode  1"), Mode == BrushEditMode.Vertex, () => Mode = BrushEditMode.Vertex);
-                menu.AddItem(new GUIContent("Wall mode  2"), Mode == BrushEditMode.Edge, () => Mode = BrushEditMode.Edge);
-                menu.AddItem(new GUIContent("Room mode  3"), Mode == BrushEditMode.Face, () => Mode = BrushEditMode.Face);
+                menu.AddItem(new GUIContent("Режим точек  1"), Mode == BrushEditMode.Vertex, () => Mode = BrushEditMode.Vertex);
+                menu.AddItem(new GUIContent("Режим стен  2"), Mode == BrushEditMode.Edge, () => Mode = BrushEditMode.Edge);
+                menu.AddItem(new GUIContent("Режим комнат  3"), Mode == BrushEditMode.Face, () => Mode = BrushEditMode.Face);
                 menu.AddSeparator("");
-                menu.AddItem(new GUIContent("Stop Editing"), false, FloorPlanEditContext.Exit);
+                menu.AddItem(new GUIContent("Завершить редактирование"), false, FloorPlanEditContext.Exit);
                 menu.ShowAsContext();
                 e.Use();
             }
@@ -751,12 +751,12 @@ namespace CsgBrush.Editor
     }
 
     /// <summary>Move in floor plan edit mode: along the gizmo's two floor axes or freely on the floor; points land on the grid.</summary>
-    [EditorTool("Move floor plan selection", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanMoveTool : PointGraphMoveTool { }
-    [EditorTool("Move spline selection", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineMoveTool : PointGraphMoveTool { }
-    [EditorTool("Rotate floor plan selection", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanRotateTool : PointGraphRotateTool { }
-    [EditorTool("Rotate spline selection", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineRotateTool : PointGraphRotateTool { }
-    [EditorTool("Scale floor plan selection", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanScaleTool : PointGraphScaleTool { }
-    [EditorTool("Scale spline selection", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineScaleTool : PointGraphScaleTool { }
+    [EditorTool("Переместить выбранные элементы плана стен", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanMoveTool : PointGraphMoveTool { }
+    [EditorTool("Переместить выбранные элементы сплайна", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineMoveTool : PointGraphMoveTool { }
+    [EditorTool("Повернуть выбранные элементы плана стен", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanRotateTool : PointGraphRotateTool { }
+    [EditorTool("Повернуть выбранные элементы сплайна", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineRotateTool : PointGraphRotateTool { }
+    [EditorTool("Масштабировать выбранные элементы плана стен", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanScaleTool : PointGraphScaleTool { }
+    [EditorTool("Масштабировать выбранные элементы сплайна", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineScaleTool : PointGraphScaleTool { }
 
     /// <summary>Move in edit mode: along the gizmo's two floor axes, freely on the floor, and up and down for a spline; points land on the grid.</summary>
     public abstract class PointGraphMoveTool : FloorPlanSelectionTool
@@ -866,7 +866,7 @@ namespace CsgBrush.Editor
             if (Vector3.Dot(turnedAbout, axis) < 0f) angle = -angle;
             s_Disc = rotation;
             if (Mathf.Abs(angle) < 1e-4f) return;
-            Undo.RecordObject(spline, "Roll spline points");
+            Undo.RecordObject(spline, "Изменить крен точек сплайна");
             foreach (var i in moving)
             {
                 if (i >= spline.pointIds.Count) continue;
@@ -951,8 +951,8 @@ namespace CsgBrush.Editor
     {
         public FloorPlanSmoothButton()
         {
-            text = "Smooth";
-            tooltip = "Curve the walls through the selected points, or make them corners again (S).";
+            text = "Сгладить";
+            tooltip = "Проводит кривую через выбранные точки. Повторное нажатие возвращает углы. Сочетание: S.";
             clicked += FloorPlanEditState.ToggleSmoothSelection;
         }
     }
@@ -962,9 +962,9 @@ namespace CsgBrush.Editor
     {
         public FloorPlanSelectModeToolbar()
         {
-            Add(Toggle(BrushEditMode.Vertex, "Mode_Vertex", "Point Selection (1)"));
-            Add(Toggle(BrushEditMode.Edge, "Mode_Edge", "Wall Selection (2)"));
-            Add(Toggle(BrushEditMode.Face, "Mode_Face", "Room Selection (3)"));
+            Add(Toggle(BrushEditMode.Vertex, "Mode_Vertex", "Выбирать точки (1)"));
+            Add(Toggle(BrushEditMode.Edge, "Mode_Edge", "Выбирать стены (2)"));
+            Add(Toggle(BrushEditMode.Face, "Mode_Face", "Выбирать комнаты (3)"));
             EditorToolbarUtility.SetupChildrenAsButtonStrip(this);
         }
 

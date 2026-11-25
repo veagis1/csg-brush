@@ -129,14 +129,14 @@ namespace CsgBrush.Editor
         {
             if (a.startId == startId && a.endId == endId && Mathf.Approximately(a.distance, distance) && Mathf.Approximately(a.angle, angle)
                 && Mathf.Approximately(a.offset, offset) && Quaternion.Angle(a.rotation, turn) < 1e-3f) return;
-            Undo.RecordObject(a, "Move on spline");
+            Undo.RecordObject(a, "Переместить объект по сплайну");
             a.startId = startId; a.endId = endId; a.distance = distance; a.angle = angle; a.offset = offset; a.rotation = turn; a.linkLength = length;
         }
 
         static void SetFree(SplineAnchor a)
         {
             if (a.startId == WallAnchor.Free) return;
-            Undo.RecordObject(a, "Move off spline");
+            Undo.RecordObject(a, "Снять привязку к сплайну при перемещении");
             a.startId = a.endId = WallAnchor.Free;
         }
 
@@ -152,9 +152,9 @@ namespace CsgBrush.Editor
             if (spline == null) spline = NearestSpline(go.transform.position);
             if (spline == null || go.GetComponent<PointGraph>() != null) return null;
             int group = Undo.GetCurrentGroup();
-            if (go.transform.parent != spline.transform) Undo.SetTransformParent(go.transform, spline.transform, "Attach to spline");
+            if (go.transform.parent != spline.transform) Undo.SetTransformParent(go.transform, spline.transform, "Привязать к сплайну");
             if (!go.TryGetComponent<SplineAnchor>(out var a)) a = Undo.AddComponent<SplineAnchor>(go);
-            Undo.RecordObject(a, "Attach to spline");
+            Undo.RecordObject(a, "Привязать к сплайну");
             a.startId = a.endId = WallAnchor.Unplaced;
             a.MarkBrushes(true);
             Layout(spline);
@@ -168,7 +168,7 @@ namespace CsgBrush.Editor
             if (go == null || !go.TryGetComponent<SplineAnchor>(out var a)) return;
             var spline = a.Spline;
             int group = Undo.GetCurrentGroup();
-            if (spline != null) Undo.SetTransformParent(go.transform, spline.transform.parent, "Detach from spline");
+            if (spline != null) Undo.SetTransformParent(go.transform, spline.transform.parent, "Отвязать от сплайна");
             a.MarkBrushes(false);
             Undo.DestroyObjectImmediate(a);
             Undo.CollapseUndoOperations(group);
@@ -187,7 +187,7 @@ namespace CsgBrush.Editor
             return best;
         }
 
-        [MenuItem("GameObject/Brush/Attach to Spline", false, 47)]
+        [MenuItem("GameObject/CSG Brush/Привязать к сплайну", false, 47)]
         static void AttachSelected()
         {
             int group = Undo.GetCurrentGroup();
@@ -195,13 +195,13 @@ namespace CsgBrush.Editor
             Undo.CollapseUndoOperations(group);
         }
 
-        [MenuItem("GameObject/Brush/Attach to Spline", true)]
+        [MenuItem("GameObject/CSG Brush/Привязать к сплайну", true)]
         static bool CanAttachSelected() { foreach (var go in Selection.gameObjects) if (CanAttach(go)) return true; return false; }
 
         static bool CanAttach(GameObject go) => go != null && !EditorUtility.IsPersistent(go) && go.GetComponent<PointGraph>() == null && go.GetComponent<SplineAnchor>() == null
             && go.GetComponent<WallAnchor>() == null && !(go.TryGetComponent<Brush>(out var b) && b.IsGenerated) && NearestSpline(go.transform.position) != null;
 
-        [MenuItem("GameObject/Brush/Detach from Spline", false, 48)]
+        [MenuItem("GameObject/CSG Brush/Отвязать от сплайна", false, 48)]
         static void DetachSelected()
         {
             int group = Undo.GetCurrentGroup();
@@ -209,7 +209,7 @@ namespace CsgBrush.Editor
             Undo.CollapseUndoOperations(group);
         }
 
-        [MenuItem("GameObject/Brush/Detach from Spline", true)]
+        [MenuItem("GameObject/CSG Brush/Отвязать от сплайна", true)]
         static bool CanDetachSelected() { foreach (var go in Selection.gameObjects) if (go.GetComponent<SplineAnchor>() != null) return true; return false; }
 
         // ------------------------------------------------------------------ repeating

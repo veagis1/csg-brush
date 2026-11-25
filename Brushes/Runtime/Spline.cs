@@ -9,41 +9,41 @@ namespace CsgBrush
     /// generated (see <see cref="BrushGenerator"/>): each straight piece of the path is one brush, the hull of the profile
     /// at its two ends. A hollow profile also cuts its inside, after every solid piece, so branches open into each other.
     /// </summary>
-    [AddComponentMenu("CSG Brush/Spline")]
+    [AddComponentMenu("CSG Brush/Сплайн")]
     [Icon("Packages/digital.dream.csgbrush/Brushes/Editor/Icons/Spline.png")]
     [DisallowMultipleComponent]
     public sealed class Spline : PointGraph
     {
         public enum Profile
         {
-            [Tooltip("A round tube: pipes, columns, tunnels.")] Circle,
-            [Tooltip("A box section: beams, rails, roads, walls; Half and Hollow, a channel open on top.")] Rectangle,
+            [InspectorName("Круг"), Tooltip("Круглый профиль для труб, колонн и тоннелей.")] Circle,
+            [InspectorName("Прямоугольник"), Tooltip("Прямоугольный профиль для балок, дорог и стен. Половинный полый профиль образует открытый жёлоб.")] Rectangle,
         }
 
         public enum Orientation
         {
-            [Tooltip("The profile's top stays up: roads, rails, fences.")] Upright,
-            [Tooltip("The profile turns with the path without twisting: pipes, coasters.")] Follow,
+            [InspectorName("Вертикально"), Tooltip("Верх профиля остаётся направлен вверх. Подходит для дорог, рельсов и ограждений.")] Upright,
+            [InspectorName("Вдоль траектории"), Tooltip("Профиль поворачивается за траекторией без скручивания. Подходит для труб и направляющих.")] Follow,
         }
 
         public enum Ends
         {
-            [Tooltip("The inside is open at the ends.")] Open,
-            [Tooltip("The ends are capped.")] Closed,
-            [Tooltip("The ends are rounded: a half ball, or a half disc for a flat profile, closed.")] Rounded,
+            [InspectorName("Открытые"), Tooltip("Полость открыта с обоих концов.")] Open,
+            [InspectorName("Закрытые"), Tooltip("На концах профиля создаются заглушки.")] Closed,
+            [InspectorName("Скруглённые"), Tooltip("Закрытые концы скругляются. Для круглого профиля создаётся полусфера, для плоского — полудиск.")] Rounded,
         }
 
-        [Tooltip("The shape swept along the path.")] public Profile profile = Profile.Circle;
-        [Tooltip("Metres: width and height of the profile (a circle's diameter is the width).")] public Vector2 size = DefaultSize;
+        [InspectorName("Форма сечения"), Tooltip("Форма сечения, протягиваемого вдоль траектории.")] public Profile profile = Profile.Circle;
+        [InspectorName("Размер сечения"), Tooltip("Ширина и высота в метрах. У круга ширина задаёт диаметр. Каждый размер ограничен снизу 0,01 м.")] public Vector2 size = DefaultSize;
         /// <summary>A new spline's profile size, metres.</summary>
         public static readonly Vector2 DefaultSize = new Vector2(0.5f, 0.5f);
-        [Tooltip("Sides of a circle; 0 works them out from the curve tolerance.")] public int sides = 0;
-        [Tooltip("Only the lower half of the profile, its top level with the path: open on top when hollow (a half pipe, a channel).")] public bool half;
-        [Tooltip("Cut out the inside, leaving a wall of the thickness below.")] public bool hollow;
-        [Tooltip("Metres: the wall of a hollow profile or a channel.")] public float thickness = 0.05f;
-        [Tooltip("Whether the path's ends are open, capped or rounded.")] public Ends ends = Ends.Open;
-        [Tooltip("How the profile turns along the path.")] public Orientation orientation = Orientation.Follow;
-        [Tooltip("Empty uses the project's default material.")] public Material material;
+        [InspectorName("Стороны круга"), Tooltip("Число граней круглого сечения. От 0 до 2 — автоматический расчёт по допуску, от 3 до 64 — заданное число. Больше граней дают более гладкий профиль.")] public int sides = 0;
+        [InspectorName("Нижняя половина"), Tooltip("Оставляет нижнюю половину профиля с верхом на уровне траектории. Вместе с полостью образует открытый жёлоб.")] public bool half;
+        [InspectorName("Полый профиль"), Tooltip("Вырезает внутреннюю часть, оставляя стенку заданной толщины. При отключении профиль сплошной.")] public bool hollow;
+        [InspectorName("Толщина стенки"), Tooltip("Толщина в метрах для полого профиля. Больше — уже полость. Минимум 0,001 м, максимум на 0,001 м меньше половины меньшей стороны сечения.")] public float thickness = 0.05f;
+        [InspectorName("Окончания"), Tooltip("Определяет форму открытых концов траектории. Замкнутый участок не имеет концов.")] public Ends ends = Ends.Open;
+        [InspectorName("Ориентация сечения"), Tooltip("Задаёт направление верха сечения вдоль траектории.")] public Orientation orientation = Orientation.Follow;
+        [InspectorName("Материал"), Tooltip("Материал граней сплайна. Пустое поле использует материал по умолчанию из настроек брашей.")] public Material material;
 
         public override bool Flat => false;
 

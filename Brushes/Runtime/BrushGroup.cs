@@ -9,7 +9,7 @@ namespace CsgBrush
     /// prefab builds into the prefab, which then carries its own mesh and colliders; a prefab without a group is a
     /// stamp that carves the level it is placed in (in the editor). The group's transform moves everything it builds.
     /// </summary>
-    [AddComponentMenu("CSG Brush/Brush Group")]
+    [AddComponentMenu("CSG Brush/Группа брашей")]
     [Icon("Packages/digital.dream.csgbrush/Brushes/Editor/Icons/BrushGroup.png")]
     [DisallowMultipleComponent]
     public sealed class BrushGroup : MonoBehaviour
@@ -30,7 +30,8 @@ namespace CsgBrush
         /// Built once in the editor and moved as a whole at runtime (a lift, a drawbridge): its brushes are not static, and
         /// moving the group's transform moves everything it builds. It is never carved again at runtime.
         /// </summary>
-        [Tooltip("Built once and moved as a whole at runtime (a lift, a drawbridge): its brushes are not static.")]
+        [Tooltip("Геометрия строится один раз. В игре группа перемещается целиком, например как лифт. Её браши становятся подвижными.")]
+        [InspectorName("Подвижная группа")]
         public bool moving;
 
         /// <summary>What every render mesh of the group gets on its renderer (the materials come from the brushes).</summary>
@@ -41,22 +42,22 @@ namespace CsgBrush
     [System.Serializable]
     public sealed class RenderingSettings
     {
-        [Tooltip("Whether the meshes cast shadows, and how.")] public UnityEngine.Rendering.ShadowCastingMode castShadows = UnityEngine.Rendering.ShadowCastingMode.On;
-        [Tooltip("Cast shadows into cached shadow maps only once (static lights).")] public bool staticShadowCaster;
-        [Tooltip("Receive shadows from other objects.")] public bool receiveShadows = true;
-        [Tooltip("Lightmaps or light probes, for static meshes that contribute to global illumination.")] public ReceiveGI receiveGlobalIllumination = ReceiveGI.Lightmaps;
-        [Tooltip("Lightmap texel density relative to the rest: 2 is twice as sharp, 0.5 half.")] [Min(0f)] public float scaleInLightmap = 1f;
-        [Tooltip("Blend lightmap seams where faces meet.")] public bool stitchLightmapSeams = true;
-        [Tooltip("Lightmap Parameters asset; empty uses the scene's default.")] public Object lightmapParameters;
-        [Tooltip("Degrees: edges sharper than this split the lightmap UVs.")] [Range(1f, 180f)] public float lightmapHardAngle = 88f;
-        [Tooltip("Percent: how much the lightmap UVs may distort angles.")] [Range(1f, 75f)] public float lightmapAngleError = 8f;
-        [Tooltip("Percent: how much the lightmap UVs may distort areas.")] [Range(1f, 75f)] public float lightmapAreaError = 15f;
-        [Tooltip("Pixels between UV islands, for a mesh filling a 1024 pixel lightmap.")] [Range(1f, 64f)] public float lightmapPackMargin = 4f;
-        [Tooltip("How the meshes use light probes when they are not lightmapped.")] public UnityEngine.Rendering.LightProbeUsage lightProbes = UnityEngine.Rendering.LightProbeUsage.BlendProbes;
-        [Tooltip("How the meshes use reflection probes.")] public UnityEngine.Rendering.ReflectionProbeUsage reflectionProbes = UnityEngine.Rendering.ReflectionProbeUsage.BlendProbes;
-        [Tooltip("The point probes are sampled at; empty uses each mesh's bounds.")] public Transform anchorOverride;
-        [Tooltip("Motion vectors for motion blur and temporal effects.")] public MotionVectorGenerationMode motionVectors = MotionVectorGenerationMode.Object;
-        [Tooltip("Hidden when occluded, even while not static.")] public bool dynamicOcclusion = true;
-        [Tooltip("Rendering layers the meshes are on (light and decal layers).")] public uint renderingLayerMask = 1;
+        [InspectorName("Отбрасывать тени"), Tooltip("Режим отбрасывания теней мешами группы.")] public UnityEngine.Rendering.ShadowCastingMode castShadows = UnityEngine.Rendering.ShadowCastingMode.On;
+        [InspectorName("Кэшировать статические тени"), Tooltip("Записывать тени в кэшированные карты теней один раз. Для статического освещения.")] public bool staticShadowCaster;
+        [InspectorName("Принимать тени"), Tooltip("Отображать на мешах группы тени других объектов.")] public bool receiveShadows = true;
+        [InspectorName("Глобальное освещение"), Tooltip("Источник глобального освещения статических мешей. Выберите карты освещения или световые пробы.")] public ReceiveGI receiveGlobalIllumination = ReceiveGI.Lightmaps;
+        [InspectorName("Плотность карты освещения"), Tooltip("Относительная плотность текселей карты освещения. При 2 плотность вдвое выше, при 0,5 вдвое ниже. При 0 меш участвует в расчёте освещения, но не занимает место в карте.")] [Min(0f)] public float scaleInLightmap = 1f;
+        [InspectorName("Сглаживать швы"), Tooltip("Сглаживать швы карты освещения на стыках граней.")] public bool stitchLightmapSeams = true;
+        [InspectorName("Параметры карт освещения"), Tooltip("Ресурс параметров запекания. Пустое поле использует настройки сцены.")] public Object lightmapParameters;
+        [InspectorName("Жёсткий угол"), Tooltip("Порог в градусах. Более резкие рёбра разделяют острова UV. Уменьшение создаёт больше разрезов. Диапазон от 1° до 180°.")] [Range(1f, 180f)] public float lightmapHardAngle = 88f;
+        [InspectorName("Отклонение углов"), Tooltip("Допустимое искажение углов на развёртке в процентах. Меньше — точнее углы, больше — свободнее раскладка. Диапазон от 1% до 75%.")] [Range(1f, 75f)] public float lightmapAngleError = 8f;
+        [InspectorName("Отклонение площади"), Tooltip("Допустимое искажение площади граней на развёртке в процентах. Уменьшение лучше сохраняет пропорции. Диапазон от 1% до 75%.")] [Range(1f, 75f)] public float lightmapAreaError = 15f;
+        [InspectorName("Зазор между островами"), Tooltip("Расстояние между островами UV в пикселях для карты 1024 × 1024. Больше — меньше утечек света, но меньше места для граней. Диапазон от 1 до 64.")] [Range(1f, 64f)] public float lightmapPackMargin = 4f;
+        [InspectorName("Световые пробы"), Tooltip("Как меши получают освещение от световых проб при отсутствии карты освещения.")] public UnityEngine.Rendering.LightProbeUsage lightProbes = UnityEngine.Rendering.LightProbeUsage.BlendProbes;
+        [InspectorName("Пробы отражений"), Tooltip("Как меши используют пробы отражений.")] public UnityEngine.Rendering.ReflectionProbeUsage reflectionProbes = UnityEngine.Rendering.ReflectionProbeUsage.BlendProbes;
+        [InspectorName("Точка выборки проб"), Tooltip("Объект, задающий точку выборки проб. Пустое поле использует границы каждого меша.")] public Transform anchorOverride;
+        [InspectorName("Векторы движения"), Tooltip("Режим расчёта векторов движения для размытия и временных эффектов.")] public MotionVectorGenerationMode motionVectors = MotionVectorGenerationMode.Object;
+        [InspectorName("Отсечение за преградами"), Tooltip("Скрывать меши за преградами, в том числе подвижные.")] public bool dynamicOcclusion = true;
+        [InspectorName("Маска слоёв рендеринга"), Tooltip("Слои рендеринга мешей для фильтрации света и декалей.")] public uint renderingLayerMask = 1;
     }
 }

@@ -8,10 +8,10 @@ namespace CsgBrush.Editor
 {
     /// <summary>Scene view overlay: grid size and snap, the new brush's parameters while a Create tool is active, the edit mode toggle, lint.</summary>
     [Icon(BrushIcons.Folder + "Brush.png")]
-    [Overlay(typeof(SceneView), "Brushes", true)]
+    [Overlay(typeof(SceneView), "Brushes", "CSG Brush", "Brushes", true)]
     public sealed class BrushOverlay : Overlay
     {
-        const float PreferredWidth = 270f, Gap = 4f;
+        const float PreferredWidth = 315f, Gap = 4f;
 
         /// <summary>The panel's width: rows of buttons wrap to fit it.</summary>
         static float s_Width = PreferredWidth;
@@ -25,7 +25,7 @@ namespace CsgBrush.Editor
                 s_Width = float.IsNaN(width) || width < PreferredWidth ? PreferredWidth : width;
                 s_Width -= 8f; // the panel's padding
                 float labelWidth = EditorGUIUtility.labelWidth;
-                EditorGUIUtility.labelWidth = Mathf.Clamp(s_Width * 0.45f, 100f, 160f); // from the panel, not the whole Scene view
+                EditorGUIUtility.labelWidth = Mathf.Clamp(s_Width * 0.45f, 145f, 190f); // from the panel, not the whole Scene view
                 try { Draw(); }
                 finally { EditorGUIUtility.labelWidth = labelWidth; }
             });
@@ -53,12 +53,12 @@ namespace CsgBrush.Editor
         }
 
         static readonly string[] SelectionIcons = { "ShapeEdit_Single", "ShapeEdit_Offset", "ShapeEdit_Match" };
-        static readonly string[] SelectionNames = { "Single", "Offset", "Match" };
+        static readonly string[] SelectionNames = { "Один", "Сдвиг", "Равно" };
         static readonly string[] SelectionTips =
         {
-            "Single: only the brush you drag changes",
-            "Offset: selected brushes of the same shape change by the same amount",
-            "Match: selected brushes of the same shape get the same size",
+            "Один браш. Меняется только браш, манипулятор которого вы тянете.",
+            "Относительная правка. Выбранные браши той же формы меняются на одинаковую величину.",
+            "Выбранные браши той же формы получают новое значение изменённого параметра.",
         };
 
         /// <summary>An icon, or its name while the icon isn't imported yet.</summary>
@@ -72,7 +72,7 @@ namespace CsgBrush.Editor
         static void DrawShapeEdit(BrushSettings s, ref float x)
         {
             var icon = BrushIcons.Get("ShapeEdit");
-            var content = new GUIContent(icon != null ? " Shape Edit" : "Shape Edit", icon, "Drag a selected brush's sides to change its shape (B)");
+            var content = new GUIContent(icon != null ? " Правка формы" : "Правка формы", icon, "Тяните стороны выделенного браша, чтобы менять его форму (B).");
             float width = EditorStyles.miniButton.CalcSize(content).x + (s.shapeHandles ? Gap + SelectionIcons.Length * 24f : 0f);
             Wrap(ref x, width); // the toggle and its choices stay together
             bool shapes = GUILayout.Toggle(s.shapeHandles, content, EditorStyles.miniButton, GUILayout.Height(18));
@@ -96,17 +96,17 @@ namespace CsgBrush.Editor
             EditorGUILayout.BeginHorizontal();
             float x = 0f;
             var gridIcon = EditorGUIUtility.IconContent("GridAxisY");
-            GUILayout.Label(gridIcon != null && gridIcon.image != null ? new GUIContent(gridIcon.image, "Grid size ([ and ] change it)") : new GUIContent("Grid"), Width(ref x, 20), GUILayout.Height(18));
+            GUILayout.Label(gridIcon != null && gridIcon.image != null ? new GUIContent(gridIcon.image, "Шаг сетки. Клавиши [ и ] уменьшают и увеличивают шаг.") : new GUIContent("Сетка"), Width(ref x, gridIcon != null && gridIcon.image != null ? 20 : 42), GUILayout.Height(18));
             var names = System.Array.ConvertAll(s.gridSizes, g => g.ToString("0.###") + " " + s.unitLabel);
             int idx = EditorGUILayout.Popup(Mathf.Clamp(s.gridIndex, 0, names.Length - 1), names, Width(ref x, 74));
             if (idx != s.gridIndex) s.SetGridIndex(idx);
             var snapIcon = EditorGUIUtility.IconContent("SceneViewSnap");
-            var snapContent = snapIcon != null && snapIcon.image != null ? new GUIContent(snapIcon.image, "Snap to grid: position, size, rotation, and vertices when editing") : new GUIContent("Snap");
-            bool snap = GUILayout.Toggle(s.snapToGrid, snapContent, EditorStyles.miniButton, Width(ref x, 26), GUILayout.Height(18));
+            var snapContent = snapIcon != null && snapIcon.image != null ? new GUIContent(snapIcon.image, "Привязка к сетке. При правке привязывает положение, размеры, поворот и вершины.") : new GUIContent("Привязка");
+            bool snap = GUILayout.Toggle(s.snapToGrid, snapContent, EditorStyles.miniButton, Width(ref x, snapIcon != null && snapIcon.image != null ? 26 : 70), GUILayout.Height(18));
             if (snap != s.snapToGrid) { s.snapToGrid = snap; s.NotifyChanged(); }
-            bool cuts = GUILayout.Toggle(s.showCuts, new GUIContent("Cuts", "Show subtract brushes as translucent red volumes, so they can be seen and selected where they have carved everything away"), EditorStyles.miniButton, Width(ref x, 40), GUILayout.Height(18));
+            bool cuts = GUILayout.Toggle(s.showCuts, new GUIContent("Вычеты", "Показывать вычитающие браши полупрозрачным красным объёмом. Так их можно выбрать, даже если они полностью убрали геометрию."), EditorStyles.miniButton, Width(ref x, 54), GUILayout.Height(18));
             if (cuts != s.showCuts) { s.showCuts = cuts; s.NotifyChanged(); SceneView.RepaintAll(); }
-            bool sizes = GUILayout.Toggle(s.showDimensions, new GUIContent("Sizes", "Show the dimensions of a brush or wall while it is drawn"), EditorStyles.miniButton, Width(ref x, 44), GUILayout.Height(18));
+            bool sizes = GUILayout.Toggle(s.showDimensions, new GUIContent("Размеры", BrushSettings.DimensionsTooltip), EditorStyles.miniButton, Width(ref x, 62), GUILayout.Height(18));
             if (sizes != s.showDimensions) { s.showDimensions = sizes; s.NotifyChanged(); SceneView.RepaintAll(); }
             DrawShapeEdit(s, ref x);
             GUILayout.FlexibleSpace();
@@ -125,14 +125,14 @@ namespace CsgBrush.Editor
             if (plan)
             {
                 bool planEditing = FloorPlanEditContext.IsActive;
-                if (GUILayout.Toggle(planEditing, new GUIContent("Edit plan", "Move, Rotate and Scale act on the selected points or walls (1, 2)"), EditorStyles.miniButton) != planEditing)
+                if (GUILayout.Toggle(planEditing, new GUIContent("Правка плана стен", "Перемещение, поворот и масштаб действуют на выделенные точки или стены. Клавиши 1 и 2 меняют режим выбора."), EditorStyles.miniButton) != planEditing)
                 {
                     if (planEditing) FloorPlanEditContext.Exit(); else FloorPlanEditContext.Enter();
                 }
             }
             else using (new EditorGUI.DisabledScope(!editable))
             {
-                bool wantEditing = GUILayout.Toggle(editing, new GUIContent("Edit brush", editable ? "Move, Rotate and Scale then act on the selected vertices, edges or faces; the selection mode is in the Tool Settings toolbar (1, 2, 3)" : "Select a brush"), EditorStyles.miniButton);
+                bool wantEditing = GUILayout.Toggle(editing, new GUIContent("Правка браша", editable ? "Перемещение, поворот и масштаб действуют на выделенные вершины, рёбра или грани. Режим выбора меняется на панели инструментов или клавишами 1, 2 и 3." : "Выберите браш."), EditorStyles.miniButton);
                 if (wantEditing != editing) { if (wantEditing) BrushEditContext.Enter(); else BrushEditContext.Exit(); }
             }
             EditorGUILayout.EndHorizontal();
@@ -143,9 +143,11 @@ namespace CsgBrush.Editor
             if (parents.Count > 0)
             {
                 EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField(parents.Count + " rotated or scaled parent" + (parents.Count == 1 ? "" : "s"), EditorStyles.miniLabel);
-                if (GUILayout.Button("Select", GUILayout.Width(52))) Selection.objects = parents.ConvertAll(t => (Object)t.gameObject).ToArray();
-                if (GUILayout.Button("Reset", GUILayout.Width(60))) { BrushSnap.ResetTransformedParents(); BrushApi.ForceUpdate(); }
+                EditorGUILayout.LabelField($"Поворот / масштаб у родителей: {parents.Count}", EditorStyles.miniLabel);
+                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button(new GUIContent("Выбрать", "Выделить родительские объекты с поворотом или масштабом."))) Selection.objects = parents.ConvertAll(t => (Object)t.gameObject).ToArray();
+                if (GUILayout.Button(new GUIContent("Сбросить", "Сбросить поворот и масштаб этих родительских объектов."))) { BrushSnap.ResetTransformedParents(); BrushApi.ForceUpdate(); }
                 EditorGUILayout.EndHorizontal();
             }
             EditorGUILayout.EndVertical();
@@ -154,8 +156,8 @@ namespace CsgBrush.Editor
         /// <summary>Linear and curved stairs: solid under the steps, or slabs of a thickness.</summary>
         static void SupportUnderSteps(BrushSettings s)
         {
-            s.newSupportUnderSteps = EditorGUILayout.Toggle(new GUIContent("Support under steps", "The steps stand on solid support down to the floor"), s.newSupportUnderSteps);
-            if (!s.newSupportUnderSteps) s.newStepThickness = UnitsField(s, "Step thickness", "0 uses 0.1 m", s.newStepThickness, BrushSettings.DefaultStepThicknessMeters);
+            s.newSupportUnderSteps = EditorGUILayout.Toggle(new GUIContent("Опора под ступенями", "Включено — под ступенями сплошная опора до пола. Выключено — отдельные плиты."), s.newSupportUnderSteps);
+            if (!s.newSupportUnderSteps) s.newStepThickness = UnitsField(s, "Толщина ступени", "Толщина плиты в текущих единицах. При нуле используется 0,1 м.", s.newStepThickness, BrushSettings.DefaultStepThicknessMeters);
         }
 
         static float UnitsField(BrushSettings s, string label, string tooltip, float units, float placeholderMeters)
@@ -170,21 +172,23 @@ namespace CsgBrush.Editor
         /// The modules every new brush gets, as one dropdown however many there are: it shows Nothing, the one module, or how
         /// many, and opens a checklist of all of them, as Unity's layer mask fields do.
         /// </summary>
+        static string ModuleName(System.Type type) => type == typeof(BrushTrigger) ? "Триггер браша" : ObjectNames.NicifyVariableName(type.Name);
+
         static void ModulesDropdown(BrushSettings s, System.Collections.Generic.List<System.Type> moduleTypes)
         {
             var chosen = moduleTypes.FindAll(t => s.newModules.Contains(t.FullName));
-            string summary = chosen.Count == 0 ? "Nothing" : chosen.Count == 1 ? ObjectNames.NicifyVariableName(chosen[0].Name) : chosen.Count + " modules";
+            string summary = chosen.Count == 0 ? "Без модулей" : chosen.Count == 1 ? ModuleName(chosen[0]) : $"Модулей: {chosen.Count}";
             var rect = EditorGUILayout.GetControlRect();
-            rect = EditorGUI.PrefixLabel(rect, new GUIContent("Modules", "The game's data every new brush gets, as components on it"));
-            if (!EditorGUI.DropdownButton(rect, new GUIContent(summary, string.Join(", ", chosen.ConvertAll(t => ObjectNames.NicifyVariableName(t.Name)))), FocusType.Keyboard)) return;
+            rect = EditorGUI.PrefixLabel(rect, new GUIContent("Модули", "Компоненты с игровыми данными, которые будут добавлены к каждому новому брашу."));
+            if (!EditorGUI.DropdownButton(rect, new GUIContent(summary, string.Join(", ", chosen.ConvertAll(ModuleName))), FocusType.Keyboard)) return;
             var menu = new GenericMenu();
-            menu.AddItem(new GUIContent("Nothing"), chosen.Count == 0, () => { s.newModules.Clear(); s.NotifyChanged(); });
+            menu.AddItem(new GUIContent("Без модулей"), chosen.Count == 0, () => { s.newModules.Clear(); s.NotifyChanged(); });
             menu.AddSeparator("");
             foreach (var t in moduleTypes)
             {
                 string name = t.FullName;
                 bool on = s.newModules.Contains(name);
-                menu.AddItem(new GUIContent(ObjectNames.NicifyVariableName(t.Name)), on, () =>
+                menu.AddItem(new GUIContent(ModuleName(t)), on, () =>
                 {
                     if (on) s.newModules.Remove(name); else s.newModules.Add(name);
                     s.NotifyChanged();
@@ -197,13 +201,13 @@ namespace CsgBrush.Editor
         static void DrawNewBrush(BrushSettings s, BrushCreateTool tool)
         {
             var shape = tool.Shape;
-            float labelWidth = EditorGUIUtility.labelWidth; EditorGUIUtility.labelWidth = 96;
+            float labelWidth = EditorGUIUtility.labelWidth; EditorGUIUtility.labelWidth = 155;
             EditorGUILayout.LabelField(tool.Title, EditorStyles.boldLabel);
             EditorGUI.BeginChangeCheck();
             if (!BrushCreateTool.IsOpening(shape)) // a door or window is always a cut
             {
-                s.newOperation = (BrushOperation)EditorGUILayout.EnumPopup(new GUIContent("Operation", "Add fills space, Subtract carves the brushes above it"), s.newOperation);
-                s.newGridSnap = (GridSnap)EditorGUILayout.EnumPopup(new GUIContent("Grid snap", "What goes onto the grid: the outermost vertices, or the pivot"), s.newGridSnap);
+                s.newOperation = (BrushOperation)EditorGUILayout.EnumPopup(new GUIContent("Операция", "«Добавить» заполняет объём. «Вычесть» вырезает объём из брашей выше в иерархии."), s.newOperation);
+                s.newGridSnap = (GridSnap)EditorGUILayout.EnumPopup(new GUIContent("Привязка к сетке", "К сетке привязываются крайние вершины формы либо точка опоры. Привязку можно отключить."), s.newGridSnap);
             }
             var moduleTypes = BrushApi.ModuleTypes();
             if (moduleTypes.Count > 0) ModulesDropdown(s, moduleTypes);
@@ -212,61 +216,61 @@ namespace CsgBrush.Editor
             {
                 case BrushShape.Cylinder:
                 case BrushShape.Cone:
-                    s.newSides = Mathf.Max(3, EditorGUILayout.IntField(new GUIContent("Sides"), s.newSides));
+                    s.newSides = Mathf.Max(3, EditorGUILayout.IntField(new GUIContent("Стороны", "Число сторон по окружности, от 3. Чем их больше, тем плавнее контур."), s.newSides));
                     break;
                 case BrushShape.Sphere:
-                    s.newTessellation = EditorGUILayout.IntSlider(new GUIContent("Tessellation"), s.newTessellation, 1, 5);
+                    s.newTessellation = EditorGUILayout.IntSlider(new GUIContent("Детализация", "Уровень разбиения сферы от 1 до 5. Чем больше значение, тем больше граней и плавнее поверхность."), s.newTessellation, 1, 5);
                     break;
                 case BrushShape.Stairs:
-                    s.newStepHeight = UnitsField(s, "Step height", "0 uses 0.25 m; the steps fill the drawn height", s.newStepHeight, stepHeight);
+                    s.newStepHeight = UnitsField(s, "Высота ступени", "Высота ступени в текущих единицах. Чем больше значение, тем меньше ступеней на заданной высоте. При нуле используется 0,25 м.", s.newStepHeight, stepHeight);
                     SupportUnderSteps(s);
                     break;
                 case BrushShape.CurvedStairs:
-                    s.newInnerRadius = UnitsField(s, "Inner radius", "0 uses one grid step", s.newInnerRadius, s.GridMeters);
-                    s.newStepHeight = UnitsField(s, "Step height", "0 uses 0.25 m; the steps fill the drawn height", s.newStepHeight, stepHeight);
-                    s.newCurveAngle = EditorGUILayout.FloatField(new GUIContent("Angle of curve", "Degrees the steps cover"), s.newCurveAngle);
-                    s.newCounterClockwise = EditorGUILayout.Toggle(new GUIContent("Counter clockwise"), s.newCounterClockwise);
+                    s.newInnerRadius = UnitsField(s, "Внутренний радиус", "В текущих единицах. Ноль соответствует шагу сетки.", s.newInnerRadius, s.GridMeters);
+                    s.newStepHeight = UnitsField(s, "Высота ступени", "Высота ступени в текущих единицах. Чем больше значение, тем меньше ступеней на заданной высоте. При нуле используется 0,25 м.", s.newStepHeight, stepHeight);
+                    s.newCurveAngle = EditorGUILayout.FloatField(new GUIContent("Угол поворота", "Угол, который проходит лестница, в градусах. Чем больше угол, тем дальше идут ступени вокруг опоры."), s.newCurveAngle);
+                    s.newCounterClockwise = EditorGUILayout.Toggle(new GUIContent("Против часовой", "Включено — подъём против часовой стрелки. Выключено — по часовой стрелке. Направление оценивается сверху."), s.newCounterClockwise);
                     SupportUnderSteps(s);
                     break;
                 case BrushShape.SpiralStairs:
-                    s.newInnerRadius = UnitsField(s, "Inner radius", "0 uses one grid step", s.newInnerRadius, s.GridMeters);
-                    s.newStepThickness = UnitsField(s, "Step thickness", "0 uses 0.1 m", s.newStepThickness, BrushSettings.DefaultStepThicknessMeters);
-                    s.newStepHeight = UnitsField(s, "Step height", "0 uses 0.25 m; the steps fill the drawn height", s.newStepHeight, stepHeight);
-                    s.newStepsPer360 = Mathf.Max(1, EditorGUILayout.IntField(new GUIContent("Steps per 360"), s.newStepsPer360));
-                    s.newSlopedCeiling = EditorGUILayout.Toggle(new GUIContent("Sloped ceiling"), s.newSlopedCeiling);
-                    s.newSlopedFloor = EditorGUILayout.Toggle(new GUIContent("Sloped floor"), s.newSlopedFloor);
-                    s.newCounterClockwise = EditorGUILayout.Toggle(new GUIContent("Counter clockwise"), s.newCounterClockwise);
+                    s.newInnerRadius = UnitsField(s, "Внутренний радиус", "В текущих единицах. Ноль соответствует шагу сетки.", s.newInnerRadius, s.GridMeters);
+                    s.newStepThickness = UnitsField(s, "Толщина ступени", "Толщина плиты в текущих единицах. При нуле используется 0,1 м.", s.newStepThickness, BrushSettings.DefaultStepThicknessMeters);
+                    s.newStepHeight = UnitsField(s, "Высота ступени", "Высота ступени в текущих единицах. Чем больше значение, тем меньше ступеней на заданной высоте. При нуле используется 0,25 м.", s.newStepHeight, stepHeight);
+                    s.newStepsPer360 = Mathf.Max(1, EditorGUILayout.IntField(new GUIContent("Ступеней на оборот", "Число ступеней на 360°, минимум одна. Чем больше ступеней, тем меньше поворот между соседними."), s.newStepsPer360));
+                    s.newSlopedCeiling = EditorGUILayout.Toggle(new GUIContent("Наклонный потолок", "Заменяет ступенчатую нижнюю поверхность лестницы наклонной."), s.newSlopedCeiling);
+                    s.newSlopedFloor = EditorGUILayout.Toggle(new GUIContent("Наклонный пол", "Заменяет ступенчатую верхнюю поверхность лестницы наклонной."), s.newSlopedFloor);
+                    s.newCounterClockwise = EditorGUILayout.Toggle(new GUIContent("Против часовой", "Включено — подъём против часовой стрелки. Выключено — по часовой стрелке. Направление оценивается сверху."), s.newCounterClockwise);
                     break;
                 case BrushShape.Arch:
-                    s.newWallThickness = UnitsField(s, "Thickness", "0 uses one grid step", s.newWallThickness, wall);
-                    s.newArchAngle = EditorGUILayout.Slider(new GUIContent("Angle", "180 is a full arch; less keeps the top part of it"), s.newArchAngle, 1f, 180f);
-                    s.newSides = Mathf.Max(3, EditorGUILayout.IntField(new GUIContent("Segments"), s.newSides));
+                    s.newWallThickness = UnitsField(s, "Толщина", "В текущих единицах. Ноль соответствует шагу сетки.", s.newWallThickness, wall);
+                    s.newArchAngle = EditorGUILayout.Slider(new GUIContent("Угол", "Угол арки в градусах. 180° даёт полную арку. Чем меньше угол, тем меньшая часть вершины остаётся."), s.newArchAngle, 1f, 180f);
+                    s.newSides = Mathf.Max(3, EditorGUILayout.IntField(new GUIContent("Сегменты", "Число сегментов арки, от 3. Чем их больше, тем плавнее дуга."), s.newSides));
                     break;
                 case BrushShape.Door:
-                    s.newDoorWidth = UnitsField(s, "Width", "Width of the doorway; 0 uses 1 m", s.newDoorWidth, BrushSettings.DefaultDoorWidthMeters);
-                    s.newDoorHeight = UnitsField(s, "Height", "Height of the doorway; 0 uses 2.2 m", s.newDoorHeight, BrushSettings.DefaultDoorHeightMeters);
+                    s.newDoorWidth = UnitsField(s, "Ширина", "Ширина дверного проёма в текущих единицах. При нуле используется 1 м.", s.newDoorWidth, BrushSettings.DefaultDoorWidthMeters);
+                    s.newDoorHeight = UnitsField(s, "Высота", "Высота дверного проёма в текущих единицах. При нуле используется 2,2 м.", s.newDoorHeight, BrushSettings.DefaultDoorHeightMeters);
                     break;
                 case BrushShape.Window:
-                    s.newWindowWidth = UnitsField(s, "Width", "Width of the window; 0 uses 1.2 m", s.newWindowWidth, BrushSettings.DefaultWindowWidthMeters);
-                    s.newWindowHeight = UnitsField(s, "Height", "Height of the window; 0 uses 1.2 m", s.newWindowHeight, BrushSettings.DefaultWindowHeightMeters);
-                    s.newWindowSill = UnitsField(s, "Sill", "Height of its bottom above the floor; 0 uses 0.9 m", s.newWindowSill, BrushSettings.DefaultWindowSillMeters);
+                    s.newWindowWidth = UnitsField(s, "Ширина", "Ширина оконного проёма в текущих единицах. При нуле используется 1,2 м.", s.newWindowWidth, BrushSettings.DefaultWindowWidthMeters);
+                    s.newWindowHeight = UnitsField(s, "Высота", "Высота оконного проёма в текущих единицах. При нуле используется 1,2 м.", s.newWindowHeight, BrushSettings.DefaultWindowHeightMeters);
+                    s.newWindowSill = UnitsField(s, "Подоконник", "Высота нижней кромки окна над полом в текущих единицах. При нуле используется 0,9 м.", s.newWindowSill, BrushSettings.DefaultWindowSillMeters);
                     break;
             }
             if (shape == BrushShape.Box || shape == BrushShape.Cylinder)
             {
-                s.newHollow = EditorGUILayout.Toggle(new GUIContent("Hollow", "Keep only the walls"), s.newHollow);
+                s.newHollow = EditorGUILayout.Toggle(new GUIContent("Полый браш", "Включено — создаются только стены заданной толщины. Выключено — создаётся сплошной браш."), s.newHollow);
                 using (new EditorGUI.DisabledScope(!s.newHollow))
-                    s.newWallThickness = UnitsField(s, "Wall thickness", "0 uses one grid step", s.newWallThickness, wall);
+                    s.newWallThickness = UnitsField(s, "Толщина стены", "В текущих единицах. Ноль соответствует шагу сетки.", s.newWallThickness, wall);
             }
             if (EditorGUI.EndChangeCheck()) { s.NotifyChanged(); SceneView.RepaintAll(); }
             EditorGUIUtility.labelWidth = labelWidth;
             EditorGUILayout.Space(2);
         }
 
-        [Shortcut("Brushes/Grid smaller", typeof(SceneView), KeyCode.LeftBracket)]
+        [Shortcut("Brushes/Grid smaller", typeof(SceneView), KeyCode.LeftBracket, displayName = "CSG Brush/Уменьшить шаг сетки")]
         static void GridSmaller() { BrushSettings.instance.SetGridIndex(BrushSettings.instance.gridIndex - 1); }
 
-        [Shortcut("Brushes/Grid larger", typeof(SceneView), KeyCode.RightBracket)]
+        [Shortcut("Brushes/Grid larger", typeof(SceneView), KeyCode.RightBracket, displayName = "CSG Brush/Увеличить шаг сетки")]
         static void GridLarger() { BrushSettings.instance.SetGridIndex(BrushSettings.instance.gridIndex + 1); }
     }
 }

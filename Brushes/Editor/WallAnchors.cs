@@ -89,7 +89,8 @@ namespace CsgBrush.Editor
         public static Brush Create(BrushShape shape, in Placement p)
         {
             int group = Undo.GetCurrentGroup();
-            var brush = BrushApi.Create(shape, p.position, p.size, p.rotation, p.plan != null ? p.plan.transform : null);
+            var parent = p.plan != null ? p.plan.transform : BrushMenu.CreationParent();
+            var brush = BrushApi.Create(shape, p.position, p.size, p.rotation, parent);
             if (p.plan != null)
             {
                 var a = Undo.AddComponent<WallAnchor>(brush.gameObject);
@@ -128,9 +129,9 @@ namespace CsgBrush.Editor
             if (go == null) return null;
             if (plan == null) plan = NearestPlan(go.transform.position);
             if (plan == null || go.GetComponent<FloorPlan>() != null) return null;
-            if (go.transform.parent != plan.transform) Undo.SetTransformParent(go.transform, plan.transform, "Attach to wall");
+            if (go.transform.parent != plan.transform) Undo.SetTransformParent(go.transform, plan.transform, "Привязать к стене");
             if (!go.TryGetComponent<WallAnchor>(out var a)) a = Undo.AddComponent<WallAnchor>(go);
-            Undo.RecordObject(a, "Attach to wall");
+            Undo.RecordObject(a, "Привязать к стене");
             a.startId = a.endId = WallAnchor.Unplaced;
             if (go.TryGetComponent<Brush>(out var b) && b.IsOpening) a.face = WallFace.Centered;
             else if (a.face == WallFace.Centered) a.face = WallFace.Inside; // the side it is on decides
@@ -147,7 +148,7 @@ namespace CsgBrush.Editor
             if (go == null || !go.TryGetComponent<WallAnchor>(out var a)) return;
             var plan = a.Plan;
             int group = Undo.GetCurrentGroup();
-            if (plan != null) Undo.SetTransformParent(go.transform, plan.transform.parent, "Detach from wall");
+            if (plan != null) Undo.SetTransformParent(go.transform, plan.transform.parent, "Отвязать от стены");
             a.MarkBrushes(false);
             Undo.DestroyObjectImmediate(a);
             Undo.CollapseUndoOperations(group);
@@ -334,14 +335,14 @@ namespace CsgBrush.Editor
         {
             if (a.startId == wall.startId && a.endId == wall.endId && a.face == face && Mathf.Approximately(a.distance, distance) && Mathf.Approximately(a.height, height)
                 && Mathf.Approximately(a.offset, offset) && Quaternion.Angle(a.rotation, rotation) < 1e-3f) return;
-            Undo.RecordObject(a, "Move on wall");
+            Undo.RecordObject(a, "Переместить вдоль стены");
             a.startId = wall.startId; a.endId = wall.endId; a.face = face; a.distance = distance; a.height = height; a.offset = offset; a.rotation = rotation; a.wallLength = wall.Length;
         }
 
         static void SetFree(WallAnchor a)
         {
             if (a.startId == WallAnchor.Free) return;
-            Undo.RecordObject(a, "Move off wall");
+            Undo.RecordObject(a, "Переместить за пределы стены");
             a.startId = a.endId = WallAnchor.Free;
         }
 
@@ -434,9 +435,9 @@ namespace CsgBrush.Editor
         {
             if (a == null || plan == null) return;
             var old = a.Plan;
-            if (old != plan) Undo.SetTransformParent(a.transform, plan.transform, "Choose wall");
+            if (old != plan) Undo.SetTransformParent(a.transform, plan.transform, "Сменить стену");
             var walls = new List<FloorPlan.Wall>(); plan.Walls(walls);
-            Undo.RecordObject(a, "Choose wall");
+            Undo.RecordObject(a, "Сменить стену");
             if (wallIndex < 0 || wallIndex >= walls.Count) a.startId = a.endId = WallAnchor.Free;
             else
             {
@@ -515,7 +516,7 @@ namespace CsgBrush.Editor
 
         // ------------------------------------------------------------------ menu
 
-        [MenuItem("GameObject/Brush/Attach to Wall", false, 45)]
+        [MenuItem("GameObject/CSG Brush/Привязать к стене", false, 45)]
         static void AttachSelected()
         {
             int group = Undo.GetCurrentGroup();
@@ -523,13 +524,13 @@ namespace CsgBrush.Editor
             Undo.CollapseUndoOperations(group);
         }
 
-        [MenuItem("GameObject/Brush/Attach to Wall", true)]
+        [MenuItem("GameObject/CSG Brush/Привязать к стене", true)]
         static bool CanAttachSelected() { foreach (var go in Selection.gameObjects) if (CanAttach(go)) return true; return false; }
 
         static bool CanAttach(GameObject go) => go != null && !EditorUtility.IsPersistent(go) && go.GetComponent<FloorPlan>() == null && go.GetComponent<WallAnchor>() == null
             && !(go.TryGetComponent<Brush>(out var b) && b.IsGenerated) && NearestPlan(go.transform.position) != null;
 
-        [MenuItem("GameObject/Brush/Detach from Wall", false, 46)]
+        [MenuItem("GameObject/CSG Brush/Отвязать от стены", false, 46)]
         static void DetachSelected()
         {
             int group = Undo.GetCurrentGroup();
@@ -537,7 +538,7 @@ namespace CsgBrush.Editor
             Undo.CollapseUndoOperations(group);
         }
 
-        [MenuItem("GameObject/Brush/Detach from Wall", true)]
+        [MenuItem("GameObject/CSG Brush/Отвязать от стены", true)]
         static bool CanDetachSelected() { foreach (var go in Selection.gameObjects) if (go.GetComponent<WallAnchor>() != null) return true; return false; }
     }
 }

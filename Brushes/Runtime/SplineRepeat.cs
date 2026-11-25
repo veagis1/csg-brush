@@ -9,18 +9,18 @@ namespace CsgBrush
     /// pipe, lamps along a road. Each run of the path (from an end or a junction to the next) gets its own row. The copies
     /// are generated: hidden, made again whenever the spline or these settings change. Edit the source to change them.
     /// </summary>
-    [AddComponentMenu("CSG Brush/Spline Repeat")]
+    [AddComponentMenu("CSG Brush/Повтор вдоль сплайна")]
     [RequireComponent(typeof(Spline))]
     [ExecuteAlways]
     public sealed class SplineRepeat : MonoBehaviour
     {
-        [Tooltip("The object or prefab to copy.")] public GameObject source;
-        [Tooltip("Metres between copies.")] public float spacing = 2f;
-        [Tooltip("Metres from the start of each run to the first copy.")] public float start = 0f;
-        [Tooltip("Degrees around the profile: 0 on top, 90 on the right, 180 underneath.")] public float angle;
-        [Tooltip("Metres from the profile's surface to each copy's pivot, out of it.")] public float offset;
-        [Tooltip("Keep the profile's up instead of standing out of the surface: posts and lamps on a road's edge.")] public bool upright;
-        [Tooltip("Each copy's turn, in degrees, relative to standing on the surface facing along the path.")] public Vector3 rotation;
+        [InspectorName("Объект для копирования"), Tooltip("Объект или префаб для размещения вдоль сплайна. При пустом поле копии не строятся.")] public GameObject source;
+        [InspectorName("Шаг копий"), Tooltip("Расстояние между копиями в метрах. Меньший шаг увеличивает число копий. Минимум 0,05 м.")] public float spacing = 2f;
+        [InspectorName("Начальный отступ"), Tooltip("Отступ до первой копии в метрах на каждом участке. Ноль — начало участка. Если отступ дальше конца, копий на участке не будет.")] public float start = 0f;
+        [InspectorName("Угол вокруг сечения"), Tooltip("Угол в градусах вокруг сечения. Ноль — сверху, 90° — справа, 180° — снизу.")] public float angle;
+        [InspectorName("Отступ от поверхности"), Tooltip("Расстояние в метрах от поверхности до опорной точки копии. Ноль — на поверхности, положительное значение сдвигает наружу.")] public float offset;
+        [InspectorName("Вертикально относительно сечения"), Tooltip("Ориентирует верх копии по верху сечения. При отключении верх направлен наружу вдоль нормали поверхности.")] public bool upright;
+        [InspectorName("Дополнительный поворот"), Tooltip("Поворот копии по осям в градусах. Нули сохраняют направление вдоль сплайна и выбранную ориентацию верха.")] public Vector3 rotation;
 
         /// <summary>The hidden object holding the copies. Derived: made again from the settings.</summary>
         [HideInInspector] public Transform container;

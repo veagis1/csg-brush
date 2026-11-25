@@ -30,7 +30,7 @@ namespace CsgBrush.Editor
                 if (brush.polyhedron == null || !brush.polyhedron.IsValid)
                     brush.polyhedron = BrushGeometry.ShapePolyhedron(brush.customFrom, BrushGeometry.ShapeParams.From(brush)); // picked Custom in the dropdown
                 brush.size = brush.polyhedron.Bounds().size;
-                if (!brush.polyhedron.IsSound(out var why)) brush.problem = "Shape is " + why + ".";
+                if (!brush.polyhedron.IsSound(out var why)) brush.problem = "Некорректная форма: " + BrushBoolean.DescribeProblem(why) + ".";
             }
             else if (brush.HasParametricSize)
                 brush.size = BrushGeometry.Polyhedron(brush).Bounds().size; // curved and spiral stairs: the size follows the parameters

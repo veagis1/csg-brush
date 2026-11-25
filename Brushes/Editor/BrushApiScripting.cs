@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using CsgBrush.Colliders;
 using UnityEditor;
 using UnityEngine;
@@ -27,9 +26,9 @@ namespace CsgBrush.Editor
         public static RebuildReport OfLoadedScenes(double milliseconds)
         {
             var report = new RebuildReport { milliseconds = milliseconds, meshColliderPieces = new List<GameObject>() };
-            foreach (var brush in Object.FindObjectsByType<Brush>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var brush in Object.FindObjectsByType<Brush>(FindObjectsInactive.Include))
                 if (brush.gameObject.scene.IsValid()) report.brushes++;
-            foreach (var group in Object.FindObjectsByType<BrushGroup>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var group in Object.FindObjectsByType<BrushGroup>(FindObjectsInactive.Include))
             {
                 if (!group.gameObject.scene.IsValid()) continue;
                 report.groups++;
@@ -37,7 +36,7 @@ namespace CsgBrush.Editor
                     if (BrushGroup.IsMeshChildName(child.name) && child.TryGetComponent<MeshFilter>(out var filter) && filter.sharedMesh != null)
                         report.triangles += (int)(filter.sharedMesh.GetIndexCount(0) / 3);
             }
-            foreach (var piece in Object.FindObjectsByType<ConvexPiece>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var piece in Object.FindObjectsByType<ConvexPiece>(FindObjectsInactive.Include))
             {
                 if (!piece.gameObject.scene.IsValid()) continue;
                 if (piece.TryGetComponent<BoxCollider>(out _)) report.boxColliders++;
@@ -62,7 +61,7 @@ namespace CsgBrush.Editor
         internal BrushBatch(string name)
         {
             Undo.IncrementCurrentGroup();
-            Undo.SetCurrentGroupName(name);
+            Undo.SetCurrentGroupName(name == "Build brushes" ? "Построить браши" : name);
             undoGroup = Undo.GetCurrentGroup();
             BrushApi.batchDepth++;
         }
@@ -102,8 +101,8 @@ namespace CsgBrush.Editor
         public static BrushGroup CreateGroup(string name, Transform parent = null, bool moving = false)
         {
             var go = new GameObject(name);
-            Undo.RegisterCreatedObjectUndo(go, "Create brush group");
-            if (parent != null) Undo.SetTransformParent(go.transform, parent, "Create brush group");
+            Undo.RegisterCreatedObjectUndo(go, "Создать группу брашей");
+            if (parent != null) Undo.SetTransformParent(go.transform, parent, "Создать группу брашей");
             go.transform.localPosition = Vector3.zero;
             go.transform.localRotation = Quaternion.identity;
             GameObjectUtility.SetStaticEditorFlags(go, moving ? 0 : BrushSettings.instance.defaultModelStaticFlags);
@@ -131,19 +130,19 @@ namespace CsgBrush.Editor
                 foreach (var root in SceneManager.GetActiveScene().GetRootGameObjects())
                     if (root.name == name && root.GetComponent<GeneratedBrushes>() != null) { container = root.transform; break; }
             }
-            using (Batch("Regenerate " + name))
+            using (Batch("Пересоздать: " + name))
             {
                 if (container == null)
                 {
                     var go = new GameObject(name);
-                    Undo.RegisterCreatedObjectUndo(go, "Regenerate brushes");
-                    if (parent != null) Undo.SetTransformParent(go.transform, parent, "Regenerate brushes");
+                    Undo.RegisterCreatedObjectUndo(go, "Пересоздать браши");
+                    if (parent != null) Undo.SetTransformParent(go.transform, parent, "Пересоздать браши");
                     container = go.transform;
                     Undo.AddComponent<GeneratedBrushes>(go);
                 }
                 var marker = container.GetComponent<GeneratedBrushes>();
                 marker.generator = generator ?? name;
-                Undo.SetSiblingIndex(container, 0, "Regenerate brushes");
+                Undo.SetSiblingIndex(container, 0, "Пересоздать браши");
                 for (int i = container.childCount - 1; i >= 0; i--)
                     Undo.DestroyObjectImmediate(container.GetChild(i).gameObject);
                 build(container);
@@ -151,15 +150,17 @@ namespace CsgBrush.Editor
             return container.GetComponent<GeneratedBrushes>();
         }
 
-        [MenuItem("Tools/CSG Brush/Select Convex Mesh Colliders", false, 200)]
+        [MenuItem("Tools/CSG Brush/Выбрать выпуклые коллайдеры-меши", false, 200)]
         static void SelectMeshCollidersMenu()
         {
             var report = RebuildReport.OfLoadedScenes(0);
             Selection.objects = report.meshColliderPieces.ToArray();
-            var text = new StringBuilder(report.ToString().Replace(", 0 ms", ""));
-            if (report.meshColliders == 0) text.Append(". Every collider piece is a box.");
-            else text.Append(". The convex mesh colliders are selected; physics treats them less exactly than boxes.");
-            Debug.Log(text.ToString());
+            string summary = $"Брашей {report.brushes} · групп {report.groups} · треугольников {report.triangles} · " +
+                $"прямоугольных коллайдеров {report.boxColliders} · выпуклых коллайдеров-мешей {report.meshColliders}.";
+            string details = report.meshColliders == 0
+                ? "Все части коллайдеров прямоугольные."
+                : "Выпуклые коллайдеры-меши выделены. Физический движок обрабатывает их с меньшей точностью, чем прямоугольные коллайдеры.";
+            Debug.Log(summary + " " + details);
         }
     }
 
@@ -168,8 +169,14 @@ namespace CsgBrush.Editor
     {
         public override void OnInspectorGUI()
         {
-            EditorGUILayout.HelpBox("These brushes are made by code and are replaced when it runs again. Put your own brushes beside this object, not inside it: they are kept, and your subtract brushes still cut what is generated here.", MessageType.Info);
-            DrawDefaultInspector();
+            EditorGUILayout.HelpBox("Эти браши создаются кодом и заменяются при каждом запуске генератора. Размещайте свои браши рядом с этим объектом. Они сохранятся, а браши с операцией «Вычесть» продолжат вырезать нужные объёмы из результата генерации.", MessageType.Info);
+            BrushEditor.DrawNamedProperties(serializedObject);
         }
+    }
+
+    [CustomEditor(typeof(BrushTrigger)), CanEditMultipleObjects]
+    sealed class BrushTriggerEditor : UnityEditor.Editor
+    {
+        public override void OnInspectorGUI() => BrushEditor.DrawNamedProperties(serializedObject);
     }
 }

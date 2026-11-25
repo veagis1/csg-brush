@@ -233,7 +233,10 @@ namespace CsgBrush.Editor
         {
             var e = Event.current;
             EditModeMouse.ReleaseStaleAfter(e); // once every edit mode and tool has had the event
-            if (BrushEditContext.IsActive || Application.isPlaying) return;
+            if (Application.isPlaying) return;
+            if (e.type == EventType.Repaint && BrushSettings.instance.showDimensions)
+                BrushShapeDrawing.DrawSelectionDimensions();
+            if (BrushEditContext.IsActive) return;
             if (e.type == EventType.Repaint)
             {
                 if (BrushSettings.instance.showCuts) BrushShapeDrawing.DrawCuts();
@@ -552,7 +555,7 @@ namespace CsgBrush.Editor
         /// A brush's shape in local space and its bounds, for picking; read-only. A parametric shape is built once per set of
         /// parameters; a Custom shape is the brush's own polyhedron (edited in place, so its bounds are measured each time).
         /// </summary>
-        static BrushPolyhedron LocalShape(Brush brush, out Bounds bounds)
+        internal static BrushPolyhedron LocalShape(Brush brush, out Bounds bounds)
         {
             bounds = default;
             if (brush.shape == BrushShape.Custom && brush.polyhedron != null && brush.polyhedron.IsValid)
