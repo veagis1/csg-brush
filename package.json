@@ -1,12 +1,12 @@
 {
   "name": "digital.dream.csgbrush",
   "displayName": "CSG Brush",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "unity": "6000.6",
   "description": "Quake/Unreal-style brush level editor for Unity 6000.6: convex brushes on a world grid, add and subtract, hand-editable shapes, CSG rendering through the Manifold library and one convex collider per brush piece.",
-  "documentationUrl": "https://github.com/jaroslavstehlik/csg-brush/blob/main/Documentation~/index.md",
-  "changelogUrl": "https://github.com/jaroslavstehlik/csg-brush/blob/main/CHANGELOG.md",
-  "licensesUrl": "https://github.com/jaroslavstehlik/csg-brush/blob/main/LICENSE.md",
+  "documentationUrl": "https://github.com/veagis1/csg-brush/blob/main/Documentation~/index.md",
+  "changelogUrl": "https://github.com/veagis1/csg-brush/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/veagis1/csg-brush/blob/main/LICENSE.md",
   "license": "MIT",
   "keywords": [
     "level design",
@@ -26,6 +26,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/jaroslavstehlik/csg-brush.git"
+    "url": "https://github.com/veagis1/csg-brush.git"
   }
 }
