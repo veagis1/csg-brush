@@ -429,13 +429,28 @@ namespace CsgBrush
             return c;
         }
 
+        // At large distances even adjacent floats are more than a micron apart.
+        // Keep their bits instead of overflowing the integer used to quantize small values.
+        internal static int MicronKey(float value)
+        {
+            double microns = (double)value * 1e6;
+            return microns >= int.MinValue && microns <= int.MaxValue
+                ? (int)Math.Round(microns)
+                : value.GetHashCode();
+        }
+
         /// <summary>Content hash of the shape (vertices rounded to a micron, faces).</summary>
         public int ContentHash()
         {
             unchecked
             {
                 int h = 17;
-                for (int i = 0; i < vertices.Length; i++) { var v = vertices[i]; h = h * 31 + Mathf.RoundToInt(v.x * 1e6f); h = h * 31 + Mathf.RoundToInt(v.y * 1e6f); h = h * 31 + Mathf.RoundToInt(v.z * 1e6f); }
+                foreach (var v in vertices)
+                {
+                    h = h * 31 + MicronKey(v.x);
+                    h = h * 31 + MicronKey(v.y);
+                    h = h * 31 + MicronKey(v.z);
+                }
                 for (int f = 0; f < faces.Length; f++) { h = h * 31 + faces[f].indices.Length; foreach (var i in faces[f].indices) h = h * 31 + i; }
                 return h;
             }

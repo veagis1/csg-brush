@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using CsgBrush.Editor;
 using CsgBrush.Colliders;
 using CsgBrush.Colliders.Editor;
@@ -113,6 +114,102 @@ namespace CsgBrush.Tests
             after.IntersectWith(before);
             Assert.AreEqual(9, after.Count, "the nine untouched piece objects are the same objects as before");
             AssertSameAsFromScratch("after moving a brush");
+        }
+
+        [Test]
+        public void MovingADistantBoxKeepsItsColliderAligned()
+        {
+            var start = new Vector3(1210099f, 88.75f, 2624193f);
+            var size = new Vector3(317.875f, 177.625f, 332f);
+            var moved = BrushApi.Create(BrushShape.Box, start, size, Quaternion.identity, name: "Distant", snap: false);
+            var independent = BrushApi.Create(BrushShape.Box, new Vector3(10f, 2f, 7f), new Vector3(2f, 4f, 6f), Quaternion.identity, name: "Independent", snap: false);
+            BrushApi.ForceUpdate();
+            var retained = Container().GetComponentsInChildren<ConvexPiece>().Single(piece => piece.brushName == independent.name);
+
+            var positions = new[] { start, start + Vector3.right * 8.125f, start + Vector3.right * 20f, start + Vector3.forward * 80.25f, start };
+            foreach (var position in positions)
+            {
+                moved.transform.position = position;
+                BrushApi.ForceUpdate();
+                Physics.SyncTransforms();
+
+                var pieces = Container().GetComponentsInChildren<ConvexPiece>();
+                var match = pieces.SingleOrDefault(piece => piece.brushName == moved.name);
+                Assert.IsNotNull(match, $"missing collider at {position:F3} m");
+                var collider = match.GetComponent<BoxCollider>();
+                Assert.IsNotNull(collider);
+                Assert.That(Vector3.Distance(position, collider.bounds.center), Is.LessThanOrEqualTo(0.25f), $"collider center at {position:F3} m");
+                Assert.That(Vector3.Distance(size, collider.bounds.size), Is.LessThanOrEqualTo(0.5f), $"collider size at {position:F3} m");
+                Assert.AreSame(retained, pieces.Single(piece => piece.brushName == independent.name));
+            }
+        }
+
+        [Test]
+        public void MovingADistantCutterAcrossAnOriginBoundaryMovesTheOpening()
+        {
+            // The cutter crosses the boundary between two 512 m origins while the recipient stays put.
+            var boundary = new Vector3(1210112f, 88.75f, 2624193f);
+            var left = boundary + Vector3.left * 8f;
+            var right = boundary + Vector3.right * 8f;
+            BrushApi.Create(BrushShape.Box, boundary, new Vector3(64f, 16f, 32f), Quaternion.identity, snap: false);
+            var cut = BrushApi.Create(BrushShape.Box, left, new Vector3(6f, 32f, 48f), Quaternion.identity, snap: false);
+            BrushApi.SetOperation(cut, BrushOperation.Subtract);
+
+            var positions = new[] { left, right, left };
+            foreach (var position in positions)
+            {
+                cut.transform.position = position;
+                BrushApi.ForceUpdate();
+                Physics.SyncTransforms();
+
+                var colliders = Container().GetComponentsInChildren<Collider>();
+                bool HitsSolid(Vector3 point) => colliders.Any(collider => collider.Raycast(new Ray(point + Vector3.up * 20f, Vector3.down), out _, 40f));
+                Assert.IsFalse(HitsSolid(position), $"opening at {position:F3} m");
+                Assert.IsTrue(HitsSolid(position == left ? right : left), "solid on the other side of the boundary");
+            }
+        }
+
+        [Test]
+        public void MovingADistantParentPreservesItsChildsOpening()
+        {
+            var start = new Vector3(1210099f, 88.75f, 2624193f);
+            var moved = BrushApi.Create(BrushShape.Box, start, new Vector3(64f, 16f, 32f), Quaternion.identity, snap: false);
+            var offset = Vector3.right * 8f;
+            var cut = BrushApi.Create(BrushShape.Box, start + offset, new Vector3(6f, 32f, 48f), Quaternion.identity, moved.transform, snap: false);
+            BrushApi.SetOperation(cut, BrushOperation.Subtract);
+
+            var alongX = start + Vector3.right * 80f;
+            var positions = new[] { start, alongX, alongX + Vector3.forward * 96f, start };
+            var previous = start;
+            foreach (var position in positions)
+            {
+                moved.transform.position = position;
+                BrushApi.ForceUpdate();
+                Physics.SyncTransforms();
+
+                Assert.AreEqual(position + offset, cut.transform.position);
+                var meshObject = BrushCsg.MeshObject(Model(), false);
+                var mesh = meshObject.GetComponent<MeshFilter>().sharedMesh;
+                var matrix = meshObject.localToWorldMatrix;
+                var colliders = Container().GetComponentsInChildren<Collider>();
+                Ray FromAbove(Vector3 point) => new Ray(point + Vector3.up * 20f, Vector3.down);
+                bool HitsCollider(Ray ray) => colliders.Any(collider => collider.Raycast(ray, out _, 40f));
+                var throughOpening = FromAbove(cut.transform.position);
+                Assert.IsFalse(BrushHooks.IntersectRayMesh(throughOpening, mesh, matrix, out _));
+                Assert.IsFalse(HitsCollider(throughOpening));
+                Assert.IsTrue(BrushHooks.IntersectRayMesh(FromAbove(position), mesh, matrix, out _));
+                Assert.IsTrue(HitsCollider(FromAbove(position)));
+
+                var openingWall = new Ray(cut.transform.position, Vector3.right);
+                Assert.IsTrue(BrushHooks.IntersectRayMesh(openingWall, mesh, matrix, out var wallHit));
+                Assert.AreSame(cut, BrushCsg.TriangleBrushes(meshObject)[wallHit.triangleIndex]);
+                if (position != previous)
+                {
+                    Assert.IsFalse(BrushHooks.IntersectRayMesh(FromAbove(previous), mesh, matrix, out _));
+                    Assert.IsFalse(HitsCollider(FromAbove(previous)));
+                }
+                previous = position;
+            }
         }
 
         [Test]

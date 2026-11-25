@@ -22,9 +22,11 @@ namespace CsgBrush.Colliders.Editor
         public static readonly System.Text.StringBuilder Log = new System.Text.StringBuilder();
         public static bool Verbose;
 
-        /// <summary>One brush, in CSG order: its convex parts in model space and what its volume means.</summary>
+        /// <summary>One brush, in CSG order: its convex parts and what its volume means.</summary>
         public sealed class Input
         {
+            /// <summary>Model-space origin of the parts. Zero accepts parts already in model space.</summary>
+            public Vector3 origin;
             public string name;
             public bool subtract;
             /// <summary>Solid geometry, a trigger volume, or nothing.</summary>
@@ -75,6 +77,7 @@ namespace CsgBrush.Colliders.Editor
         /// <summary>The pieces one input made last time, kept while its key holds.</summary>
         sealed class Built
         {
+            public Vector3 origin;
             public long key; public readonly List<GameObject> pieces = new List<GameObject>(); public int boxes, meshes, solids, triggers;
             /// <summary>The pieces of each of the input's convex parts, by the part's key: its planes and the cutter parts that reach it.</summary>
             public Dictionary<long, PartPieces> parts = new Dictionary<long, PartPieces>();
@@ -207,13 +210,15 @@ namespace CsgBrush.Colliders.Editor
                             var cutter = inputs[j];
                             if (cutter.addressedRecipients != null ? !cutter.addressedRecipients.Contains(input.owner ?? input) : j <= i)
                                 continue;
-                            if (cutter.layer != input.layer || !BoundsOf(j).Intersects(BoundsOf(i))) continue;
-                            mine.Add(j); key = key * 1000003 + cutter.key;
+                            if (cutter.layer != input.layer || !Overlaps(BoundsOf(i), BoundsOf(j), cutter.origin - input.origin)) continue;
+                            mine.Add(j);
+                            key = key * 1000003 + cutter.key;
+                            key = key * 31 + cutter.origin.GetHashCode();
                         }
                 }
                 var owner = input.owner ?? input;
                 seen.Add(owner);
-                if (built.TryGetValue(owner, out var was) && was.key == key && Alive(was))
+                if (built.TryGetValue(owner, out var was) && was.key == key && was.origin.Equals(input.origin) && Alive(was))
                 {
                     LastReusedPieces += was.pieces.Count;
                     continue;
@@ -221,8 +226,8 @@ namespace CsgBrush.Colliders.Editor
                 // this input's pieces, part by part: each of its own parts carved by the cutters' parts that reach it, in
                 // order. A part whose planes and reaching cutter parts are as they were keeps its pieces: a long brush
                 // changed at one end, or cut anew near one end, builds again only there
-                var entry = new Built { key = key };
-                bool reusable = was != null && Alive(was);
+                var entry = new Built { key = key, origin = input.origin };
+                bool reusable = was != null && was.origin.Equals(input.origin) && Alive(was);
                 long partKeyBase;
                 unchecked { partKeyBase = (((long)input.fingerprint * 31 + (int)input.kind) * 31 + input.layer) * 31 + (input.name != null ? input.name.GetHashCode() : 0); partKeyBase = partKeyBase * 31 + settings.minPieceVolume.GetHashCode(); }
                 foreach (var part in Own(i))
@@ -232,8 +237,16 @@ namespace CsgBrush.Colliders.Editor
                     long partKey = partKeyBase * 1000003 + PlanesHash(part);
                     if (!trigger)
                         foreach (int j in mine)
+                        {
+                            Vector3 offset = inputs[j].origin - input.origin;
                             foreach (var cutter in Own(j))
-                                if (PartBounds(cutter).Intersects(partBounds)) { reaching.Add(cutter); unchecked { partKey = partKey * 1000003 + PlanesHash(cutter); } }
+                            {
+                                if (!Overlaps(partBounds, PartBounds(cutter), offset)) continue;
+                                var relative = offset == Vector3.zero ? cutter : cutter.Translated(offset);
+                                reaching.Add(relative);
+                                unchecked { partKey = partKey * 1000003 + PlanesHash(relative); }
+                            }
+                        }
                     if (entry.parts.ContainsKey(partKey)) unchecked { partKey = partKey * 31 + entry.parts.Count; } // the same part twice: built on its own
                     if (reusable && was.parts.TryGetValue(partKey, out var kept))
                     {
@@ -258,7 +271,7 @@ namespace CsgBrush.Colliders.Editor
                         if (piece.IsEmpty || (!trigger && piece.Volume() < settings.minPieceVolume)) continue;
                         var tag = piece.tag as BrushTag;
                         int boxes = 0, meshes = 0;
-                        var go = ClaimOrMake(pool, container, piece, input.layer, (trigger ? "trigger " : "solid ") + (tag != null ? tag.name : "?"), trigger, tag, ref boxes, ref meshes);
+                        var go = ClaimOrMake(pool, container, piece, input.origin, input.layer, (trigger ? "trigger " : "solid ") + (tag != null ? tag.name : "?"), trigger, tag, ref boxes, ref meshes);
                         made.pieces.Add(go); made.boxes += boxes; made.meshes += meshes;
                     }
                     entry.parts[partKey] = made;
@@ -305,6 +318,12 @@ namespace CsgBrush.Colliders.Editor
 
         static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ConvexPolytope, object> s_PartBounds = new System.Runtime.CompilerServices.ConditionalWeakTable<ConvexPolytope, object>();
 
+        static bool Overlaps(Bounds a, Bounds b, Vector3 offset)
+        {
+            b.center += offset;
+            return a.Intersects(b);
+        }
+
         /// <summary>A part's box, measured once (parts are kept with their brush's solid between builds).</summary>
         static Bounds PartBounds(ConvexPolytope part)
         {
@@ -320,7 +339,13 @@ namespace CsgBrush.Colliders.Editor
             unchecked
             {
                 long h = 17;
-                foreach (var pl in part.planes) { h = h * 31 + Mathf.RoundToInt(pl.x * 1e4f); h = h * 31 + Mathf.RoundToInt(pl.y * 1e4f); h = h * 31 + Mathf.RoundToInt(pl.z * 1e4f); h = h * 31 + Mathf.RoundToInt(pl.w * 1e4f); }
+                foreach (var pl in part.planes)
+                {
+                    h = h * 31 + Mathf.RoundToInt(pl.x * 1e4f);
+                    h = h * 31 + Mathf.RoundToInt(pl.y * 1e4f);
+                    h = h * 31 + Mathf.RoundToInt(pl.z * 1e4f);
+                    h = h * 31 + System.Math.Round((double)pl.w * 1e4).GetHashCode();
+                }
                 return h;
             }
         }
@@ -332,7 +357,7 @@ namespace CsgBrush.Colliders.Editor
         }
 
         /// <summary>Reuse an existing piece with exactly these planes and module data, or create one; either way the input's hook runs on it.</summary>
-        static GameObject ClaimOrMake(Dictionary<int, List<ConvexPiece>> pool, Transform container, ConvexPolytope piece, int layer, string name, bool trigger, BrushTag tag, ref int boxes, ref int meshes)
+        static GameObject ClaimOrMake(Dictionary<int, List<ConvexPiece>> pool, Transform container, ConvexPolytope piece, Vector3 origin, int layer, string name, bool trigger, BrushTag tag, ref int boxes, ref int meshes)
         {
             int fingerprint = tag != null ? tag.fingerprint : 0;
             string brushName = tag != null ? tag.name : "";
@@ -342,7 +367,7 @@ namespace CsgBrush.Colliders.Editor
                 for (int i = 0; i < candidates.Count; i++)
                 {
                     var c = candidates[i];
-                    if (!c.Matches(piece.planes, fingerprint, trigger, layer, brushName)) continue;
+                    if (!c.transform.localPosition.Equals(origin) || !c.Matches(piece.planes, fingerprint, trigger, layer, brushName)) continue;
                     if (c.TryGetComponent<MeshCollider>(out var existing) && existing.sharedMesh == null) continue; // its mesh was lost (a prefab saved from a scene): make it again
                     candidates.RemoveAt(i);
                     LastReusedPieces++;
@@ -352,7 +377,7 @@ namespace CsgBrush.Colliders.Editor
                 }
             }
 
-            var go = MakePiece(container, piece, layer, name, trigger, ref boxes, ref meshes);
+            var go = MakePiece(container, piece, origin, layer, name, trigger, ref boxes, ref meshes);
             var id = go.AddComponent<ConvexPiece>();
             id.planes = piece.planes.ToArray();
             id.hash = hash;
@@ -370,11 +395,12 @@ namespace CsgBrush.Colliders.Editor
             return list;
         }
 
-        static GameObject MakePiece(Transform container, ConvexPolytope piece, int layer, string name, bool trigger, ref int boxes, ref int meshes)
+        static GameObject MakePiece(Transform container, ConvexPolytope piece, Vector3 origin, int layer, string name, bool trigger, ref int boxes, ref int meshes)
         {
             var go = new GameObject(name);
             go.layer = layer;
             go.transform.SetParent(container, false);
+            go.transform.localPosition = origin;
             if (piece.IsAxisAlignedBox(out Bounds b))
             {
                 var bc = go.AddComponent<BoxCollider>();

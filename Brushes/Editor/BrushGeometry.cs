@@ -104,14 +104,16 @@ namespace CsgBrush.Editor
         }
 
         /// <summary>Everything that changes the brush's solid (not its operation or surface), including its pose in the model.</summary>
-        public static int SolidKey(Brush b, Matrix4x4 toModel)
+        public static int SolidKey(Brush b, Matrix4x4 toModel) => SolidKey(b, Polyhedron(b), toModel);
+
+        internal static int SolidKey(Brush b, BrushPolyhedron local, Matrix4x4 toModel)
         {
             unchecked
             {
-                int h = Polyhedron(b).ContentHash();
+                int h = local.ContentHash();
                 h = h * 31 + (int)b.shape;
-                if (b.IsHollow) { h = h * 31 + 1; h = h * 31 + Mathf.RoundToInt(b.wallThickness * 1e6f); }
-                for (int i = 0; i < 16; i++) h = h * 31 + Mathf.RoundToInt(toModel[i] * 1e6f);
+                if (b.IsHollow) { h = h * 31 + 1; h = h * 31 + BrushPolyhedron.MicronKey(b.wallThickness); }
+                for (int i = 0; i < 16; i++) h = h * 31 + BrushPolyhedron.MicronKey(toModel[i]);
                 return h;
             }
         }
@@ -163,8 +165,28 @@ namespace CsgBrush.Editor
         /// </summary>
         public static void ConvexParts(Brush b, Matrix4x4 toModel, List<ConvexPolytope> add, List<ConvexPolytope> remove, ref string problem)
         {
+            int firstAdd = add.Count, firstRemove = remove?.Count ?? 0;
+            var origin = ConvexPartsInLocalFrame(b, toModel, add, remove, ref problem);
+            if (origin == Vector3.zero) return;
+            for (int i = firstAdd; i < add.Count; i++) add[i] = add[i].Translated(origin);
+            if (remove != null)
+                for (int i = firstRemove; i < remove.Count; i++) remove[i] = remove[i].Translated(origin);
+        }
+
+        /// <summary>Build and clip near the shape. The collider builder keeps this origin on the generated pieces.</summary>
+        internal static Vector3 ConvexPartsInLocalFrame(Brush b, Matrix4x4 toModel, List<ConvexPolytope> add,
+            List<ConvexPolytope> remove, ref string problem, Vector3? modelCentre = null)
+        {
             float weld = Mathf.Max(1e-3f, BrushSettings.instance.GridMeters / 16f); // for decomposition pieces: slivers a hair apart merge
             var local = Polyhedron(b);
+            // Binary multiples translate exactly. Nearby brushes usually share a frame, with
+            // plane distances small enough for the clipping epsilon (0.0001 m).
+            const float span = 512f;
+            var centreInCells = (modelCentre ?? toModel.MultiplyPoint3x4(local.Bounds().center)) / span;
+            var origin = new Vector3(Mathf.Round(centreInCells.x), Mathf.Round(centreInCells.y), Mathf.Round(centreInCells.z)) * span;
+            toModel.m03 -= origin.x;
+            toModel.m13 -= origin.y;
+            toModel.m23 -= origin.z;
             bool grouped = false; foreach (var f in local.faces) if (f.group >= 0) { grouped = true; break; }
             if (grouped)
             {
@@ -225,6 +247,7 @@ namespace CsgBrush.Editor
                 var pt = ToPolytope(inner.Transformed(toModel), ConvexPolytope.Epsilon);
                 if (pt != null) remove.Add(pt);
             }
+            return origin;
         }
     }
 }

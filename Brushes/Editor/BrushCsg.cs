@@ -25,7 +25,7 @@ namespace CsgBrush.Editor
     /// </summary>
     public static class BrushCsg
     {
-        sealed class SolidEntry { public int key; public ManifoldSolid solid; public Bounds bounds; public Bounds[] blocks; public BrushPolyhedron polyhedron; public List<ConvexPolytope> partsAdd, partsRemove; public string partsProblem; }
+        sealed class SolidEntry { public int key; public ManifoldSolid solid; public Bounds bounds; public Bounds[] blocks; public Vector3 colliderOrigin; public List<ConvexPolytope> partsAdd, partsRemove; public string partsProblem; }
         sealed class PieceEntry { public string key; public ManifoldSolid piece; public bool ownsPiece; }
 
         static readonly Dictionary<Brush, SolidEntry> s_Solids = new Dictionary<Brush, SolidEntry>();
@@ -190,7 +190,7 @@ namespace CsgBrush.Editor
         }
 
         /// <summary>Changes when the same brushes make a different mesh (a fix in how it is made), so meshes saved by a build are made again.</summary>
-        const int MeshFormat = 2; // 2: every vertex has its face's normal, never a sliver's zero one
+        const int MeshFormat = 3; // rebuild meshes saved with overflowing pose keys or distant face winding
 
         /// <summary>A material's identity that survives editor sessions (its asset GUID), for the content keys.</summary>
         static int MaterialKey(Material material)
@@ -319,7 +319,7 @@ namespace CsgBrush.Editor
             public System.Exception error;
         }
 
-        struct PolyData { public Vector3[] vertices; public List<int[]> faces; public Vector3[] innerVertices; public List<int[]> innerFaces; public Bounds bounds; public Bounds[] blocks; public BrushPolyhedron polyhedron; }
+        struct PolyData { public Vector3[] vertices; public List<int[]> faces; public Vector3[] innerVertices; public List<int[]> innerFaces; public Bounds bounds; public Bounds[] blocks; }
 
         struct Record { public Brush brush; public SolidEntry solid; public Matrix4x4 toModel; public int key; public bool subtract; public int layer; }
 
@@ -412,15 +412,22 @@ namespace CsgBrush.Editor
             {
                 // pose and key from the last build unless the brush changed since (BrushCache.Forget)
                 var cache = BrushCache.Of(b);
-                if (!ReferenceEquals(cache.keyModel, model)) { cache.toModel = BrushGeometry.ToModel(b, model); cache.key = BrushGeometry.SolidKey(b, cache.toModel); cache.keyModel = model; }
+                BrushPolyhedron local = null;
+                if (!ReferenceEquals(cache.keyModel, model))
+                {
+                    local = BrushGeometry.Polyhedron(b);
+                    cache.toModel = BrushGeometry.ToModel(b, model);
+                    cache.key = BrushGeometry.SolidKey(b, local, cache.toModel);
+                    cache.keyModel = model;
+                }
                 var toModel = cache.toModel; int key = cache.key;
                 s_Solids.TryGetValue(b, out var entry);
                 var r = new Record { brush = b, toModel = toModel, key = key, subtract = b.operation == BrushOperation.Subtract, layer = Info(b).layer, solid = entry != null && entry.key == key ? entry : null };
                 job.records.Add(r);
                 if (r.solid == null)
                 {
-                    var poly = BrushGeometry.Polyhedron(b).Transformed(toModel);
-                    var data = new PolyData { vertices = poly.vertices, faces = new List<int[]>(poly.faces.Length), bounds = poly.Bounds(), blocks = Blocks(poly), polyhedron = poly };
+                    var poly = (local ?? BrushGeometry.Polyhedron(b)).Transformed(toModel);
+                    var data = new PolyData { vertices = poly.vertices, faces = new List<int[]>(poly.faces.Length), bounds = poly.Bounds(), blocks = Blocks(poly) };
                     foreach (var f in poly.faces) data.faces.Add(f.indices);
                     var inner = BrushGeometry.HollowInner(b);
                     if (inner != null)
@@ -446,15 +453,21 @@ namespace CsgBrush.Editor
             // pieces: which cutters apply, and which pieces are already cached
             var subtracts = new List<int>();
             for (int i = 0; i < job.records.Count; i++) if (job.records[i].subtract) subtracts.Add(i);
+            var scopes = new Dictionary<(Brush, FloorPlan, int, int), HashSet<object>>();
             foreach (int j in subtracts)
             {
                 var cutter = job.records[j].brush;
                 if (!cutter.addressedCut) continue;
                 var scope = BrushCutTarget.Scope(cutter);
-                var recipients = new HashSet<object>();
-                foreach (var record in job.records)
-                    if (!record.subtract && scope.Contains(record.brush))
-                        recipients.Add(record.brush);
+                var scopeKey = (scope.Brush, scope.Plan, scope.Start, scope.End);
+                if (!scopes.TryGetValue(scopeKey, out var recipients))
+                {
+                    recipients = new HashSet<object>();
+                    foreach (var record in job.records)
+                        if (!record.subtract && scope.Contains(record.brush))
+                            recipients.Add(record.brush);
+                    scopes.Add(scopeKey, recipients);
+                }
                 job.addressedRecipients.Add(cutter, recipients);
             }
             var keyBuilder = new System.Text.StringBuilder();
@@ -763,7 +776,7 @@ namespace CsgBrush.Editor
                 if (r.brush == null) { job.newSolids[n]?.Dispose(); continue; }
                 if (s_Solids.TryGetValue(r.brush, out var old)) old.solid?.Dispose();
                 var data = job.newSolidData[n];
-                var entry = new SolidEntry { key = r.key, solid = job.newSolids[n], bounds = data.bounds, blocks = data.blocks, polyhedron = data.polyhedron };
+                var entry = new SolidEntry { key = r.key, solid = job.newSolids[n], bounds = data.bounds, blocks = data.blocks };
                 if (entry.solid == null) r.brush.problem = Tr("Не удалось построить форму.");
                 s_Solids[r.brush] = entry;
                 r.solid = entry; job.records[job.newSolidIndices[n]] = r;
@@ -807,13 +820,14 @@ namespace CsgBrush.Editor
                 {
                     r.solid.partsAdd = new List<ConvexPolytope>(); r.solid.partsRemove = new List<ConvexPolytope>();
                     string problem = null;
-                    BrushGeometry.ConvexParts(r.brush, r.toModel, r.solid.partsAdd, r.solid.partsRemove, ref problem);
+                    r.solid.colliderOrigin = BrushGeometry.ConvexPartsInLocalFrame(r.brush, r.toModel,
+                        r.solid.partsAdd, r.solid.partsRemove, ref problem, r.solid.bounds.center);
                     r.solid.partsProblem = problem;
                 }
                 if (r.solid.partsProblem != null && r.brush.problem == null) r.brush.problem = r.solid.partsProblem;
                 var info = Info(r.brush);
                 job.addressedRecipients.TryGetValue(r.brush, out var recipients);
-                inputs.Add(new ConvexColliderBuilder.Input { name = info.name, subtract = r.subtract, kind = info.kind, fingerprint = info.fingerprint, layer = r.layer, add = r.solid.partsAdd, remove = r.solid.partsRemove, onPiece = info.onPiece, owner = r.brush, key = r.key, addressedRecipients = recipients });
+                inputs.Add(new ConvexColliderBuilder.Input { name = info.name, subtract = r.subtract, kind = info.kind, fingerprint = info.fingerprint, layer = r.layer, origin = r.solid.colliderOrigin, add = r.solid.partsAdd, remove = r.solid.partsRemove, onPiece = info.onPiece, owner = r.brush, key = r.key, addressedRecipients = recipients });
             }
             var settings = model.GetComponent<ConvexColliderSettings>();
             if (settings == null) settings = model.gameObject.AddComponent<ConvexColliderSettings>();
@@ -1044,7 +1058,7 @@ namespace CsgBrush.Editor
         /// submesh each), vertices by (position, source brush, face), every one with its face's normal. A face made by a cut takes the flags of the brush it
         /// was cut into, so a doorway's sides light like the wall around them.
         /// </summary>
-        static void Convert(Island island, Material fallback, int defaultFlags, Matrix4x4 worldToModel)
+        static void Convert(Island island, Material fallback, int defaultFlags)
         {
             var data = island.data;
             island.parts = new List<Part>();
@@ -1056,11 +1070,8 @@ namespace CsgBrush.Editor
             foreach (var b in island.sources.Values)
             {
                 if (b == null || b.operation != BrushOperation.Add) continue;
-                var poly = BrushGeometry.Polyhedron(b);
-                if (poly == null || poly.vertices == null || poly.vertices.Length == 0) continue;
-                var m = worldToModel * b.transform.localToWorldMatrix;
-                var box = new Bounds(m.MultiplyPoint3x4(poly.vertices[0]), Vector3.zero);
-                foreach (var v in poly.vertices) box.Encapsulate(m.MultiplyPoint3x4(v));
+                if (!s_Solids.TryGetValue(b, out var solid)) continue;
+                var box = solid.bounds;
                 box.Expand(1e-3f);
                 carved.Add((b, box));
             }
@@ -1096,7 +1107,7 @@ namespace CsgBrush.Editor
                 Brush cutFrom = null;
                 if (brush != null && brush.operation == BrushOperation.Subtract)
                 {
-                    var inside = (a + b + c) / 3f - n * 2e-3f; // the solid a cut face bounds lies behind it
+                    var inside = a + ((b - a) + (c - a)) / 3f - n * 2e-3f; // the solid a cut face bounds lies behind it
                     foreach (var (addBrush, box) in carved) if (box.Contains(inside)) { flags = StaticFlags(addBrush); cutFrom = addBrush; break; }
                 }
                 if (!partOf.TryGetValue(flags, out var part)) { part = new Part { flags = flags }; partOf[flags] = part; island.parts.Add(part); }
@@ -1149,11 +1160,10 @@ namespace CsgBrush.Editor
         {
             var fallback = DefaultMaterial();
             int defaultFlags = (int)BrushSettings.instance.defaultModelStaticFlags;
-            var worldToModel = model.transform.worldToLocalMatrix;
             var byFlags = new SortedDictionary<int, List<Part>>();
             foreach (var island in islands)
             {
-                if (!StillConverted(island, fallback, defaultFlags)) Convert(island, fallback, defaultFlags, worldToModel);
+                if (!StillConverted(island, fallback, defaultFlags)) Convert(island, fallback, defaultFlags);
                 foreach (var part in island.parts) { if (!byFlags.TryGetValue(part.flags, out var list)) byFlags[part.flags] = list = new List<Part>(); list.Add(part); }
             }
             var written = new List<Transform>();

@@ -352,16 +352,19 @@ namespace CsgBrush.Editor
             var s = BrushSettings.instance;
             float grid = s.GridMeters;
             var t = brush.transform;
-            if (brush.IsPlaced) { BrushSync.NotifyTransformChanged(brush); t.hasChanged = false; return; } // no snapped preview: placed by its generator, or a door on its wall
+            if (brush.IsPlaced)
+            {
+                if (t.hasChanged) BrushSync.NotifyTransformChanged(brush);
+                t.hasChanged = false;
+                return;
+            }
             var R = t.rotation; var T = t.position; var lossy = t.lossyScale;
             var Rs = SnapChangedRotation(brush, R, s.rotationSnapDegrees);
             bool known = s_Accepted.TryGetValue(brush, out var last);
             bool moved = !known || (T - last.position).sqrMagnitude > kEpsilon * kEpsilon; // a rotation alone is shown in place
             if (brush.HasParametricSize)
             {
-                s_Preview[brush] = (Matrix4x4.TRS(moved ? SnapBrushPosition(brush, T, brush.size, Rs, grid) : T, Rs, Vector3.one), Vector3.one);
-                BrushSync.NotifyTransformChanged(brush);
-                t.hasChanged = false;
+                SetPreview(brush, t, Matrix4x4.TRS(moved ? SnapBrushPosition(brush, T, brush.size, Rs, grid) : T, Rs, Vector3.one), Vector3.one);
                 return;
             }
             var scaledSize = Vector3.Scale(brush.size, new Vector3(Mathf.Abs(lossy.x), Mathf.Abs(lossy.y), Mathf.Abs(lossy.z)));
@@ -370,7 +373,15 @@ namespace CsgBrush.Editor
             var Ts = moved || resized ? SnapBrushPosition(brush, T, sizeS, Rs, grid) : T;
             var factor = Divide(sizeS, brush.size);
             Ts += Rs * (brush.PivotShiftFor(sizeS) - Vector3.Scale(factor, brush.PivotShift)); // the geometry is scaled about the transform; a distance pivot does not scale with it
-            s_Preview[brush] = (Matrix4x4.TRS(Ts, Rs, Vector3.one), factor);
+            SetPreview(brush, t, Matrix4x4.TRS(Ts, Rs, Vector3.one), factor);
+        }
+
+        static void SetPreview(Brush brush, Transform t, Matrix4x4 pose, Vector3 scale)
+        {
+            // A held handle visits every deferred brush each editor tick, even when the mouse is stationary.
+            if (!t.hasChanged && s_Preview.TryGetValue(brush, out var old)
+                && old.localToWorld.Equals(pose) && old.shapeScale.Equals(scale)) return;
+            s_Preview[brush] = (pose, scale);
             BrushSync.NotifyTransformChanged(brush);
             t.hasChanged = false;
         }

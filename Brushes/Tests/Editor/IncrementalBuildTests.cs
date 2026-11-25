@@ -1,6 +1,7 @@
 using CsgBrush.Colliders.Editor;
 using CsgBrush.Editor;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
@@ -69,6 +70,71 @@ namespace CsgBrush.Tests
             BrushApi.ForceUpdate();
             Assert.Greater(BrushCsg.LastBuiltIslands, 0, "the cells round the moved box");
             Assert.Greater(BrushCsg.LastCachedIslands, BrushCsg.LastBuiltIslands, "most cells kept");
+        }
+
+        [Test]
+        public void MovingADistantBrushUpdatesItsRenderMeshAndTriangleSources()
+        {
+            var start = new Vector3(1210099f, 88.75f, 2624193f);
+            var size = new Vector3(317.875f, 177.625f, 332f);
+            var independentPosition = new Vector3(10f, 2f, 7f);
+            var independentSize = new Vector3(2f, 4f, 6f);
+            var moved = BrushApi.Create(BrushShape.Box, start, size, Quaternion.identity, snap: false);
+            var independent = BrushApi.Create(BrushShape.Box, independentPosition, independentSize, Quaternion.identity, snap: false);
+            var material = Object.Instantiate(AssetDatabase.GetBuiltinExtraResource<Material>("Default-Diffuse.mat"));
+
+            try
+            {
+                BrushApi.SetMaterial(moved, material);
+                var positions = new[] { start, start + Vector3.right * 8.125f, start + Vector3.forward * 17.25f, start };
+                foreach (var position in positions)
+                {
+                    moved.transform.position = position;
+                    BrushApi.ForceUpdate();
+
+                    var meshObject = BrushCsg.MeshObject(BrushCsg.ModelOf(moved), false);
+                    Assert.IsNotNull(meshObject);
+                    var mesh = meshObject.GetComponent<MeshFilter>().sharedMesh;
+                    var sources = BrushCsg.TriangleBrushes(meshObject);
+                    var materials = meshObject.GetComponent<MeshRenderer>().sharedMaterials;
+                    Assert.IsNotNull(sources);
+                    Assert.AreEqual(mesh.triangles.Length / 3, sources.Length);
+
+                    var movedBounds = new Bounds(position, Vector3.zero);
+                    var independentBounds = new Bounds(independentPosition, Vector3.zero);
+                    var vertices = mesh.vertices;
+                    int triangle = 0, movedTriangles = 0, independentTriangles = 0;
+                    for (int submesh = 0; submesh < mesh.subMeshCount; submesh++)
+                    {
+                        var indices = mesh.GetTriangles(submesh);
+                        for (int i = 0; i < indices.Length; i += 3, triangle++)
+                        {
+                            bool isMoved = sources[triangle] == moved;
+                            Assert.AreSame(isMoved ? moved : independent, sources[triangle]);
+                            Assert.AreEqual(isMoved, materials[submesh] == material);
+                            for (int corner = 0; corner < 3; corner++)
+                            {
+                                var vertex = meshObject.TransformPoint(vertices[indices[i + corner]]);
+                                if (isMoved) movedBounds.Encapsulate(vertex);
+                                else independentBounds.Encapsulate(vertex);
+                            }
+                            if (isMoved) movedTriangles++;
+                            else independentTriangles++;
+                        }
+                    }
+
+                    Assert.AreEqual(12, movedTriangles);
+                    Assert.AreEqual(12, independentTriangles);
+                    Assert.That(Vector3.Distance(position, movedBounds.center), Is.LessThanOrEqualTo(0.25f), $"render mesh center at {position:F3} m");
+                    Assert.That(Vector3.Distance(size, movedBounds.size), Is.LessThanOrEqualTo(0.5f), $"render mesh size at {position:F3} m");
+                    Assert.AreEqual(independentPosition, independentBounds.center);
+                    Assert.AreEqual(independentSize, independentBounds.size);
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(material);
+            }
         }
 
         [Test]

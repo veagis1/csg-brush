@@ -46,6 +46,18 @@ namespace CsgBrush.Colliders
             return c;
         }
 
+        /// <summary>Move a built solid to another clipping frame without reconstructing its hull.</summary>
+        public ConvexPolytope Translated(Vector3 offset)
+        {
+            if (!built) Build();
+            var result = new ConvexPolytope { tag = tag, vertexWeld = vertexWeld, built = true };
+            foreach (var plane in planes)
+                result.planes.Add(new Vector4(plane.x, plane.y, plane.z, plane.w - Vector3.Dot((Vector3)plane, offset)));
+            foreach (var vertex in vertices) result.vertices.Add(vertex + offset);
+            foreach (var face in faces) result.faces.Add((int[])face.Clone());
+            return result;
+        }
+
         public void AddPlane(Vector4 plane)
         {
             Vector3 n = new Vector3(plane.x, plane.y, plane.z);
@@ -500,14 +512,16 @@ namespace CsgBrush.Colliders
         public float Volume()
         {
             if (!built) Build();
+            if (vertices.Count == 0) return 0f;
+            var origin = vertices[0];
             double vol = 0;
             for (int f = 0; f < faces.Count; f++)
             {
                 var face = faces[f];
-                Vector3 a = vertices[face[0]];
+                Vector3 a = vertices[face[0]] - origin;
                 for (int i = 1; i + 1 < face.Length; i++)
                 {
-                    Vector3 b = vertices[face[i]], c = vertices[face[i + 1]];
+                    Vector3 b = vertices[face[i]] - origin, c = vertices[face[i + 1]] - origin;
                     vol += Vector3.Dot(a, Vector3.Cross(b, c));
                 }
             }

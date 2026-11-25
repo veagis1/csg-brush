@@ -180,6 +180,33 @@ namespace CsgBrush.Tests
         }
 
         [Test]
+        public void AnUnchangedSnapPreviewDoesNotRequestAnotherBuild()
+        {
+            var brush = BrushApi.Create(BrushShape.Box, Vector3.zero, Vector3.one, Quaternion.identity);
+            BrushApi.ForceUpdate();
+            GUIUtility.hotControl = 1234;
+            try
+            {
+                brush.transform.position = new Vector3(0.63f, 0f, 0f);
+                BrushSnap.ApplyPreview(brush);
+                BrushCsg.RebuildDirtyNow();
+                Assert.IsFalse(BrushCsg.HasDirty);
+
+                BrushSnap.ApplyPreview(brush);
+                Assert.IsFalse(BrushCsg.HasDirty, "an unchanged preview keeps the built geometry");
+
+                brush.transform.position += Vector3.right * kGrid;
+                BrushSnap.ApplyPreview(brush);
+                Assert.IsTrue(BrushCsg.HasDirty, "a different snapped position needs a build");
+            }
+            finally
+            {
+                GUIUtility.hotControl = 0;
+                BrushApi.ForceUpdate();
+            }
+        }
+
+        [Test]
         public void CustomShapesAreJudgedAndSnappedByTheirVertices()
         {
             var b = BrushApi.Create(BrushShape.Box, new Vector3(1f, 0.5f, 0f), new Vector3(2f, 1f, 2f), Quaternion.identity);

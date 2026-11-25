@@ -48,11 +48,13 @@ namespace CsgBrush.Manifold
         {
             const int props = 4;
             // winding-agnostic: orient by the signed volume so the normals point outward whichever way the faces are wound
+            // A nearby reference keeps both the volume and its sign invariant under translation.
+            var origin = vertices.Count > 0 ? vertices[0] : Vector3.zero;
             double signed = 0;
             foreach (var f in faces)
                 for (int k = 1; k + 1 < f.Length; k++)
                 {
-                    Vector3 a = vertices[f[0]], b = vertices[f[k]], c = vertices[f[k + 1]];
+                    Vector3 a = vertices[f[0]] - origin, b = vertices[f[k]] - origin, c = vertices[f[k + 1]] - origin;
                     signed += Vector3.Dot(a, Vector3.Cross(b, c));
                 }
             bool flip = signed < 0;
@@ -121,12 +123,14 @@ namespace CsgBrush.Manifold
             if (n < 3) return;
             // project onto the dominant plane of the Newell normal
             Vector3 normal = Vector3.zero;
-            for (int i = 0; i < n; i++) { var a = vertices[face[i]]; var b = vertices[face[(i + 1) % n]]; normal.x += (a.y - b.y) * (a.z + b.z); normal.y += (a.z - b.z) * (a.x + b.x); normal.z += (a.x - b.x) * (a.y + b.y); }
+            var origin = vertices[face[0]];
+            for (int i = 1; i + 1 < n; i++)
+                normal += Vector3.Cross(vertices[face[i]] - origin, vertices[face[i + 1]] - origin);
             float ax = Mathf.Abs(normal.x), ay = Mathf.Abs(normal.y), az = Mathf.Abs(normal.z);
             var pts = new Vector2[n];
             for (int i = 0; i < n; i++)
             {
-                var p = vertices[face[i]];
+                var p = vertices[face[i]] - origin;
                 pts[i] = ax >= ay && ax >= az ? new Vector2(p.y, p.z) : ay >= az ? new Vector2(p.z, p.x) : new Vector2(p.x, p.y);
             }
             // signed area gives the winding in the projection; cross products of consecutive edges tell convexity
