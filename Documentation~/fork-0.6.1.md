@@ -1,8 +1,12 @@
 # CSG Brush 0.6.1
 
-This update adds surface-aligned drawing, exact dimensions in the Scene view and geometry-based placement. It also makes large edits with many cuts faster.
+This fork builds on [Jaroslav Stehlik's CSG Brush 0.6.0](https://github.com/jaroslavstehlik/csg-brush/tree/71ab1dd51140fa07030dfbe36012047289aa233f). It adds surface-aligned drawing, exact dimensions in the Scene view and geometry-based placement. It also makes large edits with many cuts faster.
 
 ## In the Scene view
+
+![An orange subtract brush moves a rectangular opening back and forth through a blue slab in Unity.](images/0.6.1/moving-cut.gif)
+
+*Move a 1.25 × 1.6 m cut across the slab. CSG rebuilds the opening at each position.*
 
 <table>
 <tr>
