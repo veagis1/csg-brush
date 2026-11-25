@@ -5,7 +5,7 @@ Floor plan edit mode lets you select and transform the points and walls of a Flo
 To enter edit mode, select a Floor Plan and do one of the following:
 
 * Click **Edit** in the Floor Plan Inspector.
-* Click **Edit plan** in the **Brushes** overlay.
+* Click **Edit Floor Plan** in the **CSG Brush** overlay.
 * Select **Edit Floor Plan** in the tool context dropdown of the **Tools** overlay.
 
 To leave edit mode, click **Edit** again, or right-click in the Scene view and select **Stop Editing**.
@@ -77,7 +77,7 @@ Smooth points are round marks, corners are square.
 | A smooth point where three or more walls meet | The two walls that are most nearly opposite run through it smoothly. The others meet it as at a corner. |
 | A plus sign on a curved wall | The new point lands on the curve and is smooth, so the curve keeps its shape. |
 
-Curved walls are built from straight pieces. The pieces stay within the **Curve tolerance** of the true curve, set in **Project Settings** > **Brushes** (0.1 m by default). A larger tolerance gives fewer pieces and lighter meshes. To give one Floor Plan its own tolerance, enable **Override tolerance** in its Inspector.
+Curved walls are built from straight pieces. The pieces stay within the **Curve tolerance (m)** of the true curve, set in **Project Settings** > **CSG Brush** (0.1 m by default). A larger tolerance gives fewer pieces and lighter meshes. To give one Floor Plan its own tolerance, enable **Override tolerance** in its Inspector.
 
 Doors, windows, and attached objects follow a curved wall: they stay at their distance along it and face across it. A door on a curved wall is a straight cut, so on a tight curve its sides are flat.
 

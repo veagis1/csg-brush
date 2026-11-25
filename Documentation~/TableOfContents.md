@@ -1,4 +1,5 @@
 * [About CSG Brush](index.md)
+* [What's new in 0.6.1](fork-0.6.1.md)
 * [Floor plans](floor-plans.md)
   * [Draw a floor plan](floor-plans.md#draw-a-floor-plan)
   * [Floor Plan component reference](floor-plans.md#floor-plan-component-reference)

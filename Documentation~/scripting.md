@@ -15,9 +15,33 @@ var doorway = BrushApi.CreateBox(new Vector3(-1f, 0f, 9f), new Vector3(1f, 2.2f,
     name: "Doorway", operation: BrushOperation.Subtract, material: frameMaterial);
 ```
 
-A box made with `CreateBox` stays exactly where you put it, with its **Grid snap** set to **Off**, even when **Snap brushes to grid** is on in **Project Settings** > **Brushes**. A 4.4 m gap stays 4.4 m. To land a brush on the grid instead, pass `snap: true`.
+A box made with `CreateBox` stays exactly where you put it, with its **Grid snap** set to **Off**, even when **Snap brushes to grid** is on in **Project Settings** > **CSG Brush**. A 4.4 m gap stays 4.4 m. To land a brush on the grid instead, pass `snap: true`.
 
 For other shapes, use `BrushApi.Create` with a shape, a centre, a size, and a rotation. It snaps to the grid by default, like a brush drawn in the Scene view; pass `snap: false` to place it exactly.
+
+To set the working origin from a brush's geometry, call `BrushApi.SetPivotToVertex(brush, vertexIndex)` or
+`BrushApi.SetPivotToEdge(brush, a, b)`. Both leave the geometry and children in place. Use
+`BrushApi.ResetPivot(brush)` to return the origin to the centre.
+
+## Upgrade from 0.6.0
+
+Geometry was already stored in metres. On first use, the package converts the project's saved grid steps and creation
+defaults using the former units-per-metre ratio. A grid step of 16 at 32 units per metre becomes 0.5 m. Set future
+defaults directly in metres under **Project Settings** > **CSG Brush**.
+
+For editor scripts:
+
+- The unit preset API (`BrushSettings.Preset`, `PresetOrder` and `ApplyPreset`) has been removed. The old
+  `preset`, `unitsPerMeter` and `unitLabel` fields are used internally for migration.
+- Read `GridMeters` in place of `GridUnits`. Pass metre values directly in place of `ToMeters` or `ToUnits`.
+  Those obsolete methods now return their input. For display, use `BrushSettings.FormatMeters` in place of
+  `FormatUnits`.
+- Call `BrushGridMaterial.Generate(size, gridStepsInMetres)`. The obsolete three-argument overload still converts
+  the steps using the supplied units-per-metre ratio.
+- For interactive drawing, assigning `BrushCreateTool.Operation` sets a manual override for the current editor
+  session. The getter reads the project value. It does not report the operation chosen for an automatic draw.
+  When a script creates a brush itself, pass the operation explicitly to `BrushApi.Create` or `CreateBox`.
+- Update any menu automation that uses `GameObject/Brush/...` to the new `GameObject/CSG Brush/...` paths.
 
 ## Subtract order
 

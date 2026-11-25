@@ -9,14 +9,14 @@ This page describes brushes in detail. For floor plans, doors and windows, wall 
 To draw a brush in the Scene view:
 
 1. In the Scene view toolbar, open the **Create** tool dropdown and select a shape.
-2. Optional: In the **Brushes** overlay, set what the new brush gets, such as its operation, modules, number of sides, step height, or **Hollow**.
+2. Optional: In the **CSG Brush** overlay, set what the new brush gets, such as its modules, number of sides, step height, or **Hollow**.
 3. Press on a surface, a brush face, or the ground, and drag out the base.
 4. Release, then move the pointer to set the height.
 5. Click to create the brush.
 
 Press **Esc** to cancel the brush, or to leave the tool.
 
-Everything snaps to the grid. If you start on a wall, the brush grows out of the wall. If you start on a slope, the brush stays square to the world, because the grid would turn it back. To draw a brush square to the slope, turn off **Snap to grid**, or set the new brush's **Grid snap** to **Off**. While you draw, the Scene view shows the width and depth of the base, then the height. To hide these sizes, turn off **Sizes** in the **Brushes** overlay.
+In the **CSG Brush** overlay, use **Snapping** to choose the world grid, follow the surface under the pointer, or lock the grid to a face. The magnet turns grid snapping on or off. While you draw, **Dimensions** shows the width and depth of the base, then the height. See [the surface grid and cutting tools](fork-0.6.1.md).
 
 Some shapes are drawn differently:
 
@@ -30,17 +30,19 @@ Some shapes are drawn differently:
 | **Door**, **Window** | Click once. See [Doors and windows](doors-and-windows.md). |
 | **Floor Plan** | Click the corners of the walls. See [Floor plans](floor-plans.md). |
 
-A new brush starts with the settings shown in the **Brushes** overlay while the Create tool is active; the project keeps them between sessions. After you create a brush, change them on the brush itself. Its static flags come from **Project Settings** > **Brushes** > **New brush static flags**.
+A new brush starts with the settings shown in the **CSG Brush** overlay while the Create tool is active. After you create a brush, change them on the brush itself. Its static flags come from **Project Settings** > **CSG Brush** > **Static flags**.
 
 You can also create a brush in these ways:
 
 * **Tools** > **CSG Brush** > **Create** selects a shape in the Create tool.
-* **GameObject** > **Brush** creates a brush of the default size at the centre of the Scene view.
+* **GameObject** > **CSG Brush** creates a brush of the default size at the centre of the Scene view.
 * Add a **Brush** component to an empty GameObject.
 
 ## Place, size, and rotate a brush
 
 Use the **Move** and **Rotate** tools as for any GameObject. Set the brush's **Size** in metres in the Inspector. One Unity world unit equals one metre.
+
+For an exact size in the Scene view, turn on **Dimensions**, select a brush and click an editable dimension. Type a size in metres. The outline previews the change. Press **Enter** to apply it or **Esc** to cancel.
 
 The **Scale** tool also resizes the brush. When you release it, the scale goes into the brush's **Size** and the transform's scale returns to one.
 
@@ -65,7 +67,7 @@ Only the sides turned towards you are handles. A side shows a faint outline, and
 
 Unity's Move, Rotate, and Scale handles take priority when the pointer is over them. With Dimensions enabled, the dark badge updates as you drag. Each badge sits just outside its edge and shows the measurement in metres followed by its local axis, for example 2.00 m (X). Hold **Shift** to move both sides at once, about the middle. Hold **Ctrl** to move in increments of the current grid step from the start of the drag, including when grid snapping is off. With a 0.125 m step, a 1.03 m block grows to 1.155 m, then 1.28 m. **Ctrl+Shift** moves both sides by the selected step. With ordinary grid snapping, sizes snap to the grid, step heights snap in increments of 0.01 m, and angles follow the rotation snap. Escape cancels the drag. Each completed drag takes one step to undo.
 
-To turn the handles on or off, use **Shape Edit** in the **Brushes** overlay, or press **B** in the Scene view. While they're on, three buttons beside it set what a drag does to the other selected brushes:
+To turn the handles on or off, use **Shape Edit** in the **CSG Brush** overlay, or press **B** in the Scene view. While they're on, three buttons beside it set what a drag does to the other selected brushes:
 
 | **Choice** | **What happens** |
 | :--- | :--- |
@@ -77,27 +79,23 @@ Brushes of other shapes never change.
 
 ### Grid snapping
 
-With **Snap to grid** on in the **Brushes** overlay (the default), brushes stay on the world grid:
-
-* A brush's size is a multiple of the grid step.
-* Its rotation snaps to fixed angles.
-* It has no scale.
+With the snap magnet on in the **CSG Brush** overlay, moving and resizing a brush use the current grid step and rotating it uses the rotation step. A brush drawn on a local grid can keep snapping along that grid. Exact sizes entered in the Scene view can fall between grid steps.
 
 When you move or resize a brush, its **Grid snap** setting decides what goes onto the grid:
 
 | **Grid snap** | **What goes onto the grid** | **Use it for** |
 | :--- | :--- | :--- |
 | **Shape** | The brush's outermost vertices: the corner of its bounds. An axis-aligned brush has its faces on grid lines, so brushes meet cleanly. This is the default. | The classic brush workflow, and collision geometry. |
-| **Pivot** | The brush's pivot. The shape follows, wherever it ends up. | The ProBuilder workflow, such as detail brushes placed around a point. |
+| **WCS origin** | The brush's pivot. The shape follows, wherever it ends up. | The ProBuilder workflow, such as detail brushes placed around a point. |
 | **Off** | Nothing. The brush stays exactly where it's put and keeps its size. | Levels built from measured numbers, such as by a [script](scripting.md). |
 
-With **Shape** or **Pivot**, rotating a brush never moves it: it turns about its pivot, and only the angle snaps. The next time you move it, it snaps again. An undo, setting the pivot, and opening a scene don't move brushes either. Vertices you move in [edit mode](#edit-a-brushs-shape) snap to the grid in both modes; a Custom shape in **Shape** mode also puts its vertices on the grid while it's axis-aligned.
+With **Shape** or **WCS origin**, rotating a brush never moves it: it turns about its pivot, and only the angle snaps. The next time you move it, it snaps again. An undo, setting the pivot, and opening a scene don't move brushes either. Vertices you move in [edit mode](#edit-a-brushs-shape) snap to the grid in both modes; a Custom shape in **Shape** mode also puts its vertices on the grid while it's axis-aligned.
 
-Set **Grid snap** in the Brush Inspector. New brushes get the setting in the **Brushes** overlay while a Create tool is active.
+Set **Grid snap** in the Brush Inspector. New brushes get the setting in the **CSG Brush** overlay while a Create tool is active.
 
 Press **[** and **]** to change the grid step. Doors, windows, and brushes on a [wall anchor](wall-anchor.md) don't snap, because their wall places them.
 
-Parent GameObjects may only organise brushes. If a brush's parent is rotated or scaled, the **Brushes** overlay lists it with a **Reset** button.
+Parent GameObjects may only organise brushes. If a brush's parent is rotated or scaled, the **CSG Brush** overlay lists it with a **Reset** button.
 
 ### Grid steps
 
@@ -111,9 +109,9 @@ The pivot is the origin for moving and rotating the brush. A primitive drawn in 
 
 ![The Brush Inspector of a 2 × 2 × 1 m box with its pivot at the bottom of its back face, and Grid snap set to Shape.](images/brush-inspector-pivot.png)
 
-**Pivot mode** sets how the **Pivot** values are measured:
+**WCS mode** sets how the **WCS origin** values are measured:
 
-| **Pivot mode** | **Values** | **When you resize the brush** |
+| **WCS mode** | **Values** | **When you resize the brush** |
 | :--- | :--- | :--- |
 | **Normalized** | A fraction of the brush's size on each axis. 0.5, 0.5, 0.5 is the centre. A drawing origin outside the bounds can give a fraction outside 0 to 1. | The pivot stays at the same fraction of the size. |
 | **Absolute** | A distance from the corner in metres. | The pivot stays at the same distance from the corner. |
@@ -125,15 +123,17 @@ Useful pivots:
 
 Setting the pivot moves the transform, never the shape. Switching the pivot mode doesn't move anything. On a Custom shape, setting the pivot moves the vertices instead.
 
-For a single editable brush, choose **WCS → Привязать WCS к вершине** in the Scene overlay or **Привязать WCS к вершине** in the Inspector. Click a vertex or a marked edge midpoint to set the origin of the object's working coordinate system. Move and Rotate use this origin and the local axes. **Сбросить WCS** returns the origin to the centre of the geometry. Generated or wall-anchored brushes are positioned by their owner.
+Select one editable brush and choose **WCS** > **Snap WCS to Vertex** in the CSG Brush overlay, or click **Snap WCS to Vertex** in the Inspector. Pick a vertex or an edge midpoint. Move and Rotate now use that origin and the local axes. **Reset WCS** returns the origin to the centre of the geometry. A [window on a floor plan wall](doors-and-windows.md#change-a-door-or-window) can have its own origin. For generated geometry, set the origin on its floor plan or spline.
 
 ## Add and subtract
 
 A brush's **Operation** is **Add** or **Subtract**. An added brush fills space; a subtract brush carves it out.
 
+In automatic mode, drawing into a target makes a cut there. Use **+ add** or **- subtract** to choose the operation explicitly. Click the active button again to return to automatic mode. The override lasts for the editor session. On upgrade from 0.6.0, drawing starts in automatic mode even if the old project default was Subtract. Existing brushes keep their operations.
+
 The Hierarchy order is the CSG order. A subtract brush carves only the brushes above it in the Hierarchy, so a brush you create after a cutter stays whole until you move it above the cutter. To change the order, drag brushes in the Hierarchy, or use **To First** and **To Last** in the Brush component's context menu.
 
-Turn on **Cuts** in the **Brushes** overlay to see subtract brushes as translucent red volumes. This lets you select a subtract brush where it has carved everything away. With **Cuts** off, you can't click subtract brushes in the Scene view, except doors and windows.
+Turn on **Cuts** in the **CSG Brush** overlay to see subtract brushes as translucent red volumes. This lets you select a subtract brush where it has carved everything away. With **Cuts** off, you can't click subtract brushes in the Scene view, except doors and windows.
 
 ### Layers
 
@@ -141,7 +141,7 @@ Brushes are combined per Unity layer. A subtract brush carves only brushes on it
 
 ## Edit a brush's shape
 
-Every shape can be edited by hand. To start editing, click **Edit shape** in the Brush Inspector or **Edit brush** in the **Brushes** overlay, or select **Edit Brush** in the tool context dropdown of the Scene view's Tools overlay.
+Every shape can be edited by hand. To start editing, click **Edit shape** in the Brush Inspector or **Edit Brush** in the **CSG Brush** overlay, or select **Edit Brush** in the tool context dropdown of the Scene view's Tools overlay.
 
 In edit mode, the Tool Settings toolbar holds the selection settings:
 
@@ -163,12 +163,12 @@ The first edit turns the brush into a **Custom** shape. **Reset to Box** (or to 
 To extrude:
 
 1. Select one or more faces.
-2. In the **Brushes** overlay, turn on **Extrude**. The extrude settings appear under it, and the Scene view outlines the extruded shape.
+2. In the **CSG Brush** overlay, turn on **Extrude**. The extrude settings appear under it, and the Scene view outlines the extruded shape.
 3. Set the **Distance**. A negative distance cuts a pocket into the brush. The outline follows as you change it.
 4. In **Faces**, choose whether the selection extrudes as one block or each face on its own.
 5. Click **Apply**.
 
-![A box in edit mode with its side face selected. The Brushes overlay shows Extrude turned on with a distance of 48 units, and the Scene view outlines the extruded box.](images/extrude-preview.png)
+![A box in edit mode with its side face selected. The Brushes overlay shows Extrude turned on and the Scene view outlines the extruded box. Current versions show the distance in metres.](images/extrude-preview.png)
 
 Nothing changes until you click **Apply**. The faces stay selected, so **Apply** again extrudes them again. If the extrusion can't be made, the overlay says why instead of enabling **Apply**. You can also hold **Shift** when you start dragging the **Move** gizmo on selected faces: they extrude by the distance you drag. Drag into the brush to cut.
 
@@ -178,7 +178,7 @@ An extrusion can run through other parts of the brush. Your own faces, edges, an
 
 **Bridge** connects two selected faces of one brush with a block between them, the way a corridor joins two rooms. The faces need the same number of corners. The new walls stay selected.
 
-If an extrusion or bridge wouldn't make a sound shape, for example because it would end exactly where the brush touches itself, or a cut would remove everything, the brush stays as it was and the **Brushes** overlay says why. Try another distance.
+If an extrusion or bridge wouldn't make a sound shape, for example because it would end exactly where the brush touches itself, or a cut would remove everything, the brush stays as it was and the **CSG Brush** overlay says why. Try another distance.
 
 ## Materials
 
@@ -188,7 +188,7 @@ To set a material, you can also drag it from the Project window onto a brush in 
 
 The faces a subtract brush carves take the subtract brush's material by default. For example, the sides of a doorway can have a different material from the wall. To make them look like the solid they're cut into instead, select the subtract brush and set **Cut faces** to **Cut Solid Material**: a hole in a stone wall is then stone inside.
 
-Faces without a material show a generated ruler texture: lines at every grid step, stronger at each metre, on a metre checker. It lines up with the world grid across brushes and cuts. CSG Brush creates it under `Assets/CSG Brush` the first time it's needed. To use your own material instead, set it in **Project Settings** > **Brushes**.
+Faces without a material show a generated ruler texture: lines at every grid step, stronger at each metre, on a metre checker. It lines up with the world grid across brushes and cuts. CSG Brush creates it under `Assets/CSG Brush` the first time it's needed. To use your own material instead, set it in **Project Settings** > **CSG Brush**.
 
 ## Collision and triggers
 
@@ -213,7 +213,7 @@ A trigger brush made of several pieces still raises one enter and one exit per c
 
 A module carries the game-specific values of a surface, such as ice, water, or fall damage. A module is a `BrushModule` component on the brush, or on a parent GameObject, where it applies to every brush below it. Its values go onto each collider piece of the brush, and changing them rebuilds only those pieces. A module can also make a brush a trigger, for example for water.
 
-To give every new brush a module, choose it from the **Modules** dropdown in the **Brushes** overlay while the Create tool is active. The dropdown lists every module; choose one again to turn it off, or choose **Nothing** to turn them all off. The Quake controller's module, `QuakeBrushSurface`, is part of the project, not of this package.
+To give every new brush a module, choose it from the **Modules** dropdown in the **CSG Brush** overlay while the Create tool is active. The dropdown lists every module; choose one again to turn it off, or choose **Nothing** to turn them all off. The Quake controller's module, `QuakeBrushSurface`, is part of the project, not of this package.
 
 ## Shape settings
 
@@ -228,7 +228,7 @@ You set the step height and draw the total height. The number of steps is the he
 * **Linear Stairs** fill their size box. Each step runs the length divided by the number of steps.
 * **Curved Stairs** and **Spiral Stairs** use Unreal's parameters: inner radius, step width, step height, angle of the curve or steps per 360 degrees, add to first step, and counter clockwise. Spiral stairs also have step thickness, sloped floor, and sloped ceiling. You set a height instead of a number of steps, and the brush's size follows from the parameters.
 
-Linear and curved stairs stand on solid support down to the floor. Turn off **Support under steps** for open steps, each a slab of **Step thickness**. Set it on the brush, or in the **Brushes** overlay for new stairs.
+Linear and curved stairs stand on solid support down to the floor. Turn off **Support under steps** for open steps, each a slab of **Step thickness**. Set it on the brush, or in the **CSG Brush** overlay for new stairs.
 
 Each step is a closed block with its own convex collider. A sloped spiral's collider is the hull of each twisted block, so use more steps per turn for a smoother ramp.
 
@@ -246,7 +246,7 @@ For static flags, renderer settings, and lightmap UVs, see [Brush Group renderin
 
 ## Rebuild
 
-CSG Brush builds automatically when you change a brush. To build everything again from scratch, meshes and colliders, choose **Brushes** > **Rebuild Now**.
+CSG Brush builds automatically when you change a brush. To build everything again from scratch, meshes and colliders, choose **CSG Brush** > **Rebuild Now**.
 
 ## Run the package tests
 

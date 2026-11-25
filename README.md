@@ -7,6 +7,9 @@ from the brushes in the editor.
 It was written for teaching level design and character controllers, so the toolset is small, brushes snap to a world
 grid, and colliders are made of convex pieces.
 
+This fork builds on [Jaroslav Stehlik's CSG Brush](https://github.com/jaroslavstehlik/csg-brush).
+Version 0.6.1 adds surface grids, exact dimensions, and placement by vertices and edges.
+
 ![A floor plan room with a door and a window cut into its walls.](Documentation~/images/doors-and-windows.png)
 
 ## In the Scene view
@@ -60,20 +63,23 @@ The package is editor-only. Builds contain only the generated meshes and collide
 
 1. In Unity, open **Window** > **Package Manager**.
 2. Click **+** and select **Install package from git URL**.
-3. Enter `https://github.com/jaroslavstehlik/csg-brush.git` and click **Install**.
+3. Enter `https://github.com/veagis1/csg-brush.git` and click **Install**.
 
-To install a specific version, add a tag to the URL, for example `https://github.com/jaroslavstehlik/csg-brush.git#v0.6.0`.
+The package is at the root of the fork. To pin a particular revision, append its commit hash after `#`.
+If you already have the upstream package installed, replace its Git URL. The fork uses the same package ID.
 
 ## Documentation
 
+- [What's new in 0.6.1](Documentation~/fork-0.6.1.md)
 - [Manual](Documentation~/index.md): floor plans, doors and windows, wall anchors, and rendering and lightmapping.
 - [Brush reference](Documentation~/brush-reference.md): detailed notes on the brush tools and components.
 - [Changelog](CHANGELOG.md)
 
 ## Development
 
-This project is developed and maintained by AI coding agents (Claude Code), directed by the author. Changes are
-checked with the package's EditMode test suite. See [CONTRIBUTING.md](CONTRIBUTING.md).
+The original project is developed and maintained by AI coding agents (Claude Code), directed by the author.
+For fork development, see [Development~/](Development~/). The Unity test project is under `Development~/Sandbox`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the EditMode suite and native plugin.
 
 ## Support this project
 

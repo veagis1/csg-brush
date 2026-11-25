@@ -15,8 +15,8 @@ A door or window can cut any brush, but it works best on a [Floor Plan](floor-pl
 
 To place a door or window:
 
-1. In the Scene view, open the **Create** tool dropdown and select **Door Brush** or **Window Brush**.
-2. Optional: In the **Brushes** overlay, set the **Width** and **Height**. For a window, also set the **Sill**.
+1. In the Scene view, open the **Create** tool dropdown and select **Door** or **Window**.
+2. Optional: In the **CSG Brush** overlay, set the **Width** and **Height**. For a window, also set the **Sill height**.
 3. Move the pointer over a wall. An outline shows where the opening goes.
 
     ![The Door tool over a floor plan wall. The Brushes overlay shows the width and height of the next door.](images/door-tool.png)
@@ -31,7 +31,7 @@ Where the opening goes depends on what's under the pointer:
 | The side of another brush | The opening cuts through that brush and stands on its bottom. |
 | The floor or the grid | The opening stands on the floor and faces the view. |
 
-You can also select a Floor Plan and use **GameObject** > **Brush** > **Door** or **Window** to place an opening in the middle of its first wall.
+You can also select a Floor Plan and use **GameObject** > **CSG Brush** > **Door** or **Window** to place an opening in the middle of its first wall.
 
 ## Change a door or window
 
@@ -40,6 +40,8 @@ A door or window is an ordinary brush. Its **Size** in the Brush Inspector sets 
 ![The Brush component of a door.](images/door-inspector.png)
 
 To move an opening along its wall, use the **Move** tool. The opening snaps back onto the nearest wall. If you drag it far from every wall, it stays where you put it as a free cut.
+
+For a window attached to a Floor Plan, edit **WCS origin** in the Brush Inspector or choose **WCS** > **Snap WCS to Vertex** to pick a corner or an edge midpoint. The anchor still sets the opening's position and sill height. To move the window by its chosen origin, select **Move to**, pick the destination wall and then click the position along it. The sill keeps its height above the destination floor. See [placement in 0.6.1](fork-0.6.1.md).
 
 ## Additional resources
 

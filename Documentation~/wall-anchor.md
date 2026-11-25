@@ -12,11 +12,11 @@ An anchored object is a child of its Floor Plan. When you select it, the Scene v
 
 To attach an object to a wall, do one of the following:
 
-* Select the object and choose **GameObject** > **Brush** > **Attach to Wall**. The object moves under the nearest Floor Plan and attaches to its nearest wall. It keeps its position and turns to line up with the wall: its front (+Z) faces out of the wall, and up is up.
+* Select the object and choose **GameObject** > **CSG Brush** > **Attach to Wall**. The object moves under the nearest Floor Plan and attaches to its nearest wall. It keeps its position and turns to line up with the wall: its front (+Z) faces out of the wall, and up is up.
 * Draw a brush on the face of a Floor Plan wall with the **Create** tool. The brush keeps the pose you drew it with.
 * Add a **Wall Anchor** component to a child of a Floor Plan.
 
-To detach an object, select it and choose **GameObject** > **Brush** > **Detach from Wall**. The object leaves the Floor Plan and stays where it is.
+To detach an object, select it and choose **GameObject** > **CSG Brush** > **Detach from Wall**. The object leaves the Floor Plan and stays where it is.
 
 ## Move an object to another wall
 

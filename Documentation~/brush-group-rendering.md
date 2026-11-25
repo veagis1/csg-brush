@@ -10,7 +10,7 @@ Each brush's static flags control its own geometry. Set them with the **Static**
 * The brush's faces render in a mesh with the same static flags. Static brushes batch, occlude, and receive lightmaps. Brushes that aren't static render in a separate mesh, so you can move or animate them.
 * Static and non-static brushes still carve each other. The faces that a cut creates, such as the sides of a doorway, take the static flags of the brush they're cut into.
 
-New brushes and Floor Plans start with the static flags set in **Project Settings** > **Brushes** > **New brush static flags**.
+New brushes, Floor Plans and Splines start with the **Static flags** set in **Project Settings** > **CSG Brush**.
 
 ![The Brushes page in Project Settings, with New brush static flags set to Everything.](images/project-settings-brushes.png)
 
@@ -37,7 +37,7 @@ The defaults match a new Mesh Renderer, so a group you don't change, and the sce
 
 Static brushes that contribute to global illumination need lightmap UVs. CSG Brush makes them the way ProBuilder does: not while you edit, because unwrapping large meshes is slow, but once an edit is finished.
 
-* With **Auto lightmap UVs** enabled in **Project Settings** > **Brushes** (the default), lightmap UVs are made shortly after you stop editing a group.
+* With **Automatic lightmap UVs** enabled in **Project Settings** > **CSG Brush** (the default), lightmap UVs are made shortly after you stop editing a group.
 * With it disabled, click **Generate Lightmap UVs** in the Brush Group's **Lightmapping** section, or choose **Tools** > **CSG Brush** > **Generate Lightmap UVs**, before you bake.
 
 Any edit to a group's brushes builds its meshes again without lightmap UVs, and they're made again once the edit is finished. The baked lighting is then out of date until you bake again.

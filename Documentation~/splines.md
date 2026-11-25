@@ -10,7 +10,7 @@ To draw a spline:
 
 1. In the Scene view, open the **Create** tool dropdown and select **Spline**, then click where the spline starts. On a brush, it starts on the surface; elsewhere on the ground. This creates a Spline GameObject and starts drawing. If you click a point or link of an existing Spline instead, drawing continues that spline from there.
 
-    You can also select **GameObject** > **Brush** > **Spline**, which creates a Spline at the Scene view pivot and starts drawing.
+    You can also select **GameObject** > **CSG Brush** > **Spline**, which creates a Spline at the Scene view pivot and starts drawing.
 
 2. Click to place each following point. Each click adds a link from the previous point.
     * On a brush, the point lands on its surface, raised so that the profile rests on it.
@@ -57,7 +57,7 @@ To curve the path, select points and press **S**, or click **Smooth**. Smooth po
 | **Ends** | What the path's ends are.<br/>&#8226; **Open**: The inside of a hollow profile is open.<br/>&#8226; **Closed**: Capped by the wall thickness.<br/>&#8226; **Rounded**: Half a ball for a **Circle**, half a disc for a **Rectangle**, closed. |
 | **Orientation** | How the profile turns along the path.<br/>&#8226; **Follow**: The profile turns with the path without twisting. This is the default.<br/>&#8226; **Upright**: The top of the profile stays up. |
 | **Material** | The material of every piece. When empty, pieces use the project's default material. |
-| **Override tolerance** | Uses its own curve tolerance instead of the project's **Curve tolerance** (**Project Settings** > **Brushes**). |
+| **Override tolerance** | Uses its own curve tolerance instead of the project's **Curve tolerance (m)** (**Project Settings** > **CSG Brush**). |
 | **Tolerance (m)** | How far the straight pieces of its curves may stray from the true curve. Visible when **Override tolerance** is enabled. |
 | **Path** | The number of points and links. This value is read-only. |
 | **Edit** | Enters spline edit mode. |
@@ -71,7 +71,7 @@ The pieces take the layer, tag, and static flags of the Spline GameObject.
 
 An object attached to a spline stays on it when the path changes: at its distance along its link, at its angle around the profile, and at its offset from the surface. It stands on the surface: its up points out of the surface and its forward runs along the path.
 
-To attach objects, select them and select **GameObject** > **Brush** > **Attach to Spline**. Each object goes onto the surface of the nearest spline where it's nearest, and becomes the spline's child. To take an object off, select **GameObject** > **Brush** > **Detach from Spline**. It stays where it is.
+To attach objects, select them and select **GameObject** > **CSG Brush** > **Attach to Spline**. Each object goes onto the surface of the nearest spline where it's nearest, and becomes the spline's child. To take an object off, select **GameObject** > **CSG Brush** > **Detach from Spline**. It stays where it is.
 
 When you move an attached object, it takes the nearest place on the spline, keeping how far out from the surface you put it and how you turned it. Pull it more than 0.3 m further out and it comes off the spline. It stays where you put it and no longer follows the path. If its link is deleted, it stays where it was.
 

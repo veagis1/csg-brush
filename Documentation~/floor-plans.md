@@ -23,7 +23,7 @@ To draw a floor plan:
 5. To add an interior wall, click a point on a wall (the wall is split there), then click where the interior wall ends, on another wall or anywhere on the floor.
 6. Press **Esc** or double-click to end a stroke, and **Enter** or **Esc** again to stop drawing.
 
-You can also create a Floor Plan from the menu: **GameObject** > **Brush** > **Floor Plan** creates one at the Scene view pivot.
+You can also create a Floor Plan from the menu: **GameObject** > **CSG Brush** > **Floor Plan** creates one at the Scene view pivot.
 
 While you draw:
 
@@ -51,7 +51,7 @@ To continue drawing an existing Floor Plan, select it and click **Draw** in the 
 | **Ceiling** | Rooms get a ceiling slab unless a room is set otherwise. Disabled by default. |
 | **Ceiling Thickness** | The thickness of the ceilings, in metres, measured up from the top of the walls. |
 | **Ceiling Material** | The material of ceilings without one of their own. |
-| **Override tolerance** | Uses its own curve tolerance instead of the project's **Curve tolerance** (**Project Settings** > **Brushes**). Disabled by default. |
+| **Override tolerance** | Uses its own curve tolerance instead of the project's **Curve tolerance (m)** (**Project Settings** > **CSG Brush**). Disabled by default. |
 | **Tolerance (m)** | How far the straight pieces of its [curved walls](floor-plan-edit-mode.md#curve-walls) may stray from the true curve. Visible when **Override tolerance** is enabled. |
 | **Plan** | The number of points, walls and rooms. This value is read-only. |
 | **Edit** | Enters [floor plan edit mode](floor-plan-edit-mode.md). |

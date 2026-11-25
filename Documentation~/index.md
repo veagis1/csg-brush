@@ -2,12 +2,13 @@
 
 CSG Brush is a level editor for building game levels from convex brushes. You add and subtract brushes on a world grid, and the package combines them into render meshes and convex colliders.
 
-The source code, issues and the latest version of this manual are on GitHub: [jaroslavstehlik/csg-brush](https://github.com/jaroslavstehlik/csg-brush).
+This manual covers the [veagis1/csg-brush fork](https://github.com/veagis1/csg-brush) of [Jaroslav Stehlik's CSG Brush](https://github.com/jaroslavstehlik/csg-brush).
 
 This documentation covers the following features:
 
 | **Feature** | **Description** |
 | :--- | :--- |
+| [What's new in 0.6.1](fork-0.6.1.md) | Draw on a surface grid, enter exact dimensions, set an origin and move objects to vertices and edges. |
 | [Floor plans](floor-plans.md) | Draw walls on the floor, joined automatically, with a floor and ceiling in every room. |
 | [Floor plan edit mode](floor-plan-edit-mode.md) | Select, move, rotate, scale, add, and delete the points, walls, and rooms of a floor plan. |
 | [Splines](splines.md) | Sweep a pipe, beam, rail, or gutter profile along a branching 3D path. |
