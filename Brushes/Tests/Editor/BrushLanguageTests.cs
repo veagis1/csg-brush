@@ -1,12 +1,28 @@
 using System.Linq;
+using System.Reflection;
 using CsgBrush.Editor;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEngine;
 
 namespace CsgBrush.Tests
 {
     public sealed class BrushLanguageTests
     {
+        [Test]
+        public void BrushHasEnglishComponentAndContextMenuNames()
+        {
+            Assert.That(typeof(Brush).GetCustomAttribute<AddComponentMenu>().componentMenu, Is.EqualTo("Brush"));
+            var entries = TypeCache.GetMethodsWithAttribute<MenuItem>()
+                .Where(method => method.DeclaringType == typeof(BrushMenu))
+                .SelectMany(method => method.GetCustomAttributes<MenuItem>())
+                .Select(item => item.menuItem)
+                .Where(path => path.StartsWith("CONTEXT/Brush/", System.StringComparison.Ordinal));
+            CollectionAssert.AreEquivalent(new[] {
+                "CONTEXT/Brush/To First", "CONTEXT/Brush/To Last", "CONTEXT/Brush/Move Up", "CONTEXT/Brush/Move Down"
+            }, entries);
+        }
+
         [Test]
         public void SwitchingLanguageRefreshesAllCreateLabelsWithoutChangingCommandsOrProjectSettings()
         {
@@ -27,7 +43,7 @@ namespace CsgBrush.Tests
                     Assert.That(BrushCommandMenu.BuildCreateMenu().GetItemCount(), Is.EqualTo(13));
                     Assert.That(BrushSettings.FormatMeters(0.125f), Is.EqualTo(english ? "0.125 m" : "0,125 м"));
                     Assert.That(BrushPivotTool.ResetCommand.text, Is.EqualTo(english ? "Reset WCS" : "Сбросить WCS"));
-                    Assert.That(EditorPrefs.GetString(key, "ru"), Is.EqualTo(english ? "en" : "ru"));
+                    Assert.That(EditorPrefs.GetString(key, "en"), Is.EqualTo(english ? "en" : "ru"));
                     Assert.That(EditorJsonUtility.ToJson(BrushSettings.instance), Is.EqualTo(settings));
                 }
             }

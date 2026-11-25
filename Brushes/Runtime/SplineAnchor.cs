@@ -9,7 +9,7 @@ namespace CsgBrush
     /// takes the nearest place on the spline. The object stands on the surface: its up points out of it, its forward
     /// along the path. When its link is gone the object stays where it was.
     /// </summary>
-    [AddComponentMenu("CSG Brush/Привязка к сплайну")]
+    [AddComponentMenu("CSG Brush/Spline Anchor")]
     [DisallowMultipleComponent]
     [ExecuteAlways]
     public sealed class SplineAnchor : MonoBehaviour

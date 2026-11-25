@@ -9,7 +9,7 @@ namespace CsgBrush
     /// generated (see <see cref="BrushGenerator"/>): each straight piece of the path is one brush, the hull of the profile
     /// at its two ends. A hollow profile also cuts its inside, after every solid piece, so branches open into each other.
     /// </summary>
-    [AddComponentMenu("CSG Brush/Сплайн")]
+    [AddComponentMenu("CSG Brush/Spline")]
     [Icon("Packages/digital.dream.csgbrush/Brushes/Editor/Icons/Spline.png")]
     [DisallowMultipleComponent]
     public sealed class Spline : PointGraph

@@ -274,7 +274,7 @@ namespace CsgBrush.Editor
     /// one ends, ready for the next. Backspace takes back the last wall; Escape or a double click ends the stroke, Enter or
     /// a second Escape leaves the tool.
     /// </summary>
-    [EditorTool("Рисовать план стен", typeof(FloorPlan))]
+    [EditorTool("Draw Floor Plan", typeof(FloorPlan))]
     public sealed class FloorPlanDrawTool : EditorTool
     {
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("FloorPlan"), Tr("Рисовать план стен"));
@@ -451,7 +451,7 @@ namespace CsgBrush.Editor
     /// point or wall continues that plan from there (the selected plan first), and a click on the selected plan's floor
     /// adds walls to it, so new walls join its walls as when it was first drawn.
     /// </summary>
-    [EditorTool("План стен", variantGroup = typeof(BrushCreateTool), variantPriority = 11)]
+    [EditorTool("Floor Plan", variantGroup = typeof(BrushCreateTool), variantPriority = 11)]
     public sealed class CreateFloorPlanTool : EditorTool
     {
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("FloorPlan"), Tr("План стен"));
@@ -550,7 +550,7 @@ namespace CsgBrush.Editor
             {
                 bool joining = m_Plan != null && (m_PlanPoint >= 0 || m_PlanWall >= 0); // white and larger on a plan's point or wall, as when drawing
                 BrushSurfaceGrid.Draw(m_Plan != null ? new BrushSurfaceGrid.Frame(m_Plan.transform, Vector3.zero, Quaternion.identity)
-                    : BrushSurfaceGrid.Frame.OnPlane(m_Hover, Vector3.up));
+                    : BrushSurfaceGrid.Frame.OnPlane(m_Hover, Vector3.up), m_Hover);
                 Handles.color = joining ? Color.white : FloorPlanTools.Line;
                 Handles.DotHandleCap(-1, m_Hover, Quaternion.identity, HandleUtility.GetHandleSize(m_Hover) * (joining ? 0.09f : 0.06f), EventType.Repaint);
             }

@@ -7,7 +7,7 @@ namespace CsgBrush
     /// inside; brushes beside it are kept. It stays first among its siblings, so a subtract brush you add after it still
     /// cuts what was generated, and your additions are never cut by generated cuts.
     /// </summary>
-    [AddComponentMenu("CSG Brush/Сгенерированные браши")]
+    [AddComponentMenu("CSG Brush/Generated Brushes")]
     [DisallowMultipleComponent]
     public sealed class GeneratedBrushes : MonoBehaviour
     {

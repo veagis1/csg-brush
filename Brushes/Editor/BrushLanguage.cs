@@ -19,7 +19,7 @@ namespace CsgBrush.Editor
 
         static BrushLanguage()
         {
-            English = EditorPrefs.GetString(PreferenceKey, "ru") == "en";
+            English = EditorPrefs.GetString(PreferenceKey, "en") != "ru";
         }
 
         internal static void SetEnglish(bool english)

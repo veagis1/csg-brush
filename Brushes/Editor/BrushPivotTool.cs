@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace CsgBrush.Editor
 {
-    [EditorTool(BrushPivotTool.PickLabel, typeof(Brush))]
+    [EditorTool("Snap WCS to Vertex", typeof(Brush))]
     public sealed class BrushPivotTool : EditorTool
     {
         const float PickRadius = 12f; // GUI points

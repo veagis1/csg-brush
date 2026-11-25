@@ -56,7 +56,7 @@ namespace CsgBrush.Editor
         }
     }
 
-    [EditorToolContext("Редактировать план стен", typeof(FloorPlan))]
+    [EditorToolContext("Edit Floor Plan", typeof(FloorPlan))]
     [Icon(BrushIcons.Folder + "FloorPlan.png")]
     public sealed class FloorPlanEditContext : PointGraphEditContext
     {
@@ -66,7 +66,7 @@ namespace CsgBrush.Editor
     }
 
     /// <summary>Spline edit mode: the floor plan's, on a spline's points and links (Move also moves them up and down).</summary>
-    [EditorToolContext("Редактировать сплайн", typeof(Spline))]
+    [EditorToolContext("Edit Spline", typeof(Spline))]
     [Icon(BrushIcons.Folder + "Spline.png")]
     public sealed class SplineEditContext : PointGraphEditContext
     {
@@ -774,12 +774,12 @@ namespace CsgBrush.Editor
     }
 
     /// <summary>Move in floor plan edit mode: along the gizmo's two floor axes or freely on the floor; points land on the grid.</summary>
-    [EditorTool("Переместить выбранные элементы плана стен", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanMoveTool : PointGraphMoveTool { }
-    [EditorTool("Переместить выбранные элементы сплайна", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineMoveTool : PointGraphMoveTool { }
-    [EditorTool("Повернуть выбранные элементы плана стен", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanRotateTool : PointGraphRotateTool { }
-    [EditorTool("Повернуть выбранные элементы сплайна", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineRotateTool : PointGraphRotateTool { }
-    [EditorTool("Масштабировать выбранные элементы плана стен", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanScaleTool : PointGraphScaleTool { }
-    [EditorTool("Масштабировать выбранные элементы сплайна", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineScaleTool : PointGraphScaleTool { }
+    [EditorTool("Move floor plan selection", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanMoveTool : PointGraphMoveTool { }
+    [EditorTool("Move spline selection", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineMoveTool : PointGraphMoveTool { }
+    [EditorTool("Rotate floor plan selection", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanRotateTool : PointGraphRotateTool { }
+    [EditorTool("Rotate spline selection", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineRotateTool : PointGraphRotateTool { }
+    [EditorTool("Scale floor plan selection", typeof(FloorPlan), typeof(FloorPlanEditContext))] public sealed class FloorPlanScaleTool : PointGraphScaleTool { }
+    [EditorTool("Scale spline selection", typeof(Spline), typeof(SplineEditContext))] public sealed class SplineScaleTool : PointGraphScaleTool { }
 
     /// <summary>Move in edit mode: along the gizmo's two floor axes, freely on the floor, and up and down for a spline; points land on the grid.</summary>
     public abstract class PointGraphMoveTool : FloorPlanSelectionTool

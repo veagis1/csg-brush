@@ -9,7 +9,7 @@ namespace CsgBrush.Colliders
     ///
     /// Pieces live under a child named by <see cref="ContainerName"/> and are rebuilt with the model's mesh (editor only).
     /// </summary>
-    [AddComponentMenu("CSG Brush/Выпуклые коллайдеры")]
+    [AddComponentMenu("CSG Brush/Convex Colliders")]
     [DisallowMultipleComponent]
     public sealed class ConvexColliderSettings : MonoBehaviour
     {

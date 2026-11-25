@@ -18,7 +18,7 @@ namespace CsgBrush.Editor
     /// the mode gives the normal tools back. Selection (click, Shift add, Ctrl remove, marquee) is handled here
     /// so it works with any of the three tools.
     /// </summary>
-    [EditorToolContext("Правка браша", typeof(Brush))]
+    [EditorToolContext("Edit Brush", typeof(Brush))]
     [Icon(BrushIcons.Folder + "EditBrush.png")]
     public sealed class BrushEditContext : EditorToolContext
     {
@@ -559,7 +559,7 @@ namespace CsgBrush.Editor
     }
 
     /// <summary>Move tool inside brush edit mode: Unity's position gizmo on the selection, world-grid snapped.</summary>
-    [EditorTool("Переместить выделенные элементы браша", typeof(Brush), typeof(BrushEditContext))]
+    [EditorTool("Move brush selection", typeof(Brush), typeof(BrushEditContext))]
     /// <summary>The three tools of the edit context share the Tool Settings toolbar (see BrushEditToolbar).</summary>
     public abstract class BrushSelectionTool : EditorTool { }
 
@@ -596,7 +596,7 @@ namespace CsgBrush.Editor
     }
 
     /// <summary>Rotate tool inside brush edit mode: the selection turns about its centre in rotation-snap steps; positions land on the grid.</summary>
-    [EditorTool("Повернуть выделенные элементы браша", typeof(Brush), typeof(BrushEditContext))]
+    [EditorTool("Rotate brush selection", typeof(Brush), typeof(BrushEditContext))]
     public sealed class BrushRotateTool : BrushSelectionTool
     {
         Quaternion start = Quaternion.identity, current = Quaternion.identity;
@@ -627,7 +627,7 @@ namespace CsgBrush.Editor
     }
 
     /// <summary>Scale tool inside brush edit mode: the selection scales about its centre; positions land on the grid.</summary>
-    [EditorTool("Масштабировать выделенные элементы браша", typeof(Brush), typeof(BrushEditContext))]
+    [EditorTool("Scale brush selection", typeof(Brush), typeof(BrushEditContext))]
     public sealed class BrushScaleTool : BrushSelectionTool
     {
         Vector3 current = Vector3.one; Quaternion frame = Quaternion.identity;

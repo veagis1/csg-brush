@@ -122,7 +122,7 @@ namespace CsgBrush.Editor
     /// the stroke. Backspace takes back the last link; Escape or a double click ends the stroke, Enter or a second Escape
     /// leaves the tool.
     /// </summary>
-    [EditorTool("Рисовать сплайн", typeof(Spline))]
+    [EditorTool("Draw Spline", typeof(Spline))]
     public sealed class SplineDrawTool : EditorTool
     {
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Spline"), Tr("Рисовать сплайн"));
@@ -305,7 +305,7 @@ namespace CsgBrush.Editor
     /// The Create tool's Spline: click to start a spline there (on a surface, the profile resting on it), then click its
     /// points. A click on a spline's point or link continues that spline from there, the selected spline first.
     /// </summary>
-    [EditorTool("Сплайн", variantGroup = typeof(BrushCreateTool), variantPriority = 12)]
+    [EditorTool("Spline", variantGroup = typeof(BrushCreateTool), variantPriority = 12)]
     public sealed class CreateSplineTool : EditorTool
     {
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Spline"), Tr("Сплайн"));
@@ -384,7 +384,7 @@ namespace CsgBrush.Editor
             if (e.type == EventType.Repaint && m_HoverValid)
             {
                 bool joining = m_Spline != null; // white and larger on a spline's point or link, as when drawing
-                if (!joining) BrushSurfaceGrid.Draw(m_Grid);
+                if (!joining) BrushSurfaceGrid.Draw(m_Grid, m_Hover);
                 Handles.color = joining ? Color.white : FloorPlanTools.Line;
                 Handles.DotHandleCap(-1, m_Hover, Quaternion.identity, HandleUtility.GetHandleSize(m_Hover) * (joining ? 0.09f : 0.06f), EventType.Repaint);
             }

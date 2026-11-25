@@ -12,7 +12,7 @@ namespace CsgBrush
     /// generated (see <see cref="BrushGenerator"/>): change the plan and the brushes follow. Door and window brushes under
     /// it ride on its walls (see <see cref="WallAnchor"/>).
     /// </summary>
-    [AddComponentMenu("CSG Brush/План стен")]
+    [AddComponentMenu("CSG Brush/Floor Plan")]
     [Icon("Packages/digital.dream.csgbrush/Brushes/Editor/Icons/FloorPlan.png")]
     [DisallowMultipleComponent]
     public sealed class FloorPlan : PointGraph

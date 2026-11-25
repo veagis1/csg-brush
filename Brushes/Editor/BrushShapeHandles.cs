@@ -102,7 +102,7 @@ namespace CsgBrush.Editor
             SceneView.RepaintAll();
         }
 
-        [Shortcut("Brushes/Toggle Shape Handles", typeof(SceneView), KeyCode.B, displayName = "CSG Brush/Переключить правку формы")]
+        [Shortcut("Brushes/Toggle Shape Handles", typeof(SceneView), KeyCode.B, displayName = "CSG Brush/Toggle Shape Editing")]
         static void ToggleShortcut()
         {
             Enabled = !Enabled;

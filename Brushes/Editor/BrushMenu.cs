@@ -156,10 +156,10 @@ namespace CsgBrush.Editor
             }
         }
 
-        [MenuItem("CONTEXT/Brush/В начало")] static void ContextToFirst(MenuCommand c) => BrushApi.ToFirst((Brush)c.context);
-        [MenuItem("CONTEXT/Brush/В конец")] static void ContextToLast(MenuCommand c) => BrushApi.ToLast((Brush)c.context);
-        [MenuItem("CONTEXT/Brush/Переместить выше")] static void ContextUp(MenuCommand c) => BrushApi.Step((Brush)c.context, -1);
-        [MenuItem("CONTEXT/Brush/Переместить ниже")] static void ContextDown(MenuCommand c) => BrushApi.Step((Brush)c.context, 1);
+        [MenuItem("CONTEXT/Brush/To First")] static void ContextToFirst(MenuCommand c) => BrushApi.ToFirst((Brush)c.context);
+        [MenuItem("CONTEXT/Brush/To Last")] static void ContextToLast(MenuCommand c) => BrushApi.ToLast((Brush)c.context);
+        [MenuItem("CONTEXT/Brush/Move Up")] static void ContextUp(MenuCommand c) => BrushApi.Step((Brush)c.context, -1);
+        [MenuItem("CONTEXT/Brush/Move Down")] static void ContextDown(MenuCommand c) => BrushApi.Step((Brush)c.context, 1);
 
         [MenuItem("CSG Brush/Перестроить сейчас")]
         static void Rebuild() => BrushApi.ForceUpdate();

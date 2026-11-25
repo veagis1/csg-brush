@@ -45,6 +45,7 @@ namespace CsgBrush.Editor
         }
 
         static Frame held, candidate;
+        static Vector3 candidatePoint;
         static SceneView pickingView;
         internal static bool Picking => pickingView != null;
         internal static bool HasHeld => held.Valid && !SceneVisibilityManager.instance.IsHidden(held.Owner.gameObject);
@@ -181,6 +182,7 @@ namespace CsgBrush.Editor
             {
                 var surface = BrushHooks.PickConstructionSurface(HandleUtility.GUIPointToWorldRay(e.mousePosition), out var point, out var normal);
                 candidate = surface != null ? ForSurface(surface, point, normal) : default;
+                candidatePoint = point;
                 if (e.type == EventType.MouseDown)
                 {
                     if (candidate.Valid)
@@ -193,45 +195,95 @@ namespace CsgBrush.Editor
                 }
                 view.Repaint();
             }
-            Draw(candidate);
+            if (candidate.Valid && e.type == EventType.Repaint)
+            {
+                Draw(candidate, candidatePoint);
+                DrawCursorPoint(candidatePoint);
+            }
             return true;
         }
 
-        internal static void Draw(Frame frame)
+        const int RadiusInSteps = 12;
+        static Material gridMaterial;
+
+        static BrushSurfaceGrid()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload += ReleaseGridMaterial;
+            EditorApplication.quitting += ReleaseGridMaterial;
+        }
+
+        static void ReleaseGridMaterial()
+        {
+            if (gridMaterial != null) Object.DestroyImmediate(gridMaterial);
+        }
+
+        internal static void DrawCursorPoint(Vector3 point)
+        {
+            var view = SceneView.currentDrawingSceneView;
+            if (view == null || view.camera == null) return;
+            using (new Handles.DrawingScope(Color.white))
+                Handles.DrawSolidDisc(point, view.camera.transform.forward, HandleUtility.GetHandleSize(point) * 0.035f);
+        }
+
+        internal static void Draw(Frame frame, Vector3? focus = null)
         {
             if (!frame.Valid || Event.current.type != EventType.Repaint) return;
             var step = BrushSettings.instance.GridMeters;
             if (!(step > 0f) || float.IsInfinity(step)) return;
-            const int radius = 12;
-            var ray = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
-            var point = frame.Plane.Raycast(ray, out float t) ? ray.GetPoint(t) : frame.Origin;
+            var point = focus ?? frame.Origin;
+            if (!focus.HasValue)
+            {
+                var ray = HandleUtility.GUIPointToWorldRay(Event.current.mousePosition);
+                if (frame.Plane.Raycast(ray, out float t)) point = ray.GetPoint(t);
+            }
             // Keep visible lines on real grid nodes as the camera pulls away.
             float minSpacing = HandleUtility.GetHandleSize(point) * 0.1f;
             while (step < minSpacing) step *= 2f;
-            var center = BrushDraw.SnapInPlane(point, frame.Origin, frame.Rotation, step);
-            var local = Quaternion.Inverse(frame.Rotation) * (center - frame.Origin);
-            int column = Mathf.RoundToInt(local.x / step), row = Mathf.RoundToInt(local.z / step);
+            var cells = Quaternion.Inverse(frame.Rotation) * (point - frame.Origin) / step;
+            int column = Mathf.RoundToInt(cells.x), row = Mathf.RoundToInt(cells.z);
             var minor = new Color(0.38f, 0.88f, 0.83f, 0.34f);
             var major = new Color(0.55f, 0.96f, 0.91f, 0.70f);
-            var previous = Handles.zTest;
+            // Hardware lines use the same depth as the surface grid used for snapping.
+            // Camera-facing AA strips can disappear into a coplanar face in orthographic views.
+            if (gridMaterial == null)
+            {
+                gridMaterial = new Material(Shader.Find("Hidden/Internal-Colored")) { hideFlags = HideFlags.HideAndDontSave };
+                gridMaterial.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+                gridMaterial.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+                gridMaterial.SetInt("_ZWrite", 0);
+                gridMaterial.SetInt("_ZTest", (int)CompareFunction.LessEqual);
+            }
+            if (!gridMaterial.SetPass(0)) return;
+            GL.PushMatrix();
             try
             {
-                Handles.zTest = CompareFunction.LessEqual;
-                using (new Handles.DrawingScope(minor,
-                    Matrix4x4.TRS(center + frame.Normal * 0.001f, frame.Rotation, Vector3.one)))
+                GL.MultMatrix(Matrix4x4.TRS(point + frame.Normal * 0.001f, frame.Rotation, Vector3.one));
+                float radius = RadiusInSteps * step;
+                for (int i = -RadiusInSteps; i <= RadiusInSteps; i++)
                 {
-                    float edge = radius * step;
-                    for (int i = -radius; i <= radius; i++)
-                    {
-                        float offset = i * step;
-                        Handles.color = (column + i) % 4 == 0 ? major : minor;
-                        Handles.DrawLine(new Vector3(offset, 0f, -edge), new Vector3(offset, 0f, edge));
-                        Handles.color = (row + i) % 4 == 0 ? major : minor;
-                        Handles.DrawLine(new Vector3(-edge, 0f, offset), new Vector3(edge, 0f, offset));
-                    }
+                    DrawChord((column - cells.x + i) * step, radius, Vector3.right, Vector3.forward, (column + i) % 4 == 0 ? major : minor);
+                    DrawChord((row - cells.z + i) * step, radius, Vector3.forward, Vector3.right, (row + i) % 4 == 0 ? major : minor);
                 }
             }
-            finally { Handles.zTest = previous; }
+            finally { GL.PopMatrix(); }
+        }
+
+        static void DrawChord(float offset, float radius, Vector3 across, Vector3 along, Color color)
+        {
+            float side = offset / radius;
+            if (Mathf.Abs(side) >= 1f) return;
+            float halfChord = Mathf.Sqrt(1f - side * side);
+            const int segments = 16;
+            GL.Begin(GL.LINE_STRIP);
+            for (int i = 0; i <= segments; i++)
+            {
+                float position = Mathf.Lerp(-halfChord, halfChord, (float)i / segments);
+                float distance = Mathf.Sqrt(side * side + position * position);
+                float fade = Mathf.InverseLerp(0.45f, 1f, distance);
+                GL.Color(new Color(color.r, color.g, color.b, color.a * Mathf.SmoothStep(1f, 0f, fade)));
+                GL.Vertex(across * offset + along * (position * radius));
+            }
+            GL.End();
         }
     }
 }

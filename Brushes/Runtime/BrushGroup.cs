@@ -9,7 +9,7 @@ namespace CsgBrush
     /// prefab builds into the prefab, which then carries its own mesh and colliders; a prefab without a group is a
     /// stamp that carves the level it is placed in (in the editor). The group's transform moves everything it builds.
     /// </summary>
-    [AddComponentMenu("CSG Brush/Группа брашей")]
+    [AddComponentMenu("CSG Brush/Brush Group")]
     [Icon("Packages/digital.dream.csgbrush/Brushes/Editor/Icons/BrushGroup.png")]
     [DisallowMultipleComponent]
     public sealed class BrushGroup : MonoBehaviour

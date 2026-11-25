@@ -18,7 +18,7 @@ namespace CsgBrush
     /// and it takes the nearest wall. Doors and windows get one by themselves; anything else (a prefab, a brush) is
     /// attached by dropping it on a wall. When its wall is gone the object stays where it was.
     /// </summary>
-    [AddComponentMenu("CSG Brush/Привязка к стене")]
+    [AddComponentMenu("CSG Brush/Wall Anchor")]
     [DisallowMultipleComponent]
     [ExecuteAlways]
     public sealed class WallAnchor : MonoBehaviour

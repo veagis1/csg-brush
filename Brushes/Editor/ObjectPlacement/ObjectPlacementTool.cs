@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace CsgBrush.Editor
 {
-    [EditorTool(ObjectPlacementTool.Label)]
+    [EditorTool("Move to")]
     public sealed class ObjectPlacementTool : EditorTool
     {
         internal const string Label = "Переместить к";

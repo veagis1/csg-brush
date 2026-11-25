@@ -9,7 +9,7 @@ namespace CsgBrush
     /// pipe, lamps along a road. Each run of the path (from an end or a junction to the next) gets its own row. The copies
     /// are generated: hidden, made again whenever the spline or these settings change. Edit the source to change them.
     /// </summary>
-    [AddComponentMenu("CSG Brush/Повтор вдоль сплайна")]
+    [AddComponentMenu("CSG Brush/Spline Repeat")]
     [RequireComponent(typeof(Spline))]
     [ExecuteAlways]
     public sealed class SplineRepeat : MonoBehaviour

@@ -64,7 +64,7 @@ namespace CsgBrush
     /// generated automatically (CSG through the Manifold library, one convex collider per piece). Sizes are stored in
     /// metres, the same as in the Inspector.
     /// </summary>
-    [AddComponentMenu("Браш")]
+    [AddComponentMenu("Brush")]
     [Icon("Packages/digital.dream.csgbrush/Brushes/Editor/Icons/Brush.png")]
     [DisallowMultipleComponent]
     [SelectionBase]

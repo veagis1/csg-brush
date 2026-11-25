@@ -303,10 +303,10 @@ namespace CsgBrush.Editor
             EditorGUILayout.Space(2);
         }
 
-        [Shortcut("Brushes/Grid smaller", typeof(SceneView), KeyCode.LeftBracket, displayName = "CSG Brush/Уменьшить шаг сетки")]
+        [Shortcut("Brushes/Grid smaller", typeof(SceneView), KeyCode.LeftBracket, displayName = "CSG Brush/Decrease Grid Step")]
         static void GridSmaller() { BrushSettings.instance.SetGridIndex(BrushSettings.instance.gridIndex - 1); }
 
-        [Shortcut("Brushes/Grid larger", typeof(SceneView), KeyCode.RightBracket, displayName = "CSG Brush/Увеличить шаг сетки")]
+        [Shortcut("Brushes/Grid larger", typeof(SceneView), KeyCode.RightBracket, displayName = "CSG Brush/Increase Grid Step")]
         static void GridLarger() { BrushSettings.instance.SetGridIndex(BrushSettings.instance.gridIndex + 1); }
     }
 }
