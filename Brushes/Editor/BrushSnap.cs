@@ -95,6 +95,11 @@ namespace CsgBrush.Editor
             force || (s_Accepted.TryGetValue(brush, out var last) && Quaternion.Angle(rotation, last.rotation) > 1e-3f)
                 ? SnapBrushRotation(brush, rotation, step) : rotation;
 
+        // Translation, Undo and scene reload accept an existing size. Only sizing and explicit grid commands round it.
+        static Vector3 SnapChangedSize(Brush brush, Vector3 size, float grid, bool force = false) =>
+            force || (s_Accepted.TryGetValue(brush, out var last) && (size - last.size).sqrMagnitude > kEpsilon * kEpsilon)
+                ? SnapBrushSize(brush, size, grid) : size;
+
         /// <summary>The lowest corner of the shape's world bounds relative to its transform, for a size and a rotation.</summary>
         static Vector3 ShapeMin(Brush brush, Vector3 size, Quaternion worldRotation)
         {
@@ -183,7 +188,7 @@ namespace CsgBrush.Editor
                 t.localScale = desiredScale;
                 changed = true;
             }
-            size = SnapBrushSize(brush, size, grid);
+            size = SnapChangedSize(brush, size, grid, force || changed);
             if ((size - brush.size).sqrMagnitude > kEpsilon * kEpsilon) { brush.size = size; changed = true; }
 
             var rotation = SnapChangedRotation(brush, t.rotation, s.rotationSnapDegrees, force);
@@ -359,7 +364,7 @@ namespace CsgBrush.Editor
                 return;
             }
             var scaledSize = Vector3.Scale(brush.size, new Vector3(Mathf.Abs(lossy.x), Mathf.Abs(lossy.y), Mathf.Abs(lossy.z)));
-            var sizeS = SnapBrushSize(brush, scaledSize, grid);
+            var sizeS = SnapChangedSize(brush, scaledSize, grid);
             bool resized = known && (sizeS - last.size).sqrMagnitude > kEpsilon * kEpsilon;
             var Ts = moved || resized ? SnapBrushPosition(brush, T, sizeS, Rs, grid) : T;
             var factor = Divide(sizeS, brush.size);

@@ -22,6 +22,7 @@ namespace CsgBrush.Editor
         {
             var toolbar = new OverlayToolbar();
             toolbar.Add(new IMGUIContainer(DrawCreateMenu));
+            toolbar.Add(new IMGUIContainer(ObjectPlacementTool.DrawButton));
             toolbar.Add(new IMGUIContainer(() => DrawDimensionsAndSnapping(BrushSettings.instance)));
             toolbar.Add(new IMGUIContainer(DrawEditToggles));
             foreach (var operation in new[] { BrushOperation.Add, BrushOperation.Subtract })
@@ -132,7 +133,11 @@ namespace CsgBrush.Editor
             var s = BrushSettings.instance;
             bool showShapeSelection = BrushShapeHandles.Enabled;
             EditorGUILayout.BeginVertical();
-            DrawCreateMenu();
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                DrawCreateMenu();
+                ObjectPlacementTool.DrawButton();
+            }
 
             // Independent row keeps each pair together even at the minimum width.
             EditorGUILayout.BeginHorizontal();
