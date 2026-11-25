@@ -1,12 +1,11 @@
 using System;
-using System.Collections;
+using System.Linq;
 using CsgBrush.Editor;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
 
 namespace CsgBrush.Tests
@@ -19,10 +18,14 @@ namespace CsgBrush.Tests
     {
         SceneView m_View; Vector2 m_Offset, m_Seen, m_TargetGui; Func<Vector3> m_Target;
         Brush m_Floor, m_Tower;
+        UnityEditor.PivotMode m_PreviousPivotMode;
+        PivotRotation m_PreviousPivotRotation;
 
         [SetUp]
         public void Open()
         {
+            m_PreviousPivotMode = Tools.pivotMode;
+            m_PreviousPivotRotation = Tools.pivotRotation;
             EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
             m_Floor = BrushApi.Create(BrushShape.Box, new Vector3(0f, -0.5f, 0f), new Vector3(30f, 1f, 30f), Quaternion.identity, null, "Floor");
             m_Tower = BrushApi.Create(BrushShape.Box, new Vector3(4f, 3f, 4f), new Vector3(4f, 6f, 4f), Quaternion.identity, null, "Tower");
@@ -43,6 +46,8 @@ namespace CsgBrush.Tests
             SceneView.duringSceneGui -= Observe;
             GUIUtility.hotControl = 0;
             Tools.current = Tool.Move;
+            Tools.pivotMode = m_PreviousPivotMode;
+            Tools.pivotRotation = m_PreviousPivotRotation;
             Selection.activeGameObject = null;
         }
 
@@ -53,7 +58,15 @@ namespace CsgBrush.Tests
             if (m_Target != null && (e.type == EventType.Layout || e.type == EventType.Repaint)) m_TargetGui = HandleUtility.WorldToGUIPoint(m_Target());
         }
 
-        Vector2 Gui(Vector3 world) { m_Target = () => world; m_View.SendEvent(new Event { type = EventType.Repaint }); return m_TargetGui - m_Offset; }
+        Vector2 Gui(Vector3 world) => Gui(() => world);
+
+        Vector2 Gui(Func<Vector3> world)
+        {
+            m_Target = world;
+            m_View.SendEvent(new Event { type = EventType.Repaint });
+            m_Target = null;
+            return m_TargetGui - m_Offset;
+        }
 
         void Send(EventType type, Vector2 at)
         {
@@ -113,15 +126,22 @@ namespace CsgBrush.Tests
         public void TheMoveGizmoKeepsItsDragOverAnotherBrush()
         {
             Tools.current = Tool.Move;
+            Tools.pivotMode = UnityEditor.PivotMode.Pivot;
+            Tools.pivotRotation = PivotRotation.Global;
             Selection.activeGameObject = m_Tower.gameObject;
             var at = m_Tower.transform.position;
-            float size = HandleUtility.GetHandleSize(at);
-            m_View.SendEvent(new Event { type = EventType.Repaint });
-            var arrow = Gui(at + Vector3.right * size * 0.85f); var to = Gui(at + Vector3.right * size * 0.85f + Vector3.left * 6f); // dragged back over the floor
+            Vector3 Arrow() => at + Vector3.right * (HandleUtility.GetHandleSize(at) * 0.85f);
+            var arrow = Gui(Arrow);
+            var to = Gui(() => Arrow() + Vector3.left * 6f); // dragged back over the floor
             m_View.SendEvent(new Event { type = EventType.MouseMove, mousePosition = arrow });
-            Send(EventType.MouseDown, arrow); MoveTo(arrow, to, EventType.MouseDrag); Send(EventType.MouseUp, to); MoveTo(to, to);
+            Send(EventType.MouseDown, arrow);
+            int hotControl = GUIUtility.hotControl;
+            MoveTo(arrow, to, EventType.MouseDrag);
+            Send(EventType.MouseUp, to);
+            MoveTo(to, to);
             Assert.AreEqual(m_Tower.gameObject, Selection.activeGameObject, "still the tower");
-            Assert.Less(m_Tower.transform.position.x, at.x - 1f, "moved along the arrow");
+            Assert.Less(m_Tower.transform.position.x, at.x - 1f,
+                $"moved along the arrow ({arrow} to {to}, control {hotControl})");
         }
 
         [Test]
@@ -137,20 +157,31 @@ namespace CsgBrush.Tests
             Assert.IsTrue(spline ? selected.GetComponent<Spline>() != null : selected.GetComponent<FloorPlan>() != null, "the new " + (spline ? "spline" : "floor plan") + ", not the floor under it (" + selected.name + ")");
         }
 
-        [UnityTest]
-        public IEnumerator AHoldIsLetGoOnlyAfterEveryToolHadTheRelease()
+        [Test]
+        public void AHoldIsLetGoOnlyAfterEveryToolHadTheRelease()
         {
             EditModeMouse.Take(4251);
-            EditModeMouse.ReleaseStaleAfter(new Event { type = EventType.MouseUp });
+            var onRelease = ScheduleRelease();
             Assert.AreEqual(4251, GUIUtility.hotControl, "still held while the release goes round the handlers");
-            yield return null; yield return null;
+            onRelease();
             Assert.AreEqual(0, GUIUtility.hotControl, "let go once nobody did");
             EditModeMouse.Take(4252);
-            EditModeMouse.ReleaseStaleAfter(new Event { type = EventType.MouseUp });
+            onRelease = ScheduleRelease();
             EditModeMouse.Take(4253); // a new press before the editor came round: it keeps its hold
-            yield return null; yield return null;
+            onRelease();
             Assert.AreEqual(4253, GUIUtility.hotControl);
             GUIUtility.hotControl = 0;
+        }
+
+        static EditorApplication.CallbackFunction ScheduleRelease()
+        {
+            var pending = EditorApplication.delayCall?.GetInvocationList() ?? Array.Empty<Delegate>();
+            EditModeMouse.ReleaseStaleAfter(new Event { type = EventType.MouseUp });
+            // Batch tests can advance the test enumerator without an Inspector update.
+            var scheduled = (EditorApplication.CallbackFunction)EditorApplication.delayCall
+                .GetInvocationList().Except(pending).Single();
+            EditorApplication.delayCall -= scheduled;
+            return scheduled;
         }
     }
 }

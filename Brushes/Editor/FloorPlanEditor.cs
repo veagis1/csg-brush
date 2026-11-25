@@ -432,7 +432,11 @@ namespace CsgBrush.Editor
             var plan = Undo.AddComponent<FloorPlan>(go);
             if (firstPoint) plan.AddPoint(Vector3.zero); // the draw tool starts its first wall here
             Selection.activeGameObject = go;
-            EditorApplication.delayCall += () => { if (Selection.activeGameObject == go) FloorPlanDrawTool.Begin(); };
+            EditorApplication.delayCall += () =>
+            {
+                if (plan != null && !EditorApplication.isPlayingOrWillChangePlaymode &&
+                    Selection.gameObjects.Length == 1 && Selection.activeGameObject == go) FloorPlanDrawTool.Begin();
+            };
             return plan;
         }
     }
@@ -506,7 +510,7 @@ namespace CsgBrush.Editor
 
         public override void OnToolGUI(EditorWindow window)
         {
-            if (!(window is SceneView)) return;
+            if (!(window is SceneView) || BrushSurfaceGrid.Picking) return;
             var e = Event.current;
             int id = GUIUtility.GetControlID(FocusType.Passive);
             HandleUtility.AddDefaultControl(id);

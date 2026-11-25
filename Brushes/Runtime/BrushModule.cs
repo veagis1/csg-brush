@@ -34,16 +34,6 @@ namespace CsgBrush
         void OnBrushTriggerExit(Brush brush, Collider other);
     }
 
-    /// <summary>On every trigger piece: forwards Unity's trigger events to the brush, which counts them per collider across its pieces.</summary>
-    [AddComponentMenu("")]
-    public sealed class BrushTriggerRelay : MonoBehaviour
-    {
-        public Brush brush;
-        void OnTriggerEnter(Collider other) { if (brush != null) brush.PieceTriggerEnter(other); }
-        void OnTriggerExit(Collider other) { if (brush != null) brush.PieceTriggerExit(other); }
-        void OnTriggerStay(Collider other) { if (brush != null) brush.PieceTriggerStay(other); }
-    }
-
     /// <summary>
     /// The plain trigger module: makes the brush a trigger volume and exposes its Enter and Exit as UnityEvents,
     /// so a door or a checkpoint can be wired in the Inspector without code. Code can implement

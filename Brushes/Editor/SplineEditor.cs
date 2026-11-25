@@ -287,7 +287,11 @@ namespace CsgBrush.Editor
             var spline = Undo.AddComponent<Spline>(go);
             int first = firstPoint ? spline.AddPoint(Vector3.zero) : -1; // the draw tool starts its first link here
             Selection.activeGameObject = go;
-            EditorApplication.delayCall += () => { if (Selection.activeGameObject == go) SplineDrawTool.Begin(first); };
+            EditorApplication.delayCall += () =>
+            {
+                if (go != null && !EditorApplication.isPlayingOrWillChangePlaymode &&
+                    Selection.gameObjects.Length == 1 && Selection.activeGameObject == go) SplineDrawTool.Begin(first);
+            };
             return spline;
         }
     }
@@ -339,7 +343,7 @@ namespace CsgBrush.Editor
 
         public override void OnToolGUI(EditorWindow window)
         {
-            if (!(window is SceneView)) return;
+            if (!(window is SceneView) || BrushSurfaceGrid.Picking) return;
             var e = Event.current;
             int id = GUIUtility.GetControlID(FocusType.Passive);
             HandleUtility.AddDefaultControl(id);

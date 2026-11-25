@@ -1,4 +1,5 @@
 using UnityEditor;
+using UnityEditor.EditorTools;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -148,6 +149,9 @@ namespace CsgBrush.Editor
             if (e.alt || Tools.viewToolActive) return false;
             if (pickingView != view)
             {
+                // Each creation tool draws the plane it actually uses, including wall openings and floor plans.
+                if (BrushCreateTool.Active != null || ToolManager.activeToolType == typeof(CreateFloorPlanTool) ||
+                    ToolManager.activeToolType == typeof(CreateSplineTool)) return false;
                 if (HasHeld) Draw(held);
                 else if (Tools.current == Tool.Move && GUIUtility.hotControl != 0 &&
                     Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<Brush>(out var brush) &&

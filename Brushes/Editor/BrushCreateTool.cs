@@ -424,7 +424,7 @@ namespace CsgBrush.Editor
                     }
                     if (e.type == EventType.Repaint && hoverValid)
                     {
-                        if (!BrushSurfaceGrid.HasHeld) BrushSurfaceGrid.Draw(hoverGrid);
+                        BrushSurfaceGrid.Draw(hoverGrid);
                         if (ManualOperation == BrushOperation.Subtract) hoverTarget.Draw();
                         using (new Handles.DrawingScope(Color.white))
                             Handles.DotHandleCap(-1, hoverPoint, Quaternion.identity, HandleUtility.GetHandleSize(hoverPoint) * 0.04f, EventType.Repaint);
@@ -612,7 +612,7 @@ namespace CsgBrush.Editor
 
         void DrawPreview()
         {
-            if (!BrushSurfaceGrid.HasHeld) BrushSurfaceGrid.Draw(drawGrid);
+            BrushSurfaceGrid.Draw(drawGrid);
             CurrentPose(out var centre, out var size, out var rotation);
             var poly = BrushGeometry.ShapePolyhedron(Shape, CurrentParameters(size));
             var m = Matrix4x4.TRS(centre, rotation, Vector3.one);

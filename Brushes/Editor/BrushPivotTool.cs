@@ -10,12 +10,14 @@ namespace CsgBrush.Editor
         const float PickRadius = 12f; // GUI points
         internal static bool Active => ToolManager.activeToolType == typeof(BrushPivotTool);
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), "Привязать гизмо к вершине");
-        public override bool IsAvailable() => targets != null && Selection.gameObjects.Length == 1 && BrushApi.CanPickPivot(target as Brush);
+        public override bool IsAvailable() => target is Brush brush && brush.gameObject.scene.IsValid() &&
+            Selection.gameObjects.Length == 1 && BrushApi.CanPickPivot(brush);
 
         internal static void Begin(Brush brush)
         {
             Selection.activeGameObject = brush.gameObject;
             BrushEditContext.Exit();
+            ActiveEditorTracker.sharedTracker.ForceRebuild();
             ToolManager.SetActiveTool<BrushPivotTool>();
             SceneView.lastActiveSceneView?.Focus();
             SceneView.RepaintAll();
