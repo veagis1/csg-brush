@@ -3,7 +3,7 @@
 # name = "caveman-check-read"
 # summary = "Check Caveman Read less boundaries, recovery and subprocess exit codes."
 # effects = "exec"
-# example = ["--tools", "Tools/Caveman"]
+# example = ["--tools", "Development~/Tools/Caveman"]
 #
 # [returns]
 # keys = ["passed"]
@@ -12,7 +12,7 @@
 # tools = { type = "path", required = true, help = "Caveman directory with the wrappers and installed CLI" }
 #
 # [stamp]
-# verified = "d82add0bf1df"
+# verified = "c58fb363e9c4"
 # ///
 """Exercise installed Read less in an isolated state directory."""
 import argparse

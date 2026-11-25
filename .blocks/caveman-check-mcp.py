@@ -3,7 +3,7 @@
 # name = "caveman-check-mcp"
 # summary = "Check Caveman MCP stdio and exact log recovery with an offline fixture."
 # effects = "exec"
-# example = ["--tools", "Tools/Caveman"]
+# example = ["--tools", "Development~/Tools/Caveman"]
 #
 # [returns]
 # keys = ["passed"]
@@ -12,7 +12,7 @@
 # tools = { type = "path", required = true, help = "Caveman directory with installed binaries" }
 #
 # [stamp]
-# verified = "0f876e910523"
+# verified = "2387cbb25ef5"
 # ///
 """Check exact MCP log recovery without altering the persistent recovery store."""
 import argparse

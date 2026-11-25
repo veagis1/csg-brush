@@ -3,7 +3,7 @@
 # name = "firefox-check-mcp"
 # summary = "Verify headless Firefox MCP navigation, snapshot and shutdown with an offline fixture."
 # effects = "exec"
-# example = ["--tools", "Tools/Firefox", "--heading", "Firefox fixture"]
+# example = ["--tools", "Development~/Tools/Firefox", "--heading", "Firefox fixture"]
 #
 # [returns]
 # keys = ["passed"]
@@ -13,7 +13,7 @@
 # heading = { type = "str", required = true, help = "Heading to generate in the offline page" }
 #
 # [stamp]
-# verified = "c0f6bb500c60"
+# verified = "3582cd1bc654"
 # ///
 """Test the project's Firefox MCP wrapper with a separate profile and a data URL."""
 import argparse

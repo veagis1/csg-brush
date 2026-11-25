@@ -15,5 +15,5 @@ if not exist "%CLI%" (
 "%NODE%" "%CLI%" %*
 exit /b %ERRORLEVEL%
 :firefox
-1>&2 echo Caveman Browse requires Chromium. This project uses Firefox MCP; see Knowledge/Инструкции/Caveman.md.
+1>&2 echo Caveman Browse requires Chromium. This project uses Firefox MCP. See Development~/Knowledge/Инструкции/Caveman.md.
 exit /b 2

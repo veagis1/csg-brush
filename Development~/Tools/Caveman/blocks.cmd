@@ -10,7 +10,7 @@ if errorlevel 1 (
 if defined DESKTOP_GIT set "PATH=%DESKTOP_GIT%;%PATH%"
 set "BLOCKS=%~dp0.state\bin\caveman-blocks.exe"
 if not exist "%BLOCKS%" (
-  1>&2 echo Run Tools\Caveman\caveman.cmd on scripts --yes first.
+  1>&2 echo Run Development~\Tools\Caveman\caveman.cmd on scripts --yes first.
   exit /b 1
 )
 "%BLOCKS%" %*

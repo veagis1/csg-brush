@@ -4,7 +4,7 @@ set "NODE=node.exe"
 if exist "%~dp0..\Caveman\.runtime\node.exe" set "NODE=%~dp0..\Caveman\.runtime\node.exe"
 set "MCP=%~dp0node_modules\@mozilla\firefox-mcp\dist\index.js"
 if not exist "%MCP%" (
-  1>&2 echo Install Tools\Firefox dependencies with npm ci first.
+  1>&2 echo Install Development~\Tools\Firefox dependencies with npm ci first.
   exit /b 1
 )
 if not defined FIREFOX_MCP_EXECUTABLE set "FIREFOX_MCP_EXECUTABLE=%ProgramFiles%\Mozilla Firefox\firefox.exe"
