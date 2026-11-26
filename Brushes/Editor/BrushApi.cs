@@ -154,9 +154,11 @@ namespace CsgBrush.Editor
 
         public static void Move(Brush brush, Vector3 position)
         {
-            if (brush.transform.position == position) return;
+            if (brush.transform.position.Equals(position)) return;
             Undo.RecordObject(brush.transform, Tr("Переместить браш"));
             brush.transform.position = position;
+            if (!Application.isPlaying && BrushSettings.instance.snapToGrid && !BrushSnap.DragInProgress)
+                BrushSnap.Snap(brush);
             BrushSync.NotifyTransformChanged(brush);
         }
 

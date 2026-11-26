@@ -3,7 +3,9 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEditor.SceneManagement;
+using UnityEditor.ShortcutManagement;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace CsgBrush.Editor
 {
@@ -12,17 +14,81 @@ namespace CsgBrush.Editor
     {
         const string kMenu = "GameObject/CSG Brush/";
 
-        static BrushMenu() => ToolManager.activeToolChanged += OnToolChanged;
+        static BrushMenu()
+        {
+            ToolManager.activeToolChanged += () => ToolVersion++;
+            ToolManager.activeContextChanged += OnContextChanged;
+            SceneView.duringSceneGui += HandleSceneShortcut;
+        }
 
         internal static int ToolVersion { get; private set; }
 
-        static void OnToolChanged()
+        // A focused Scene view can receive a key that the global tool shortcuts did not consume.
+        // Use the active profile's binding and the same transition as the overlay.
+        static void HandleSceneShortcut(SceneView view)
+        {
+            var e = Event.current;
+            if (e.type != EventType.KeyDown || e.keyCode == KeyCode.None || EditorWindow.focusedWindow != view ||
+                Tools.viewToolActive || GUIUtility.hotControl != 0 || EditorGUIUtility.editingTextField ||
+                BrushDimensionFields.IsEditingInCurrentView ||
+                view.rootVisualElement.focusController?.focusedElement is ITextEdition { isReadOnly: false })
+                return;
+            if (ToolManager.activeContextType != typeof(GameObjectToolContext) &&
+                !BrushEditContext.IsActive && !PointGraphEditContext.IsActive) return;
+            if (Tools.current == Tool.Custom && ToolManager.activeToolType?.Assembly != typeof(BrushMenu).Assembly) return;
+
+            if (MatchesShortcut("Tools/Move", e)) ActivateTransform(Tool.Move);
+            else if (MatchesShortcut("Tools/Rotate", e)) ActivateTransform(Tool.Rotate);
+            else if (MatchesShortcut("Tools/Scale", e)) ActivateTransform(Tool.Scale);
+            else if (MatchesShortcut(BrushShapeHandles.ShortcutId, e)) BrushShapeHandles.Enabled = !BrushShapeHandles.Enabled;
+            else return;
+            e.Use();
+        }
+
+        static bool MatchesShortcut(string id, Event e)
+        {
+            var sequence = ShortcutManager.instance.GetShortcutBinding(id).keyCombinationSequence;
+            using var keys = sequence.GetEnumerator();
+            if (!keys.MoveNext()) return false;
+            var key = keys.Current;
+            bool mac = Application.platform == RuntimePlatform.OSXEditor;
+            return key.keyCode == e.keyCode && key.alt == e.alt && key.shift == e.shift &&
+                key.action == (mac ? e.command : e.control) && key.control == (mac && e.control) && !keys.MoveNext();
+        }
+
+        internal static void ActivateTransform(Tool tool)
         {
             ToolVersion++;
-            var type = ToolManager.activeToolType;
-            if (type == typeof(CreateFloorPlanTool) || type == typeof(CreateSplineTool) ||
-                type != null && typeof(BrushCreateTool).IsAssignableFrom(type))
-                BrushShapeHandles.SuspendForCreation();
+            CancelSceneGestures();
+            Tools.current = tool;
+            SceneView.RepaintAll();
+        }
+
+        static void OnContextChanged()
+        {
+            ToolVersion++;
+            if (!BrushEditContext.IsActive && !PointGraphEditContext.IsActive) return;
+            CancelSceneGestures();
+            BrushShapeHandles.Suspend();
+            // Unity leaves a global Create tool active when only the component context changes.
+            if (Tools.current == Tool.Custom) Tools.current = Tool.Move;
+        }
+
+        static void CancelSceneGestures()
+        {
+            BrushShapeHandles.CancelGesture();
+            BrushDimensionFields.Cancel();
+            BrushSurfaceGrid.CancelPicking();
+            WallAnchorEditor.CancelPicking();
+        }
+
+        internal static void PrepareShapeEditing()
+        {
+            ToolVersion++; // invalidate deferred graph drawing even if Move is already active
+            CancelSceneGestures();
+            BrushEditContext.Exit();
+            PointGraphEditContext.Exit();
+            if (!BrushShapeHandles.WorksWith(Tools.current)) Tools.current = Tool.Move;
         }
 
         // Unity 6000.6 exposes setters for the Hierarchy default parent but keeps its stage-aware getter internal.
@@ -56,15 +122,14 @@ namespace CsgBrush.Editor
             {
                 ToolVersion++;
                 PrepareCreation();
-                BrushShapeHandles.SuspendForCreation();
                 BrushCreateTool.Active?.ResetGesture();
             }
         }
 
         internal static void PrepareCreation()
         {
-            BrushShapeHandles.CancelGesture();
-            BrushSurfaceGrid.CancelPicking();
+            CancelSceneGestures();
+            BrushShapeHandles.Suspend();
             if (ToolManager.activeContextType != typeof(GameObjectToolContext))
                 ToolManager.SetActiveContext<GameObjectToolContext>();
         }
@@ -74,7 +139,6 @@ namespace CsgBrush.Editor
             PrepareCreation();
             if (Tools.current == Tool.Custom) ToolManager.RestorePreviousPersistentTool();
             ToolVersion++;
-            BrushShapeHandles.SuspendForCreation();
         }
 
         static Brush CreateAtPivot(BrushShape shape)

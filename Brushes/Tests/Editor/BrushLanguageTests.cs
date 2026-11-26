@@ -42,6 +42,11 @@ namespace CsgBrush.Tests
                         : new[] { "Блок", "Клин", "Цилиндр", "Конус", "Сфера", "Прямая лестница", "Изогнутая лестница", "Винтовая лестница", "Арка", "Дверь", "Окно", "План стен", "Сплайн" }));
                     Assert.That(BrushCommandMenu.BuildCreateMenu().GetItemCount(), Is.EqualTo(13));
                     Assert.That(BrushSettings.FormatMeters(0.125f), Is.EqualTo(english ? "0.125 m" : "0,125 м"));
+                    Assert.That(BrushLanguage.Tr("Относительное смещение"), Is.EqualTo(english ? "Relative displacement" : "Относительное смещение"));
+                    StringAssert.Contains(english ? "world axis" : "мировой оси", BrushLanguage.Tr(BrushSettings.RelativeDisplacementTooltip));
+                    Assert.That(BrushLanguage.Tr("Переместить выделение"), Is.EqualTo(english ? "Move selection" : "Переместить выделение"));
+                    Assert.That(BrushLanguage.Tr("Повернуть выделение"), Is.EqualTo(english ? "Rotate selection" : "Повернуть выделение"));
+                    Assert.That(BrushLanguage.Tr("Масштабировать выделение"), Is.EqualTo(english ? "Scale selection" : "Масштабировать выделение"));
                     Assert.That(BrushPivotTool.ResetCommand.text, Is.EqualTo(english ? "Reset WCS" : "Сбросить WCS"));
                     Assert.That(EditorPrefs.GetString(key, "en"), Is.EqualTo(english ? "en" : "ru"));
                     Assert.That(EditorJsonUtility.ToJson(BrushSettings.instance), Is.EqualTo(settings));

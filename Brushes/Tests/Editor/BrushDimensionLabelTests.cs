@@ -8,6 +8,34 @@ namespace CsgBrush.Tests
 {
     public class BrushDimensionLabelTests
     {
+        [TestCase(1.25f, 0, "<color=#FF7373>X</color>: +1.25 m")]
+        [TestCase(-0.5f, 1, "<color=#79DD75>Y</color>: -0.5 m")]
+        [TestCase(-0.0000001f, 2, "<color=#78AAFF>Z</color>: 0 m")]
+        public void DisplacementHasAWorldAxisAndSignedMetres(float meters, int axis, string expected)
+        {
+            if (!BrushLanguage.English) expected = expected.Replace(".", ",").Replace(" m", " м");
+            Assert.AreEqual(expected, BrushDimensionFields.FormatDisplacement(meters, axis));
+        }
+
+        [Test]
+        public void PlaneDragKeepsBothLabelsWhenOneComponentIsZero()
+        {
+            const int xz = 5;
+            Assert.That(BrushMoveDisplacement.DragAxes(xz, Vector3.right), Is.EqualTo(xz));
+            Assert.That(BrushMoveDisplacement.DragAxes(xz, Vector3.zero), Is.EqualTo(xz));
+            Assert.That(BrushMoveDisplacement.ArrowForWorldAxis(xz, Quaternion.identity, 1), Is.EqualTo(-1));
+            for (int i = 0; i < 3; i++)
+                Assert.That(BrushMoveDisplacement.ArrowForWorldAxis(7, Quaternion.identity, i), Is.EqualTo(i));
+        }
+
+        [Test]
+        public void LocalMoveLabelsFollowTheDraggedArrowWithWorldCoordinates()
+        {
+            var basis = Quaternion.Euler(0, 90, 0);
+            Assert.That(BrushMoveDisplacement.ArrowForWorldAxis(1, basis, 0), Is.EqualTo(-1));
+            Assert.That(BrushMoveDisplacement.ArrowForWorldAxis(1, basis, 2), Is.EqualTo(0));
+        }
+
         [TestCase(0, "19,75 м (<color=#FF7373>X</color>)")]
         [TestCase(1, "19,75 м (<color=#79DD75>Y</color>)")]
         [TestCase(2, "19,75 м (<color=#78AAFF>Z</color>)")]

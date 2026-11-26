@@ -1,6 +1,5 @@
 using static CsgBrush.Editor.BrushLanguage;
 using UnityEditor;
-using UnityEditor.EditorTools;
 using UnityEditor.Overlays;
 using UnityEditor.ShortcutManagement;
 using UnityEditor.Toolbars;
@@ -14,7 +13,7 @@ namespace CsgBrush.Editor
     [Overlay(typeof(SceneView), "Brushes", "CSG Brush", "Brushes", true)]
     public sealed class BrushOverlay : Overlay, ICreateHorizontalToolbar, ICreateVerticalToolbar
     {
-        const float PreferredWidth = 315f, MinimumWidth = 250f;
+        const float PreferredWidth = 335f, MinimumWidth = 290f;
 
         public OverlayToolbar CreateHorizontalToolbarContent() => CreateOperationToolbar();
         public OverlayToolbar CreateVerticalToolbarContent() => CreateOperationToolbar();
@@ -26,6 +25,7 @@ namespace CsgBrush.Editor
             toolbar.Add(new IMGUIContainer(ObjectPlacementTool.DrawButton));
             toolbar.Add(new IMGUIContainer(() => DrawGridAndVisibility(BrushSettings.instance)));
             toolbar.Add(new IMGUIContainer(DrawSnapMenus));
+            toolbar.Add(new IMGUIContainer(DrawTransformTools));
             toolbar.Add(new IMGUIContainer(DrawEditToggles));
             foreach (var operation in new[] { BrushOperation.Add, BrushOperation.Subtract })
             {
@@ -95,6 +95,23 @@ namespace CsgBrush.Editor
             return image != null ? new GUIContent(image, tooltip) : new GUIContent(name, tooltip);
         }
 
+        static void DrawTransformTools()
+        {
+            using var row = new EditorGUILayout.HorizontalScope();
+            DrawTransformTool(Tool.Move, "MoveTool", "W", "Переместить выделение");
+            DrawTransformTool(Tool.Rotate, "RotateTool", "E", "Повернуть выделение");
+            DrawTransformTool(Tool.Scale, "ScaleTool", "R", "Масштабировать выделение");
+        }
+
+        static void DrawTransformTool(Tool tool, string icon, string fallback, string tooltip)
+        {
+            var image = EditorGUIUtility.IconContent(icon).image;
+            var content = new GUIContent(image == null ? fallback : "", image, Tr(tooltip));
+            bool active = Tools.current == tool;
+            if (GUILayout.Toggle(active, content, EditorStyles.miniButton, GUILayout.Width(24), GUILayout.Height(24)) && !active)
+                BrushMenu.ActivateTransform(tool);
+        }
+
         static void DrawEditToggles()
         {
             using var row = new EditorGUILayout.HorizontalScope();
@@ -137,6 +154,9 @@ namespace CsgBrush.Editor
             if (cuts != s.showCuts) { s.showCuts = cuts; s.NotifyChanged(); SceneView.RepaintAll(); }
             bool sizes = GUILayout.Toggle(s.showDimensions, new GUIContent(Tr("Размеры"), Tr(BrushSettings.DimensionsTooltip)), EditorStyles.miniButton, GUILayout.Width(BrushLanguage.English ? 76 : 62), GUILayout.Height(18));
             if (sizes != s.showDimensions) { s.showDimensions = sizes; s.NotifyChanged(); SceneView.RepaintAll(); }
+            var offset = new GUIContent("Δ", Tr("Относительное смещение") + "\n" + Tr(BrushSettings.RelativeDisplacementTooltip));
+            bool showOffset = GUILayout.Toggle(s.showRelativeDisplacement, offset, EditorStyles.miniButton, GUILayout.Width(20), GUILayout.Height(20));
+            if (showOffset != s.showRelativeDisplacement) { s.showRelativeDisplacement = showOffset; s.NotifyChanged(); SceneView.RepaintAll(); }
         }
 
         static void DrawSnapMenus()
@@ -159,6 +179,7 @@ namespace CsgBrush.Editor
 
             DrawGridAndVisibility(s);
             DrawSnapMenus();
+            DrawTransformTools();
             DrawEditToggles();
             if (showShapeSelection) DrawShapeEditSelection(s);
             if (BrushCreateTool.Active != null) DrawNewBrush(s, BrushCreateTool.Active);

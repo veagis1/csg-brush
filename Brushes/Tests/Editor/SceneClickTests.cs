@@ -5,6 +5,7 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEditor.SceneManagement;
+using UnityEditor.ShortcutManagement;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -85,6 +86,113 @@ namespace CsgBrush.Tests
         }
 
         void Click(Vector2 at) { Send(EventType.MouseDown, at); Send(EventType.MouseUp, at); MoveTo(at, at); }
+
+        [Test]
+        public void MovePlaneReadoutIncludesTheNativePickMarginOutsideTheSquare()
+        {
+            var oldPivot = m_View.pivot;
+            var oldRotation = m_View.rotation;
+            float oldSize = m_View.size;
+            bool wasOrtho = m_View.orthographic;
+            int axes = 0;
+            void ObserveHover(SceneView view)
+            {
+                if (view == m_View && Event.current.rawType == EventType.MouseMove)
+                    axes = BrushMoveDisplacement.PickAxes(view.camera, Vector3.zero, Quaternion.identity);
+            }
+            try
+            {
+                m_View.LookAt(Vector3.zero, Quaternion.identity, 10f, true, true);
+                var edge = Gui(() => new Vector3(0.25f, 0.125f, 0) * HandleUtility.GetHandleSize(Vector3.zero));
+                var outward = (Gui(Vector3.right) - Gui(Vector3.zero)).normalized;
+                SceneView.duringSceneGui += ObserveHover;
+                Send(EventType.MouseMove, edge + outward * 2f);
+                Assert.That(axes, Is.EqualTo(3), "the XY square also accepts clicks just beyond its edge");
+            }
+            finally
+            {
+                SceneView.duringSceneGui -= ObserveHover;
+                m_View.LookAt(oldPivot, oldRotation, oldSize, wasOrtho, true);
+            }
+        }
+
+        void Press(KeyCode key)
+        {
+            m_View.SendEvent(new Event { type = EventType.KeyDown, keyCode = key });
+            m_View.SendEvent(new Event { type = EventType.KeyUp, keyCode = key });
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void TransformShortcutsWorkAfterClickingInTheScene(bool editBrush)
+        {
+            var shortcuts = ShortcutManager.instance;
+            string previousProfile = shortcuts.activeProfileId;
+            bool wasSuspended = SessionState.GetBool(BrushShapeHandles.SuspendedKey, false);
+            try
+            {
+                shortcuts.activeProfileId = ShortcutManager.defaultProfileId;
+                m_View.Focus();
+                Click(Gui(new Vector3(3f, 4f, 2f)));
+                if (editBrush)
+                {
+                    ActiveEditorTracker.sharedTracker.ForceRebuild();
+                    BrushEditContext.Enter();
+                    Click(Gui(new Vector3(3f, 4f, 2f)));
+                }
+                Tools.current = Tool.Move;
+                Press(KeyCode.E);
+                Assert.That(Tools.current, Is.EqualTo(Tool.Rotate));
+                Press(KeyCode.R);
+                Assert.That(Tools.current, Is.EqualTo(Tool.Scale));
+                Press(KeyCode.W);
+                Assert.That(Tools.current, Is.EqualTo(Tool.Move));
+                Assert.That(BrushEditContext.IsActive, Is.EqualTo(editBrush));
+            }
+            finally
+            {
+                BrushEditContext.Exit();
+                shortcuts.activeProfileId = previousProfile;
+                if (wasSuspended) SessionState.SetBool(BrushShapeHandles.SuspendedKey, true);
+                else SessionState.EraseBool(BrushShapeHandles.SuspendedKey);
+            }
+        }
+
+        [Test]
+        public void ShapeShortcutDiscardsTheBoxPreviewBeforeHeightIsConfirmed()
+        {
+            var shortcuts = ShortcutManager.instance;
+            string previousProfile = shortcuts.activeProfileId;
+            var settings = BrushSettings.instance;
+            bool previousPreference = settings.shapeHandles;
+            bool wasSuspended = SessionState.GetBool(BrushShapeHandles.SuspendedKey, false);
+            try
+            {
+                shortcuts.activeProfileId = ShortcutManager.defaultProfileId;
+                settings.shapeHandles = true;
+                m_View.Focus();
+                int before = Brushes;
+                BrushMenu.ActivateCreation<CreateBoxBrushTool>();
+                var start = Gui(new Vector3(-6f, 0f, -2f));
+                var finish = Gui(new Vector3(-4f, 0f, 0f));
+                Send(EventType.MouseDown, start);
+                MoveTo(start, finish, EventType.MouseDrag);
+                Send(EventType.MouseUp, finish);
+                Assert.That(BrushCreateTool.Active.Drawing, Is.True);
+                Press(KeyCode.B);
+                Assert.That(BrushCreateTool.Active, Is.Null);
+                Assert.That(BrushShapeHandles.Enabled, Is.True);
+                Assert.That(Brushes, Is.EqualTo(before));
+                Assert.That(GUIUtility.hotControl, Is.Zero);
+            }
+            finally
+            {
+                settings.shapeHandles = previousPreference;
+                shortcuts.activeProfileId = previousProfile;
+                if (wasSuspended) SessionState.SetBool(BrushShapeHandles.SuspendedKey, true);
+                else SessionState.EraseBool(BrushShapeHandles.SuspendedKey);
+            }
+        }
 
         int Brushes => Object.FindObjectsByType<Brush>(FindObjectsInactive.Exclude).Length;
 

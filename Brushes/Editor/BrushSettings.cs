@@ -80,6 +80,9 @@ namespace CsgBrush.Editor
         internal const string DimensionsTooltip = "Размеры в метрах в окне сцены. Щёлкните по размеру выделенного браша, введите число и нажмите Enter. Esc отменяет ввод.";
         [Tooltip(DimensionsTooltip)]
         public bool showDimensions = true;
+        internal const string RelativeDisplacementTooltip = "При перемещении показывает у стрелок смещение в метрах от начала перетаскивания. Знак указывает направление по мировой оси. При движении в плоскости видны две оси, при удержании Shift — все три. Ноль соответствует исходной позиции.";
+        [Tooltip(RelativeDisplacementTooltip)]
+        public bool showRelativeDisplacement = true;
         [Tooltip("Позволяет менять форму выделенного браша перетаскиванием его сторон.")]
         public bool shapeHandles = true;
         [Tooltip("Определяет, как правка формы затронет остальные выделенные браши.")]

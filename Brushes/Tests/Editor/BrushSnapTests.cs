@@ -50,6 +50,89 @@ namespace CsgBrush.Tests
             Assert.AreEqual(new Vector3(0.25f, 0f, -1f), b.transform.position, "pivot sits half a size away from the snapped corner");
         }
 
+        [TestCase(GridSnap.Pivot)]
+        [TestCase(GridSnap.Shape)]
+        public void FreePositionIsKeptUntilTheMovedAxisSnapsToTheAbsoluteGrid(GridSnap mode)
+        {
+            var brush = BrushApi.Create(BrushShape.Box, Vector3.zero, Vector3.one, Quaternion.identity);
+            brush.gridSnap = mode;
+            BrushApi.ForceUpdate();
+            var settings = BrushSettings.instance;
+            var free = new Vector3(1.23f, -0.13f, 0.39f);
+            settings.snapToGrid = false;
+            brush.transform.position = free;
+            BrushSnap.ProcessChanged();
+            settings.snapToGrid = true;
+            Assert.IsFalse(BrushSnap.Snap(brush));
+            Assert.AreEqual(free, brush.transform.position);
+
+            GUIUtility.hotControl = 1234;
+            try
+            {
+                brush.transform.position = new Vector3(1.31f, free.y, free.z);
+                BrushSnap.ProcessChanged();
+                Assert.IsTrue(BrushSnap.TryGetPreview(brush, out var pose, out _));
+                Assert.AreEqual(new Vector3(1.5f, free.y, free.z), pose.MultiplyPoint3x4(Vector3.zero));
+                Assert.AreEqual(1.31f, brush.transform.position.x);
+            }
+            finally { GUIUtility.hotControl = 0; }
+            BrushSnap.ProcessChanged();
+            Assert.AreEqual(new Vector3(1.5f, free.y, free.z), brush.transform.position);
+
+            foreach (float node in new[] { 0.5f, 0f, -0.5f, 0f, 1.5f, 1.5f, 0f })
+            {
+                brush.transform.position = new Vector3(node + 0.000002f, free.y, free.z);
+                BrushSnap.ProcessChanged();
+                Assert.AreEqual(new Vector3(node, free.y, free.z), brush.transform.position, "including residuals within the old tolerance");
+            }
+        }
+
+        [Test]
+        public void EnablingTheMagnetBeforeTheNextUpdateKeepsTheFreePositionThroughUndo()
+        {
+            var brush = BrushApi.Create(BrushShape.Box, Vector3.zero, Vector3.one, Quaternion.identity);
+            brush.gridSnap = GridSnap.Pivot;
+            BrushApi.ForceUpdate();
+            var settings = BrushSettings.instance;
+            var free = new Vector3(1.23f, 0.12f, -0.16f);
+            try
+            {
+                settings.snapToGrid = false;
+                BrushHooks.ApplyGrid();
+                brush.transform.position = free;
+                settings.snapToGrid = true;
+                BrushHooks.ApplyGrid();
+                BrushSnap.ProcessChanged();
+                Assert.AreEqual(free, brush.transform.position);
+
+                Undo.IncrementCurrentGroup();
+                BrushApi.Move(brush, new Vector3(1.499998f, free.y, free.z));
+                Undo.FlushUndoRecordObjects();
+                BrushSnap.ProcessChanged();
+                var snapped = new Vector3(1.5f, free.y, free.z);
+                Assert.AreEqual(snapped, brush.transform.position);
+                Undo.PerformUndo();
+                Assert.AreEqual(free, brush.transform.position);
+                Undo.PerformRedo();
+                Assert.AreEqual(snapped, brush.transform.position);
+            }
+            finally { settings.snapToGrid = true; BrushHooks.ApplyGrid(); }
+        }
+
+        [Test]
+        public void QuarterTurnedBoxReturnsToExactWorldNodesByItsOuterCorner()
+        {
+            var brush = BrushApi.Create(BrushShape.Box, Vector3.zero, new Vector3(2f, 1f, 3f), Quaternion.Euler(0f, 90f, 0f));
+            brush.gridSnap = GridSnap.Shape;
+            BrushApi.ForceUpdate();
+            foreach (float node in new[] { -1.5f, 0f, 1f, 0f })
+            {
+                brush.transform.position = new Vector3(node + 0.000002f, 0f, 0f);
+                BrushSnap.ProcessChanged();
+                Assert.AreEqual(new Vector3(node, 0f, 0f), brush.transform.position);
+            }
+        }
+
         [Test]
         public void RotationSnapsAndScaleIsRemoved()
         {

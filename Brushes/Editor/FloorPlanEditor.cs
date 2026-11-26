@@ -307,6 +307,7 @@ namespace CsgBrush.Editor
 
         public override void OnActivated()
         {
+            BrushMenu.PrepareCreation();
             m_Last = -1; m_Stroke.Clear();
             int start = s_Start; s_Start = -1;
             if (target is PointGraph plan)

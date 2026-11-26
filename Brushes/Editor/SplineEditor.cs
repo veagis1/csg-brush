@@ -150,6 +150,7 @@ namespace CsgBrush.Editor
 
         public override void OnActivated()
         {
+            BrushMenu.PrepareCreation();
             m_Last = -1; m_Stroke.Clear();
             int start = s_Start; s_Start = -1;
             if (target is Spline spline && start >= 0 && spline.PointIndex(start) >= 0) { m_Last = start; m_Stroke.Add(start); }

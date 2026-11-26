@@ -152,6 +152,55 @@ namespace CsgBrush.Tests
         }
 
         [Test]
+        public void EnablingShapeEditingCancelsTheArmedCreateTool()
+        {
+            var settings = BrushSettings.instance;
+            bool original = settings.shapeHandles;
+            settings.shapeHandles = true;
+            try
+            {
+                BrushMenu.ActivateCreation<CreateBoxBrushTool>();
+                Assert.That(BrushCreateTool.Active, Is.Not.Null);
+                BrushShapeHandles.Enabled = true;
+                Assert.That(BrushCreateTool.Active, Is.Null);
+                Assert.That(BrushShapeHandles.Enabled, Is.True);
+                Assert.That(BrushShapeHandles.WorksWith(Tools.current), Is.True);
+            }
+            finally { settings.shapeHandles = original; }
+        }
+
+        [TestCase(typeof(BrushEditContext), typeof(BrushMoveTool))]
+        [TestCase(typeof(FloorPlanEditContext), typeof(FloorPlanMoveTool))]
+        [TestCase(typeof(SplineEditContext), typeof(SplineMoveTool))]
+        public void EnteringComponentEditingCancelsTheArmedCreateTool(Type context, Type expectedMove)
+        {
+            var go = context == typeof(BrushEditContext) ? brush.gameObject :
+                context == typeof(FloorPlanEditContext) ? plan.gameObject : spline.gameObject;
+            Selection.activeGameObject = go;
+            ActiveEditorTracker.sharedTracker.ForceRebuild();
+            BrushMenu.ActivateCreation<CreateBoxBrushTool>();
+            Assert.That(BrushCreateTool.Active, Is.Not.Null);
+            if (context == typeof(BrushEditContext)) BrushEditContext.Enter();
+            else PointGraphEditContext.Enter();
+            Assert.That(ToolManager.activeContextType, Is.EqualTo(context));
+            Assert.That(ToolManager.activeToolType, Is.EqualTo(expectedMove));
+            Assert.That(BrushCreateTool.Active, Is.Null);
+            Assert.That(BrushShapeHandles.Enabled, Is.False);
+            Assert.That(Selection.activeGameObject, Is.SameAs(go));
+        }
+
+        [Test]
+        public void DeferredDrawingCannotReplaceAnExplicitEditCommand()
+        {
+            var pending = ExecuteGraphMenu<FloorPlan>("План стен", typeof(FloorPlanMenu));
+            ActiveEditorTracker.sharedTracker.ForceRebuild();
+            PointGraphEditContext.Enter();
+            pending();
+            Assert.That(ToolManager.activeContextType, Is.EqualTo(typeof(FloorPlanEditContext)));
+            Assert.That(ToolManager.activeToolType, Is.Not.EqualTo(typeof(FloorPlanDrawTool)));
+        }
+
+        [Test]
         public void CreationLeavesThePivotPickerImmediately()
         {
             Enter<BrushEditContext>(brush);

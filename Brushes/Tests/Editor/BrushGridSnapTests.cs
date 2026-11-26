@@ -131,10 +131,14 @@ namespace CsgBrush.Tests
             var vertices = (Vector3[])box.polyhedron.vertices.Clone();
             box.transform.rotation = Quaternion.Euler(0f, 15f, 0f);
             BrushApi.ForceUpdate();
+            var before = World(box).min;
             box.transform.position += new Vector3(2.3f * g, 0f, 0f);
             BrushApi.ForceUpdate();
             for (int i = 0; i < vertices.Length; i++) Near(vertices[i], box.polyhedron.vertices[i], "vertex " + i + " is not bent onto the grid");
-            OnGrid(World(box).min, "its bounds on the grid");
+            var after = World(box).min;
+            OnGrid(new Vector3(after.x, 0f, 0f), "its bounds on the grid along the moved axis");
+            Assert.That(after.y, Is.EqualTo(before.y).Within(1e-4f), "its bounds on the untouched Y axis");
+            Assert.That(after.z, Is.EqualTo(before.z).Within(1e-4f), "its bounds on the untouched Z axis");
         }
 
         [Test]

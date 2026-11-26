@@ -243,6 +243,7 @@ namespace CsgBrush.Editor
             if (BrushSurfaceGrid.OnSceneGUI(view)) { s_MouseDownValid = false; return; }
             if (BrushSettings.instance.showDimensions && !e.alt)
                 BrushShapeDrawing.DrawSelectionDimensions();
+            BrushMoveDisplacement.OnSceneGUI(view);
             if (e.type == EventType.Used) { s_MouseDownValid = false; return; }
             if (BrushEditContext.IsActive) return;
             if (e.type == EventType.Repaint)
@@ -758,10 +759,14 @@ namespace CsgBrush.Editor
             finally { redirecting = false; }
         }
 
+        static bool? previousSnapToGrid;
+
         /// <summary>Unity's grid snapping and its visible Scene view grid follow the configured grid step in metres.</summary>
         public static void ApplyGrid()
         {
             var s = BrushSettings.instance;
+            if (s.snapToGrid && previousSnapToGrid == false) BrushSnap.AcceptFreePoses();
+            previousSnapToGrid = s.snapToGrid;
             float g = s.GridMeters;
             EditorSnapSettings.move = new Vector3(g, g, g);
             EditorSnapSettings.gridSize = new Vector3(g, g, g);

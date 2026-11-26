@@ -18,11 +18,11 @@ namespace CsgBrush.Editor
         static readonly List<Rect> placedLabels = new List<Rect>();
         static readonly Color Plate = new Color(0.08f, 0.10f, 0.12f, 0.94f);
         static readonly Color Accent = new Color(0.33f, 0.92f, 0.95f);
-        static readonly string[] AxisSuffix =
+        static readonly string[] AxisLetters =
         {
-            "м (<color=#FF7373>X</color>)",
-            "м (<color=#79DD75>Y</color>)",
-            "м (<color=#78AAFF>Z</color>)"
+            "<color=#FF7373>X</color>",
+            "<color=#79DD75>Y</color>",
+            "<color=#78AAFF>Z</color>"
         };
 
         static BrushDimensionFields()
@@ -87,10 +87,31 @@ namespace CsgBrush.Editor
             }
         }
 
-        static string Suffix(int axis) => axis < 0 ? Tr("м") : Tr(AxisSuffix[axis]);
+        static string Suffix(int axis) => axis < 0 ? Tr("м") : Tr("м") + " (" + AxisLetters[axis] + ")";
 
         internal static string FormatDimension(float meters, int axis) =>
             meters.ToString("0.00###", BrushLanguage.Culture) + " " + Suffix(axis);
+
+        internal static string FormatDisplacement(float meters, int axis) =>
+            AxisLetters[axis] + ": " + meters.ToString("+0.#####;-0.#####;0", BrushLanguage.Culture) + Tr(" м");
+
+        internal static void DrawDisplacement(SceneView view, Vector3 tip, Vector3 pivot, float meters, int axis)
+        {
+            var point = HandleUtility.WorldToGUIPointWithDepth(view.camera, tip);
+            if (point.z < view.camera.nearClipPlane || point.z > view.camera.farClipPlane) return;
+            var label = new GUIContent(FormatDisplacement(meters, axis));
+            var size = new Vector2(Badge.CalcSize(label).x + 12f, 22f);
+            Vector2 outward = (Vector2)point - HandleUtility.WorldToGUIPoint(pivot);
+            var rect = BadgeRect(point, Vector2.zero, outward, size, placedLabels);
+            placedLabels.Add(rect);
+            Handles.BeginGUI();
+            try
+            {
+                EditorGUI.DrawRect(rect, Plate);
+                GUI.Label(rect, label, Badge);
+            }
+            finally { Handles.EndGUI(); }
+        }
 
         // All geometry below is in GUI points, so zoom and display scaling do not change the gap.
         internal static Rect BadgeRect(Vector2 midpoint, Vector2 along, Vector2 outward, Vector2 size, List<Rect> occupied)

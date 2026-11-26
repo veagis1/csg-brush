@@ -84,6 +84,8 @@ namespace CsgBrush.Editor
             get => BrushSettings.instance.shapeHandles && !SessionState.GetBool(SuspendedKey, false);
             set
             {
+                if (value) BrushMenu.PrepareShapeEditing();
+                else CancelGesture();
                 SessionState.EraseBool(SuspendedKey);
                 var settings = BrushSettings.instance;
                 if (settings.shapeHandles != value)
@@ -95,14 +97,16 @@ namespace CsgBrush.Editor
             }
         }
 
-        internal static void SuspendForCreation()
+        internal static void Suspend()
         {
             if (!Enabled) return;
             SessionState.SetBool(SuspendedKey, true);
             SceneView.RepaintAll();
         }
 
-        [Shortcut("Brushes/Toggle Shape Handles", typeof(SceneView), KeyCode.B, displayName = "CSG Brush/Toggle Shape Editing")]
+        internal const string ShortcutId = "Brushes/Toggle Shape Handles";
+
+        [Shortcut(ShortcutId, typeof(SceneView), KeyCode.B, displayName = "CSG Brush/Toggle Shape Editing")]
         static void ToggleShortcut()
         {
             Enabled = !Enabled;
