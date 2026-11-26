@@ -1,13 +1,14 @@
 # Contributing
 
-Contributions are accepted under the [MIT license](LICENSE.md), the same license as the package.
+Contributions are accepted under the [MIT license](../LICENSE.md), the same license as the package.
 
 ## Run the tests
 
-Open **Window** > **General** > **Test Runner**, select **EditMode**, and run `CsgBrush.Tests`. To run them headlessly:
+Open the [development sandbox](../Development~/Sandbox) in Unity 6000.6.8f1. Under **Window** > **General** >
+**Test Runner**, select **EditMode** and run `CsgBrush.Tests`. To run them headlessly from the repository root:
 
 ```
-Unity -batchmode -projectPath <project> -runTests -testPlatform EditMode -testFilter CsgBrush.Tests
+Unity -batchmode -projectPath Development~/Sandbox -runTests -testPlatform EditMode -testFilter CsgBrush.Tests
 ```
 
 ## Native plugin
@@ -27,4 +28,4 @@ from `manifoldc.h` at configure time: after bumping the tag, check that its list
 
 ## Icons
 
-The editor icons are generated: see `Tools~/icons/README.md` (Python 3 with Pillow).
+The editor icons are generated with Python 3 and Pillow. See the [icon generator instructions](../Tools~/icons/README.md).
