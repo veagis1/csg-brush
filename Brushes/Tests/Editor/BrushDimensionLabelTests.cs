@@ -8,13 +8,44 @@ namespace CsgBrush.Tests
 {
     public class BrushDimensionLabelTests
     {
-        [TestCase(1.25f, 0, "<color=#FF7373>X</color>: +1.25 m")]
-        [TestCase(-0.5f, 1, "<color=#79DD75>Y</color>: -0.5 m")]
-        [TestCase(-0.0000001f, 2, "<color=#78AAFF>Z</color>: 0 m")]
+        [TestCase(1.25f, 0, "<color=#FF7373>X</color>: +1.250 m")]
+        [TestCase(-0.5f, 1, "<color=#79DD75>Y</color>: -0.500 m")]
+        [TestCase(-0.0000001f, 2, "<color=#78AAFF>Z</color>: 0.000 m")]
+        [TestCase(0.0004f, 0, "<color=#FF7373>X</color>: 0.000 m")]
+        [TestCase(1.2346f, 2, "<color=#78AAFF>Z</color>: +1.235 m")]
         public void DisplacementHasAWorldAxisAndSignedMetres(float meters, int axis, string expected)
         {
             if (!BrushLanguage.English) expected = expected.Replace(".", ",").Replace(" m", " м");
             Assert.AreEqual(expected, BrushDimensionFields.FormatDisplacement(meters, axis));
+        }
+
+        [TestCase(15.25f, 0, "<color=#FF7373>X</color>: +15.250°")]
+        [TestCase(-181.5f, 1, "<color=#79DD75>Y</color>: -181.500°")]
+        [TestCase(-0.0004f, 2, "<color=#78AAFF>Z</color>: 0.000°")]
+        public void RotationHasAnAxisColorAndSignedDegrees(float degrees, int axis, string expected)
+        {
+            if (!BrushLanguage.English) expected = expected.Replace(".", ",");
+            Assert.That(BrushDimensionFields.FormatRotation(degrees, axis), Is.EqualTo(expected));
+        }
+
+        [TestCase(false, 1f)]
+        [TestCase(false, -1f)]
+        [TestCase(true, 1f)]
+        [TestCase(true, -1f)]
+        public void RotationReadoutFollowsTheDraggedAxisAcrossAFullTurn(bool local, float direction)
+        {
+            var start = Quaternion.Euler(19f, 47f, -28f);
+            var basis = local ? start : Quaternion.identity;
+            var previous = Vector3.zero;
+            foreach (float step in new[] { 0f, 73f, 179f, 181f, 263f, 350f, 360f, 385f, 320f, 185f, 179f, 61f, 0f, -25f })
+            {
+                float expected = step * direction;
+                var current = Quaternion.AngleAxis(expected, basis * Vector3.up) * start;
+                previous = BrushMoveDisplacement.RelativeRotation(start, current, basis, previous);
+                Assert.That(previous.x, Is.EqualTo(0f).Within(0.0001f));
+                Assert.That(previous.y, Is.EqualTo(expected).Within(0.0001f));
+                Assert.That(previous.z, Is.EqualTo(0f).Within(0.0001f));
+            }
         }
 
         [Test]

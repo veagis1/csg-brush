@@ -92,14 +92,17 @@ namespace CsgBrush.Editor
         internal static string FormatDimension(float meters, int axis) =>
             meters.ToString("0.00###", BrushLanguage.Culture) + " " + Suffix(axis);
 
-        internal static string FormatDisplacement(float meters, int axis) =>
-            AxisLetters[axis] + ": " + meters.ToString("+0.#####;-0.#####;0", BrushLanguage.Culture) + Tr(" м");
+        static string SignedValue(float value, int axis) =>
+            AxisLetters[axis] + ": " + value.ToString("+0.000;-0.000;0.000", BrushLanguage.Culture);
 
-        internal static void DrawDisplacement(SceneView view, Vector3 tip, Vector3 pivot, float meters, int axis)
+        internal static string FormatDisplacement(float meters, int axis) => SignedValue(meters, axis) + Tr(" м");
+        internal static string FormatRotation(float degrees, int axis) => SignedValue(degrees, axis) + "°";
+
+        internal static void DrawDisplacement(SceneView view, Vector3 tip, Vector3 pivot, string text)
         {
             var point = HandleUtility.WorldToGUIPointWithDepth(view.camera, tip);
             if (point.z < view.camera.nearClipPlane || point.z > view.camera.farClipPlane) return;
-            var label = new GUIContent(FormatDisplacement(meters, axis));
+            var label = new GUIContent(text);
             var size = new Vector2(Badge.CalcSize(label).x + 12f, 22f);
             Vector2 outward = (Vector2)point - HandleUtility.WorldToGUIPoint(pivot);
             var rect = BadgeRect(point, Vector2.zero, outward, size, placedLabels);

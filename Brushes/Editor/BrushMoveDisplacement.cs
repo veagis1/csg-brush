@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace CsgBrush.Editor
 {
-    // Observe the native Move handle. The readout never takes a control or writes a Transform.
+    // Observe Unity's Move and Rotate handles without taking a control or writing a Transform.
     [InitializeOnLoad]
     internal static class BrushMoveDisplacement
     {
@@ -16,6 +16,9 @@ namespace CsgBrush.Editor
         static Vector3 start;
         static Quaternion rotation;
         static int axesAtPress;
+        static Quaternion startRotation;
+        static Vector3 rotationDegrees;
+        static int rotationAxes;
         static bool shift;
         static readonly Vector3[] Axes = { Vector3.right, Vector3.up, Vector3.forward };
 
@@ -44,7 +47,8 @@ namespace CsgBrush.Editor
         internal static void OnSceneGUI(SceneView view)
         {
             var e = Event.current;
-            if (!BrushSettings.instance.showRelativeDisplacement || Tools.current != Tool.Move ||
+            var tool = Tools.current;
+            if (!BrushSettings.instance.showRelativeDisplacement || (tool != Tool.Move && tool != Tool.Rotate) ||
                 ToolManager.activeContextType != typeof(GameObjectToolContext))
             {
                 if (owner != null) Reset();
@@ -59,13 +63,26 @@ namespace CsgBrush.Editor
                 target.TryGetComponent(out brush);
                 start = target.position;
                 rotation = Tools.handleRotation;
-                axesAtPress = PickAxes(view.camera, Tools.handlePosition, rotation);
+                if (tool == Tool.Move)
+                    axesAtPress = PickAxes(view.camera, Tools.handlePosition, rotation);
+                else
+                {
+                    startRotation = target.rotation;
+                    rotationDegrees = Vector3.zero;
+                    rotationAxes = 0;
+                }
             }
             if (owner != view) return;
             if (target == null || e.rawType == EventType.MouseUp || e.rawType == EventType.Ignore ||
                 (e.rawType == EventType.KeyDown && e.keyCode == KeyCode.Escape))
             {
                 Reset();
+                return;
+            }
+            if (tool == Tool.Rotate)
+            {
+                // RotateTool applies its change directly to the Transform, outside TransformManipulator.
+                if (GUIUtility.hotControl != 0) UpdateRotation(view, e);
                 return;
             }
             // Repaint events may have no modifier flags of their own.
@@ -88,8 +105,48 @@ namespace CsgBrush.Editor
             {
                 int arrow = ArrowForWorldAxis(axes, rotation, world);
                 if (arrow >= 0)
-                    BrushDimensionFields.DrawDisplacement(view, pivot + rotation * Axes[arrow] * length, pivot, delta[world], world);
+                    BrushDimensionFields.DrawDisplacement(view, pivot + rotation * Axes[arrow] * length, pivot,
+                        BrushDimensionFields.FormatDisplacement(delta[world], world));
             }
+        }
+
+        static void UpdateRotation(SceneView view, Event e)
+        {
+            rotationDegrees = RelativeRotation(startRotation, target.rotation, rotation, rotationDegrees);
+            int moving = DragAxes(0, rotationDegrees);
+            if (moving != 0) rotationAxes = moving; // keep the ring's zero label when returning to the start
+            if (e.type != EventType.Repaint || rotationAxes == 0) return;
+
+            var degrees = rotationDegrees;
+            if (brush != null && BrushSnap.TryGetPreview(brush, out var pose, out _))
+                degrees = RelativeRotation(startRotation, pose.rotation, rotation, rotationDegrees);
+            var pivot = Tools.handlePosition;
+            float radius = HandleUtility.GetHandleSize(pivot);
+            for (int axis = 0; axis < 3; axis++)
+            {
+                if ((rotationAxes & (1 << axis)) == 0) continue;
+                var tip = HandleUtility.ClosestPointToDisc(pivot, rotation * Axes[axis], radius);
+                BrushDimensionFields.DrawDisplacement(view, tip, pivot, BrushDimensionFields.FormatRotation(degrees[axis], axis));
+            }
+        }
+
+        // Axis-angle of the relative orientation, expressed in the handle basis captured at mouse-down.
+        // Choose the equivalent turn closest to the previous sample so crossing 180° or 360° keeps the sign.
+        internal static Vector3 RelativeRotation(Quaternion start, Quaternion current, Quaternion basis, Vector3 previousDegrees)
+        {
+            var delta = current * Quaternion.Inverse(start);
+            var vector = Quaternion.Inverse(basis) * new Vector3(delta.x, delta.y, delta.z);
+            // Quaternion arithmetic can leave orthogonal components even on a single-axis ring.
+            // This tolerance is below half the last displayed decimal place in degrees.
+            for (int axis = 0; axis < 3; axis++)
+                if (Mathf.Abs(vector[axis]) < 0.000001f) vector[axis] = 0f;
+            float length = vector.magnitude;
+            if (length == 0f)
+                return previousDegrees.normalized * (360f * Mathf.Round(previousDegrees.magnitude / 360f));
+            var direction = vector / length;
+            float angle = 2f * Mathf.Atan2(length, delta.w) * Mathf.Rad2Deg;
+            float turns = Mathf.Round((Vector3.Dot(previousDegrees, direction) - angle) / 360f);
+            return direction * (angle + 360f * turns);
         }
 
         // The native plane squares extend one quarter of a handle into the camera-facing octant.

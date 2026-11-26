@@ -66,9 +66,8 @@ namespace CsgBrush.Editor
         }
 
         /// <summary>
-        /// A brush's snapped position by its <see cref="Brush.gridSnap"/>: Shape puts the lowest corner of its world bounds (its
-        /// outermost vertices) on the grid at any rotation, so axis-aligned faces lie on grid lines as in Hammer or TrenchBroom;
-        /// Pivot puts its pivot on the grid. Curved and spiral stairs also snap their pivot.
+        /// Shape snaps a boundary of the brush on each moved grid axis, preferring a boundary at the pivot.
+        /// Pivot and parametric stairs snap their pivot directly.
         /// </summary>
         public static Vector3 SnapBrushPosition(Brush brush, Vector3 worldPosition, Vector3 size, Quaternion worldRotation, float grid) =>
             SnapBrushPosition(brush, worldPosition, size, worldRotation, grid, AllAxes);
@@ -83,7 +82,7 @@ namespace CsgBrush.Editor
             var position = inverse * (worldPosition - origin);
             var rotation = inverse * worldRotation;
             var offset = brush.gridSnap == GridSnap.Pivot || brush.HasParametricSize
-                ? Vector3.zero : ShapeMin(brush, size, rotation);
+                ? Vector3.zero : ShapeSnapOffset(brush, size, rotation);
             var target = SnapCoordinates(position, offset, grid, axes);
             return local ? origin + basis * target : target;
         }
@@ -118,8 +117,8 @@ namespace CsgBrush.Editor
             force || (s_Accepted.TryGetValue(brush, out var last) && (size - last.size).sqrMagnitude > kEpsilon * kEpsilon)
                 ? SnapBrushSize(brush, size, grid) : size;
 
-        /// <summary>The lowest corner of the shape's world bounds relative to its transform, for a size and a rotation.</summary>
-        static Vector3 ShapeMin(Brush brush, Vector3 size, Quaternion worldRotation)
+        /// <summary>The grid-facing bounds in the grid basis, relative to the brush pivot.</summary>
+        static Vector3 ShapeSnapOffset(Brush brush, Vector3 size, Quaternion worldRotation)
         {
             BrushPolyhedron poly;
             if (brush.shape == BrushShape.Custom) poly = BrushGeometry.Polyhedron(brush);
@@ -141,7 +140,17 @@ namespace CsgBrush.Editor
                         if (Mathf.Abs(axes[row, col] - integer) <= 0.0000005f) axes[row, col] = integer;
                     }
             var min = Vector3.positiveInfinity;
-            foreach (var v in poly.vertices) min = Vector3.Min(min, axes.MultiplyVector(v));
+            var max = Vector3.negativeInfinity;
+            foreach (var vertex in poly.vertices)
+            {
+                var point = axes.MultiplyVector(vertex);
+                min = Vector3.Min(min, point);
+                max = Vector3.Max(max, point);
+            }
+            // A drawn box can start at its positive corner. If the width is not a grid multiple,
+            // snapping the opposite face would make the construction point unable to return to zero.
+            for (int axis = 0; axis < 3; axis++)
+                if (max[axis] == 0f) min[axis] = 0f;
             return min;
         }
 
@@ -149,6 +158,13 @@ namespace CsgBrush.Editor
         // rotation (or an undo, or loading the scene) never moves it
         static readonly Dictionary<Brush, (Vector3 position, Quaternion rotation, Vector3 size)> s_Accepted = new Dictionary<Brush, (Vector3, Quaternion, Vector3)>();
         static readonly HashSet<Brush> s_Once = new HashSet<Brush>();
+
+        // Record a freshly loaded pose before the first handle event or delayed Inspector sync.
+        // Opening an additive scene must preserve pending moves in the scenes already open.
+        internal static void AcceptLoadedPose(Brush brush)
+        {
+            if (!brush.IsGenerated && !s_Accepted.ContainsKey(brush)) Accept(brush);
+        }
 
         /// <summary>Take the brush's pose as it is: the next snap moves it only if it is moved or resized after this.</summary>
         public static void Accept(Brush brush)

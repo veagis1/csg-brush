@@ -95,7 +95,13 @@ namespace CsgBrush.Editor
             BrushSync.RemoveLegacySceneObjects();
             BrushCsg.ClearCachesKeepingSavedMeshes();
             var active = Brush.Active;
-            for (int i = 0; i < active.Count; i++) if (active[i] != null) BrushSync.Ensure(active[i]);
+            for (int i = 0; i < active.Count; i++)
+            {
+                var brush = active[i];
+                if (brush == null) continue;
+                BrushSync.Ensure(brush);
+                BrushSnap.AcceptLoadedPose(brush);
+            }
             BrushCsg.MarkAllDirty();
         }
 

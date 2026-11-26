@@ -81,11 +81,13 @@ Brushes of other shapes never change.
 
 With the snap magnet on in the **CSG Brush** overlay, moving and resizing a brush use the current grid step and rotating it uses the rotation step. A brush drawn on a local grid can keep snapping along that grid. Exact sizes entered in the Scene view can fall between grid steps.
 
+Enable **Δ** in the overlay to measure a drag from its starting pose. **Move (W)** shows signed distances in metres, such as **X: +0.125 m**. **Rotate (E)** shows signed degrees beside the dragged axis ring, such as **Y: −15.000°**. Both readouts use three decimal places.
+
 When you move or resize a brush, its **Grid snap** setting decides what goes onto the grid:
 
 | **Grid snap** | **What goes onto the grid** | **Use it for** |
 | :--- | :--- | :--- |
-| **Shape** | The brush's outermost vertices: the corner of its bounds. An axis-aligned brush has its faces on grid lines, so brushes meet cleanly. This is the default. | The classic brush workflow, and collision geometry. |
+| **Shape** | A boundary of the brush on each moved axis. If a boundary passes through the WCS origin, that boundary snaps. Otherwise the minimum extent snaps. This is the default. | Aligning faces and returning a drawn corner to a grid point, including brushes with exact sizes. |
 | **WCS origin** | The brush's pivot. The shape follows, wherever it ends up. | The ProBuilder workflow, such as detail brushes placed around a point. |
 | **Off** | Nothing. The brush stays exactly where it's put and keeps its size. | Levels built from measured numbers, such as by a [script](scripting.md). |
 

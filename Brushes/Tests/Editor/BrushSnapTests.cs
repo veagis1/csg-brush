@@ -88,6 +88,70 @@ namespace CsgBrush.Tests
         }
 
         [Test]
+        public void ExactSizeBoxWithWcsOnItsMaximumEdgesReturnsToWorldZero()
+        {
+            var settings = BrushSettings.instance;
+            settings.gridIndex = System.Array.IndexOf(settings.gridSizes, 0.125f);
+            settings.snapToGrid = false;
+            var initial = new Vector3(-0.012491941f, -0.125f, -0.103406906f);
+            var size = new Vector3(0.61250806f, 3.1009622f, 6.896593f);
+            var brush = BrushApi.Create(BrushShape.Box, initial, size, Quaternion.identity, snap: false);
+            brush.pivot = new Vector3(1f, 0f, 1f);
+            using var serialized = new SerializedObject(brush);
+            var exactSize = serialized.FindProperty("exactSizeMeters");
+            exactSize.vector3Value = size;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            brush.gridSnap = GridSnap.Shape;
+            brush.transform.position = initial;
+            BrushSnap.Accept(brush);
+            settings.snapToGrid = true;
+
+            GUIUtility.hotControl = 1234;
+            try
+            {
+                brush.transform.position = new Vector3(-0.002f, initial.y, 0.015f);
+                BrushSnap.ProcessChanged();
+                Assert.That(BrushSnap.TryGetPreview(brush, out var pose, out var shapeScale), Is.True);
+                Assert.That((Vector3)pose.GetColumn(3), Is.EqualTo(new Vector3(0f, initial.y, 0f)));
+                Assert.That(shapeScale, Is.EqualTo(Vector3.one));
+            }
+            finally { GUIUtility.hotControl = 0; }
+
+            BrushSnap.ProcessChanged();
+            Assert.That(brush.transform.position, Is.EqualTo(new Vector3(0f, initial.y, 0f)));
+            Assert.That(brush.size, Is.EqualTo(size));
+            serialized.Update();
+            Assert.That(exactSize.vector3Value, Is.EqualTo(size));
+        }
+
+        [Test]
+        public void FirstMoveImmediatelyAfterSceneLoadUsesTheLoadedPose()
+        {
+            var scene = EditorSceneManager.GetActiveScene();
+            string path = AssetDatabase.GenerateUniqueAssetPath("Assets/BrushSnapFirstMove.unity");
+            var initial = new Vector3(-0.02f, -0.125f, -0.103f);
+            var brush = BrushApi.Create(BrushShape.Box, initial, Vector3.one, Quaternion.identity, snap: false);
+            brush.gridSnap = GridSnap.Pivot;
+            try
+            {
+                Assert.That(EditorSceneManager.SaveScene(scene, path), Is.True);
+                var loadedScene = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
+                brush = System.Array.Find(loadedScene.GetRootGameObjects(), root => root.TryGetComponent<Brush>(out _))
+                    .GetComponent<Brush>();
+                Assert.That(brush.transform.position, Is.EqualTo(initial));
+
+                brush.transform.position = new Vector3(0.27f, initial.y, initial.z);
+                BrushSnap.ProcessChanged();
+                Assert.That(brush.transform.position, Is.EqualTo(new Vector3(0.5f, initial.y, initial.z)));
+            }
+            finally
+            {
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                AssetDatabase.DeleteAsset(path);
+            }
+        }
+
+        [Test]
         public void EnablingTheMagnetBeforeTheNextUpdateKeepsTheFreePositionThroughUndo()
         {
             var brush = BrushApi.Create(BrushShape.Box, Vector3.zero, Vector3.one, Quaternion.identity);

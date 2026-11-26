@@ -9,7 +9,7 @@ namespace CsgBrush
     /// <summary>What of a brush goes onto the grid when it is moved or resized (a rotation never moves it).</summary>
     public enum GridSnap
     {
-        [Tooltip("Крайние вершины ложатся на линии сетки, чтобы соседние браши стыковались без зазоров."), InspectorName("По форме")] Shape,
+        [Tooltip("На каждой перемещаемой оси к сетке привязывается граница габарита, проходящая через начало WCS. Если такой границы нет, используется минимальная координата формы."), InspectorName("По форме")] Shape,
         [Tooltip("К сетке привязывается начало рабочей системы координат объекта, а форма перемещается вместе с ним."), InspectorName("По началу WCS")] Pivot,
         [Tooltip("Положение и размеры сохраняют введённые значения без округления по сетке."), InspectorName("Отключено")] Off,
     }
