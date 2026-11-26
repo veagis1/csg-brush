@@ -13,8 +13,18 @@
 - New brushes drawn in the Scene view start with their origin at the first drawing point. Set or reset the working
   coordinate system (WCS) of an editable brush, floor plan, spline or wall-anchored window. **Move to** places a
   selected object at a vertex or along an edge and can move a window between floor plan walls while keeping its sill height.
-- The CSG Brush overlay groups snapping and WCS controls. Starting a creation tool ends the current edit mode and
-  cancels unfinished edits. Creation uses the Hierarchy's Default Parent. GameObject commands are under **CSG Brush**.
+- The CSG Brush overlay groups snapping and WCS controls and provides Move, Rotate and Scale buttons. The Scene view
+  handles Unity's W, E and R shortcuts for those tools. Switch directly between Create and Shape Edit, Edit Brush,
+  floor plan editing or spline editing. Switching cancels the active preview or unfinished drag and preserves work
+  already confirmed. Creation uses the Hierarchy's Default Parent. GameObject commands are under **CSG Brush**.
+- The **Δ** toggle shows signed displacement in metres during Move and signed angles in degrees during Rotate.
+  Labels measure from the start of each drag and disappear on release. Move can show one axis, a pair of axes for a
+  plane handle, or all three world components with Shift. Rotate tracks the current Global or Local axis through full turns.
+- Turning on grid snapping preserves a freely placed brush. The next translation snaps only the changed coordinates
+  of the current world or surface grid, leaving the size and other coordinates intact. **Shape** snapping prefers the
+  brush boundary at the WCS on each moved axis, including a positive-side boundary. **WCS origin** (`Pivot`) snaps
+  the origin itself.
+  The first Move after reopening the scene uses the saved position for snapping.
 - Choose English or Russian in **Edit** > **Project Settings** > **CSG Brush**. English is the default. The choice is
   saved per editor user.
 - Fixed: moving brushes with cuts far from the world origin now keeps their meshes and colliders aligned. Editing

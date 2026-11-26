@@ -37,15 +37,36 @@ Start a rectangle on a solid brush and give it depth. Push into the face and the
 
 ## Draw a box on a ramp
 
-Hover over a sloping face. A small grid lies flat against the slope, with a white dot at the snapped point and lines that fade towards the edge of the preview. Draw the base there, then pull out from the slope to give the box height. With **Snapping → Lock grid to a face**, you can keep working on the same plane even beyond the ramp’s edge. Brushes drawn on that grid can also follow its axes when moved or duplicated.
+Choose **Create → Box** and move the pointer from the floor to a vertical face, then onto a wedge. With **Local surface grid** selected under **Snapping**, the drawing grid follows each surface through 0°, 90° and 20°. The white dot marks where the brush will start, and the grid lines fade around it.
 
-![The drawing grid follows the sloped face. A square footprint grows into a cube along the surface normal.](images/0.6.1/sloped-surface.gif)
+![The grid follows a 0° floor, a 90° wall and a 20° wedge. A box is then drawn on a 48° ramp.](images/0.6.1/sloped-surface.gif)
 
-*The three size labels reach 2 m. The base of the finished cube lies flat on the 28° ramp.* [Still image of the surface grid](images/0.6.1/surface-grid.png)
+On the new 48° ramp, draw a 2 m square directly on the slope, then pull 2 m along the surface normal. The cube’s base sits flush against the ramp. Use **Snapping → Lock grid to a face** to keep drawing on the same plane past the ramp’s edge. Brushes drawn on a surface grid can follow its axes when moved or duplicated. [Still image of the surface grid](images/0.6.1/surface-grid.png)
 
-## Keep building in the Scene view
+## Read the distance or angle while you drag
 
-- **Start the next object without leaving edit mode by hand.** Choose a creation tool while editing a brush’s vertices, a floor plan or a spline. The current edit tool closes, any unfinished drag is cancelled, and drawing can begin. Wall segments and spline links you already confirmed stay in the level.
+Enable **Δ** in the CSG Brush overlay and drag with Unity’s **Move** tool (**W**). The coloured labels show the signed distance in metres from the start of the current drag. Pull an axis arrow to see its displacement, or drag the square between X and Z to see both components. Hold **Shift** to show all three world components, including zero values. With brush snapping enabled, the numbers follow the snapped preview. The labels disappear when you release the mouse.
+
+![In the English Scene view, Move shows X and Z displacement in metres as the brush is dragged. The labels disappear on release.](images/0.6.1/relative-move.gif)
+
+With **Rotate** (**E**), drag a coloured axis ring to see the signed angle in degrees from the start of the gesture. The readout follows the active Global or Local axis and keeps counting as you turn through 180° or complete a full revolution. It disappears when you release the mouse.
+
+## Turn on grid snapping without moving the brush
+
+Switch off the magnet and move a box to any position. Turn it back on and the box stays where you left it. On the next **Move**, the changed coordinates snap to the nearest nodes of the current grid. In the example, the grid step is **0.5 m**. Drag along X on the **World grid** and the Y and Z coordinates stay at their previous values, even if they are off-grid. With **Local surface grid** selected, a locked face or the brush’s saved surface can supply the grid origin and axes.
+
+![With the magnet off, the brush moves freely. Turning it back on preserves the position, and the next X drag snaps on the 0.5 m grid.](images/0.6.1/grid-snap.gif)
+
+The brush’s **Grid snap** setting controls what aligns. With **Shape** selected, a WCS on the −X face makes that face align to the grid when you move along X. The +X face aligns when the WCS is there. If the WCS lies between the faces, **Shape** uses the minimum boundary. **WCS origin** (`Pivot`) aligns the origin itself. **Snap WCS to Vertex** also selects **WCS origin**, so choose **Shape** again if you want to compare the two modes.
+
+## Switch between drawing and editing
+
+Go straight from **Shape Edit** or **Edit Brush** to **Create → Box** and back. Starting creation closes the current edit tool and cancels an unfinished edit drag. Switching to an edit mode cancels the current creation preview. Confirmed brushes, wall segments and spline links stay in the level. Use the overlay’s Move, Rotate and Scale buttons or Unity’s **W**, **E** and **R** shortcuts to switch manipulators in the Scene view.
+
+![The Scene view switches between Shape Edit, Edit Brush and Create Box. Switching back discards an unfinished box preview.](images/0.6.1/tool-switching.gif)
+
+## Organise and adjust the level
+
 - **Group new objects as you draw.** Choose a GameObject in the Hierarchy and use Unity’s **Set as Default Parent**. New brushes, floor plans and splines are created beneath it. For example, set the loading bay as the parent and the boxes you draw for that bay appear together in the Hierarchy. A targeted cut stays with the brush or plan it cuts.
 - **Move a window to another wall.** Pick a corner as the window’s WCS, then use **Move to** on a wall in the same or another floor plan. The opening turns to match the wall, fits its thickness and keeps its sill height above the destination floor.
 - **Switch the editor language.** English is the default. Choose Russian in **Edit → Project Settings → CSG Brush** to switch the package’s overlay, settings and custom Inspectors. Unity remembers the choice for that editor user.
@@ -65,3 +86,5 @@ A world unit is one metre throughout the fork. Existing project settings convert
 Editor scripts can set a brush origin with `BrushApi.SetPivotToVertex`, `BrushApi.SetPivotToEdge` and `BrushApi.ResetPivot`. The former unit-preset API has been removed. Pass lengths in metres to `BrushGridMaterial.Generate(int, float[])`. The legacy `ToMeters` and `ToUnits` methods now return their input.
 
 The [development sandbox](https://github.com/veagis1/csg-brush/tree/main/Development~/Sandbox) opens this checkout as a local package in Unity 6000.6.8f1. Its URP setup and first-person controller let you walk through the geometry you build.
+
+I wrote this entire description of the updates and features with the help of GPT‑6.2 Sol. A few details in the write-up may be off. The tools work great and make life easier if you’re used to CAD modelling. :-)

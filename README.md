@@ -1,5 +1,9 @@
 # CSG Brush
 
+This fork experiments with bringing CAD-style parametric modelling to level design in Unity. It builds on
+[Jaroslav Stehlik’s CSG Brush](https://github.com/jaroslavstehlik/csg-brush), with thanks for the original editor
+and its focus on building levels directly in the Scene view.
+
 A brush-based level editor for Unity, modelled on the Quake and Unreal level editors. Levels are built from convex
 brushes that are added to or subtracted from each other. The package generates the render meshes and convex colliders
 from the brushes in the editor.
@@ -7,8 +11,8 @@ from the brushes in the editor.
 It was written for teaching level design and character controllers, so the toolset is small, brushes snap to a world
 grid, and colliders are made of convex pieces.
 
-This fork builds on [Jaroslav Stehlik's CSG Brush](https://github.com/jaroslavstehlik/csg-brush).
-Version 0.6.1 adds surface grids, exact dimensions, and placement by vertices and edges.
+Version 0.6.1 adds surface grids, exact dimensions, placement by vertices and edges, and distance and angle readouts
+while you drag in the Scene view. [Stable release 0.6.1](https://github.com/veagis1/csg-brush/releases/tag/v0.6.1)
 
 ![A floor plan room with a door and a window cut into its walls.](Documentation~/images/doors-and-windows.png)
 
@@ -65,7 +69,7 @@ The package is editor-only. Builds contain only the generated meshes and collide
 2. Click **+** and select **Install package from git URL**.
 3. Enter `https://github.com/veagis1/csg-brush.git` and click **Install**.
 
-The package is at the root of the fork. To pin a particular revision, append its commit hash after `#`.
+The package is at the root of the fork. To pin version 0.6.1, use `https://github.com/veagis1/csg-brush.git#v0.6.1`.
 If you already have the upstream package installed, replace its Git URL. The fork uses the same package ID.
 
 ## Documentation
@@ -78,6 +82,7 @@ If you already have the upstream package installed, replace its Git URL. The for
 ## Development
 
 The original project is developed and maintained by AI coding agents (Claude Code), directed by the author.
+ChatGPT is the AI assistant for this fork.
 For fork development, see [Development~/](Development~/). The Unity test project is under `Development~/Sandbox`.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the EditMode suite and native plugin.
 
