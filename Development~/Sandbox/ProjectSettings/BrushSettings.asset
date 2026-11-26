@@ -57,7 +57,7 @@ MonoBehaviour:
   defaultMaterial: {fileID: 2100000, guid: 7842144c1a12ffd40955764965fa8afd, type: 2}
   showGenerated: 0
   showCuts: 0
-  showDimensions: 0
+  showDimensions: 1
   showRelativeDisplacement: 1
   shapeHandles: 0
   shapeEditSelection: 0
