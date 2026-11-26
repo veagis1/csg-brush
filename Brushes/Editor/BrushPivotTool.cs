@@ -153,10 +153,10 @@ namespace CsgBrush.Editor
                     depth = screen.z;
                 }
                 if (e.type != EventType.Repaint) return;
-                PlacementMarker.Draw(world, view.camera.transform.rotation, kind, 0.032f);
+                PlacementMarker.Draw(world, view.camera.transform.rotation, kind, PlacementMarker.PointScale);
             }
 
-            using (new Handles.DrawingScope(new Color(1f, 0.85f, 0.3f)))
+            using (new Handles.DrawingScope(PlacementMarker.PointColor))
             {
                 if (source is PointGraph graph)
                 {
@@ -178,12 +178,7 @@ namespace CsgBrush.Editor
                 }
             }
             if (e.type == EventType.Repaint && picked)
-            {
-                using (new Handles.DrawingScope(Color.yellow))
-                    PlacementMarker.Draw(pickedWorld, view.camera.transform.rotation, pickedKind, 0.075f);
-                Handles.Label(pickedWorld, pickedKind == PlacementMarkerKind.FaceCenter ? Tr("  Центр грани") :
-                    pickedKind == PlacementMarkerKind.Midpoint ? Tr("  Середина ребра") : Tr("  Вершина"));
-            }
+                PlacementMarker.Highlight(pickedWorld, view.camera.transform.rotation, pickedKind);
             if (e.type == EventType.MouseDown && HandleUtility.nearestControl == control)
             {
                 e.Use();

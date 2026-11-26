@@ -245,15 +245,7 @@ namespace CsgBrush.Editor
             var major = new Color(0.55f, 0.96f, 0.91f, 0.70f);
             // Hardware lines use the same depth as the surface grid used for snapping.
             // Camera-facing AA strips can disappear into a coplanar face in orthographic views.
-            if (gridMaterial == null)
-            {
-                gridMaterial = new Material(Shader.Find("Hidden/Internal-Colored")) { hideFlags = HideFlags.HideAndDontSave };
-                gridMaterial.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
-                gridMaterial.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
-                gridMaterial.SetInt("_ZWrite", 0);
-                gridMaterial.SetInt("_ZTest", (int)CompareFunction.LessEqual);
-            }
-            if (!gridMaterial.SetPass(0)) return;
+            if (!UseOverlayMaterial()) return;
             GL.PushMatrix();
             try
             {
@@ -266,6 +258,20 @@ namespace CsgBrush.Editor
                 }
             }
             finally { GL.PopMatrix(); }
+        }
+
+        internal static bool UseOverlayMaterial()
+        {
+            if (gridMaterial == null)
+            {
+                gridMaterial = new Material(Shader.Find("Hidden/Internal-Colored")) { hideFlags = HideFlags.HideAndDontSave };
+                gridMaterial.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+                gridMaterial.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+                gridMaterial.SetInt("_ZWrite", 0);
+                gridMaterial.SetInt("_ZTest", (int)CompareFunction.LessEqual);
+                gridMaterial.SetInt("_Cull", (int)CullMode.Off);
+            }
+            return gridMaterial.SetPass(0);
         }
 
         static void DrawChord(float offset, float radius, Vector3 across, Vector3 along, Color color)

@@ -93,6 +93,14 @@ namespace CsgBrush.Editor
             return true;
         }
 
+        internal static bool ApplyPositionPreview(Transform source, Vector3 destination)
+        {
+            if (source == null || !float.IsFinite(destination.sqrMagnitude)) return false;
+            source.position = destination;
+            RefreshSurfaceSource(source);
+            return true;
+        }
+
         internal static Quaternion SurfaceLocalRotation(Transform parent, Quaternion worldRotation)
         {
             if (parent == null) return worldRotation;
@@ -133,7 +141,7 @@ namespace CsgBrush.Editor
         {
             if (!CanMove(source) || IsWallWindow(source) || !ValidSurfacePose(pose)) return false;
             if (source.position.Equals(pose.position) && Quaternion.Angle(source.rotation, pose.rotation) < 0.001f) return false;
-            Undo.RegisterCompleteObjectUndo(source, Tr("Переместить на"));
+            Undo.RegisterCompleteObjectUndo(source, Tr(ObjectPlacementTool.Label));
             ApplySurfacePreview(source, pose);
             PrefabUtility.RecordPrefabInstancePropertyModifications(source);
             return true;

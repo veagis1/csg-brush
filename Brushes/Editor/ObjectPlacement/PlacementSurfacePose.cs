@@ -26,7 +26,7 @@ namespace CsgBrush.Editor
             return new Pose(float.IsFinite(lowest) ? contact - up * lowest : contact, rotation);
         }
 
-        internal void DrawSurfacePreview(Pose pose, Color color) => DrawMovingWire(SurfaceMatrix(pose), color);
+        internal void DrawSurfacePreview(Pose pose, Color color) => DrawMovingGeometry(SurfaceMatrix(pose), color);
 
         Matrix4x4 SurfaceMatrix(Pose pose)
         {

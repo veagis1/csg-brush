@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using System.Linq;
 using CsgBrush.Editor;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
@@ -173,6 +175,122 @@ namespace CsgBrush.Tests
                 Near(new Vector3(2f, 1f, 0f), hit.Position);
             }
             finally { BrushSettings.instance.showCuts = previousCuts; }
+        }
+
+        [Test]
+        public void HiddenNestedCutExposesThePocketUnderItsAdditiveOwner()
+        {
+            var source = new GameObject("Перемещаемый объект").transform;
+            var wall = BrushApi.CreateBox(new Vector3(-3f, -3f, 0f), new Vector3(3f, 3f, 2f), name: "Стена");
+            var child = BrushApi.CreateBox(new Vector3(-1f, -1f, -1f), new Vector3(1f, 1f, 1.25f),
+                name: "Вычет", operation: BrushOperation.Subtract);
+            child.transform.SetParent(wall.transform, true);
+            BrushCutTarget.FromBrush(wall).Assign(child);
+            var camera = new GameObject("Камера").AddComponent<Camera>();
+            camera.enabled = false;
+            camera.pixelRect = new Rect(0f, 0f, 800f, 600f);
+            camera.transform.position = Vector3.back * 4f;
+            bool previousCuts = BrushSettings.instance.showCuts;
+            try
+            {
+                BrushSettings.instance.showCuts = false;
+                BrushApi.ForceUpdate();
+                var scene = new PlacementScene(source);
+
+                Assert.That(scene.TryRaycast(new Ray(camera.transform.position, Vector3.forward), out var hit), Is.True);
+                Assert.That(hit.Part.Owner, Is.SameAs(wall));
+                Near(Vector3.forward * 1.25f, hit.Position);
+                Near(Vector3.back, hit.Normal);
+                Near(hit.Part.World(hit.Face.Center), hit.Position);
+
+                var features = new List<PlacementScene.Feature>();
+                scene.GetFeatures(hit.Part, features);
+                var rim = features.Single(point => point.Midpoint && Vector3.Distance(point.Position, Vector3.up) < 1e-5f);
+                var pocketCorner = features.Single(point => !point.Midpoint && !point.FaceCenter &&
+                    Vector3.Distance(point.Position, new Vector3(1f, 1f, 1.25f)) < 1e-5f);
+                Assert.That(scene.IsVisible(camera, rim), Is.True);
+                Assert.That(scene.IsVisible(camera, pocketCorner), Is.True);
+                camera.transform.position += Vector3.right * 3f;
+                Assert.That(scene.IsVisible(camera, pocketCorner), Is.False);
+                var projectedCorner = HandleUtility.WorldToGUIPointWithDepth(camera, pocketCorner.Position);
+                var plain = scene.Pick(camera, (Vector2)projectedCorner);
+                Assert.That(plain.Part, Is.SameAs(hit.Part));
+                Near(pocketCorner.Position, plain.Position);
+                Assert.That(features.Count(point => point.Midpoint), Is.EqualTo(24));
+                Assert.That(features.Count(point => !point.Midpoint && !point.FaceCenter), Is.EqualTo(16));
+                Assert.That(features.Count(point => point.FaceCenter), Is.EqualTo(11));
+
+                Assert.That(scene.TryRaycast(new Ray(new Vector3(2f, 0f, -4f), Vector3.forward), out hit), Is.True);
+                var frontCenter = hit.Part.World(hit.Face.Center);
+                Assert.That(frontCenter.z, Is.EqualTo(0f).Within(1e-5f));
+                Assert.That(Mathf.Max(Mathf.Abs(frontCenter.x), Mathf.Abs(frontCenter.y)), Is.EqualTo(2f).Within(1e-5f));
+
+                Assert.That(scene.TryRaycast(new Ray(new Vector3(0f, 0f, -2f), new Vector3(1f, 0f, 3f)),
+                    out hit), Is.True);
+                Assert.That(hit.Part.Owner, Is.SameAs(wall));
+                Near(new Vector3(1f, 0f, 1f), hit.Position);
+                Near(Vector3.left, hit.Normal);
+                Near(new Vector3(1f, 0f, 0.625f), hit.Part.World(hit.Face.Center));
+            }
+            finally { BrushSettings.instance.showCuts = previousCuts; }
+        }
+
+        [Test]
+        public void AuthoredCutterIsAvailableForPlainPickingAndAbsentFromTheSurface()
+        {
+            var source = new GameObject("Перемещаемый объект").transform;
+            var wall = BrushApi.CreateBox(new Vector3(-2f, -2f, 3f), new Vector3(2f, 2f, 4f), name: "Стена");
+            var cutter = BrushApi.CreateBox(new Vector3(-0.5f, -0.5f, 0f), new Vector3(0.5f, 0.5f, 1f),
+                name: "Вычет без пересечения", operation: BrushOperation.Subtract);
+            var camera = new GameObject("Камера").AddComponent<Camera>();
+            camera.enabled = false;
+            camera.pixelRect = new Rect(0f, 0f, 800f, 600f);
+            camera.transform.position = Vector3.back * 4f;
+            var corner = new Vector3(-0.5f, -0.5f, 0f);
+            var mouse = (Vector2)HandleUtility.WorldToGUIPointWithDepth(camera, corner);
+            bool previousCuts = BrushSettings.instance.showCuts;
+            try
+            {
+                BrushSettings.instance.showCuts = true;
+                BrushApi.ForceUpdate();
+                var scene = new PlacementScene(source);
+                var plain = scene.Pick(camera, mouse);
+                Assert.That(plain.Part?.Owner, Is.SameAs(cutter));
+                Near(corner, plain.Position);
+                Assert.That(scene.IsVisible(camera, plain), Is.False);
+                var overlay = new List<PlacementScene.Feature>();
+                scene.GetFeatures(plain.Part, overlay);
+                Assert.That(overlay, Is.Empty);
+
+                var ray = new Ray(camera.transform.position, corner - camera.transform.position);
+                Assert.That(scene.TryRaycast(ray, out var surface), Is.True);
+                Assert.That(surface.Part.Owner, Is.SameAs(wall));
+
+                BrushSettings.instance.showCuts = false;
+                Assert.That(scene.Pick(camera, mouse).Part?.Owner, Is.Not.SameAs(cutter));
+            }
+            finally { BrushSettings.instance.showCuts = previousCuts; }
+        }
+
+        [Test]
+        public void GeneratedMeshUsesTheWholeEdgeAcrossACollinearTriangulationVertex()
+        {
+            var builder = new PlacementGeometry.MeshBuilder();
+            int a = builder.AddVertex(new Vector3(-2f, 0f));
+            int split = builder.AddVertex(new Vector3(-1f, 0f));
+            int b = builder.AddVertex(new Vector3(2f, 0f));
+            int c = builder.AddVertex(new Vector3(2f, 2f));
+            int d = builder.AddVertex(new Vector3(-2f, 2f));
+            builder.AddTriangle(a, split, d);
+            builder.AddTriangle(split, b, c);
+            builder.AddTriangle(split, c, d);
+
+            var geometry = builder.Build(simplify: true);
+            var face = geometry.Faces.Single();
+            Assert.That(geometry.IsFeatureVertex(split), Is.False);
+            Assert.That(geometry.Edges, Has.Length.EqualTo(4));
+            Assert.That(face.Edges, Does.Contain(new Vector2Int(a, b)));
+            Near(new Vector3(0f, 1f), face.Center);
         }
 
         [TestCase(false)]

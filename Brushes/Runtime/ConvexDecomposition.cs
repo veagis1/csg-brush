@@ -60,7 +60,7 @@ namespace CsgBrush
             return true;
         }
 
-        static IEnumerable<int[]> Triangulate(BrushPolyhedron poly, int face)
+        internal static IEnumerable<int[]> Triangulate(BrushPolyhedron poly, int face)
         {
             var idx = poly.faces[face].indices;
             if (idx.Length == 3) { yield return idx; yield break; }

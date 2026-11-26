@@ -127,7 +127,9 @@ Setting the pivot moves the transform, never the shape. Switching the pivot mode
 
 Select one editable brush and choose **WCS** > **Snap WCS** in the CSG Brush overlay, or click **Snap WCS** in the Inspector. Pick a vertex, an edge midpoint or a face centre. Move and Rotate now use that origin and the local axes. **Reset WCS** returns the origin to the centre of the geometry. A window on a floor plan wall can have its own origin. For generated geometry, set the origin on its floor plan or spline. [Window settings](doors-and-windows.md#change-a-door-or-window).
 
-**Move to** places the WCS at the selected point. **Move onto** switches to the Move tool. Hold Shift and drag a rod onto a visible face to seat its base there with local +Y pointing out of the surface. Release on a free point to place it. On a yellow marker, release and click again to align exactly. A solid square marks a vertex, an open square marks an edge midpoint, and a diamond with a dot inside marks a face centre.
+**Move onto object** places the WCS on a surface while preserving rotation. Shift-drag to preview the primitive as you move it. **⊥** seats its base against the visible face with local +Y pointing outwards. The **magnet** starts on. Switch it off to place the object anywhere on the face, or hold Ctrl to move in grid steps. The **reference points** button shows visible vertices, edge midpoints and face centres with the same markers and hover labels as **Snap WCS**. Ordinary placement can snap to an occluded vertex or midpoint. Perpendicular placement uses visible features only.
+
+Release over a free point to place the object. With the magnet on, click a feature twice to align exactly. Pocket floors, walls and rim edges from CSG subtraction are also placement targets.
 
 From a face centre, move toward an edge midpoint to choose a guide. Hold Ctrl to measure from the centre in grid steps, or enter the distance in **Offset (m)** and click **Apply**. Zero returns to the centre. Esc cancels the preview. Undo restores the previous pose.
 
@@ -137,7 +139,7 @@ A brush's **Operation** is **Add** or **Subtract**. An added brush fills space; 
 
 In automatic mode, drawing into a target makes a cut there. Use **+ add** or **- subtract** to choose the operation explicitly. Click the active button again to return to automatic mode. The override lasts for the editor session. On upgrade from 0.6.0, drawing starts in automatic mode even if the old project default was Subtract. Existing brushes keep their operations.
 
-The Hierarchy order is the CSG order. A subtract brush carves only the brushes above it in the Hierarchy, so a brush you create after a cutter stays whole until you move it above the cutter. To change the order, drag brushes in the Hierarchy, or use **To First** and **To Last** in the Brush component's context menu.
+An assigned cutter carves its target. An unassigned cutter nested inside an additive brush carves that brush and its compound parts. An independent brush placed in the pocket keeps its mesh and collider. Unassigned cutters without an additive ancestor follow the CSG order within their group and affect earlier brushes. To change the order, drag brushes in the Hierarchy, or use **To First** and **To Last** in the Brush component's context menu.
 
 Turn on **Cuts** in the **CSG Brush** overlay to see subtract brushes as translucent red volumes. This lets you select a subtract brush where it has carved everything away. With **Cuts** off, you can't click subtract brushes in the Scene view, except doors and windows.
 

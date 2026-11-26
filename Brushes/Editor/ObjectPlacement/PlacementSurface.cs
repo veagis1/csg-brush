@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Collections;
 using UnityEditor;
 using UnityEngine;
 
@@ -7,9 +8,12 @@ namespace CsgBrush.Editor
     internal sealed partial class PlacementScene
     {
         readonly Dictionary<BrushGroup, List<Transform>> csgMeshes = new Dictionary<BrushGroup, List<Transform>>();
+        readonly Dictionary<(BrushGroup model, int layer), bool> loadedCsgLayers =
+            new Dictionary<(BrushGroup model, int layer), bool>();
         Dictionary<BrushGroup, List<Brush>> csgOrder;
-        readonly Dictionary<Brush, Part> independentCuts = new Dictionary<Brush, Part>();
+        readonly Dictionary<Brush, Part> authoredParts = new Dictionary<Brush, Part>();
         readonly Dictionary<Brush, List<Part>> cutsByTarget = new Dictionary<Brush, List<Part>>();
+        readonly Dictionary<Brush, List<Part>> wallsByCut = new Dictionary<Brush, List<Part>>();
 
         internal readonly struct SurfaceHit
         {
@@ -29,7 +33,7 @@ namespace CsgBrush.Editor
             }
         }
 
-        internal bool TryPickSurface(Camera camera, Vector2 mouse, out SurfaceHit hit)
+        internal bool TryHoverSurface(Camera camera, Vector2 mouse, out SurfaceHit hit)
         {
             var ray = HandleUtility.GUIPointToWorldRay(mouse);
             var forward = camera.transform.forward;
@@ -40,33 +44,45 @@ namespace CsgBrush.Editor
             float nearDistance = Mathf.Max(0f, (camera.nearClipPlane - originDepth) / directionDepth);
             var nearRay = new Ray(ray.GetPoint(nearDistance), ray.direction);
             float maxDistance = (camera.farClipPlane - originDepth) / directionDepth - nearDistance;
-            if (!TryRaycast(nearRay, camera.cullingMask & Tools.visibleLayers, maxDistance, out var surface))
-                return false;
+            return TryRaycast(nearRay, camera.cullingMask & Tools.visibleLayers, maxDistance, out hit);
+        }
 
+        readonly List<Feature> surfaceFeatures = new List<Feature>();
+
+        internal bool TryPickSurface(Camera camera, Vector2 mouse, out SurfaceHit hit, bool snap = true)
+        {
+            bool hasSurface = TryHoverSurface(camera, mouse, out var surface);
+            hit = surface;
+            if (!snap) return hasSurface;
             Feature feature = default;
-            float nearest = MagnetRadius * MagnetRadius;
-            var part = surface.Part;
-            var face = surface.Face;
-            void Consider(int a, int b)
-            {
-                var candidate = new Feature(part, a, b, face);
-                var world = candidate.Position;
-                var projected = HandleUtility.WorldToGUIPointWithDepth(camera, world);
-                float distance = ((Vector2)projected - mouse).sqrMagnitude;
-                if (distance > nearest || (feature.Part != null && Mathf.Approximately(distance, nearest))) return;
-                if (!IsVisible(camera, part, face, world)) return;
-                nearest = distance;
-                feature = candidate;
-            }
-            Consider(-1, -1);
-            foreach (var edge in face.Edges)
-            {
-                Consider(edge.x, -1);
-                Consider(edge.y, -1);
-                Consider(edge.x, edge.y);
-            }
-            hit = new SurfaceHit(part, face, surface.Position, surface.Normal, feature);
+            float nearest = MagnetRadius * MagnetRadius, depth = float.PositiveInfinity;
+            var preferred = surface.Part;
+            if (preferred != null) ConsiderPart(preferred);
+            foreach (var part in targets)
+                if (part != preferred && Available(camera, part) && MayContainPointer(camera, part, mouse))
+                    ConsiderPart(part);
+            if (feature.Part == null) return hasSurface;
+            var position = feature.Part == preferred && feature.Face == surface.Face ? surface.Position : feature.Position;
+            hit = new SurfaceHit(feature.Part, feature.Face, position, WorldNormal(feature.Part, feature.Face), feature);
             return true;
+
+            void ConsiderPart(Part part)
+            {
+                surfaceFeatures.Clear();
+                GetFeatures(part, surfaceFeatures);
+                foreach (var candidate in surfaceFeatures)
+                {
+                    var projected = HandleUtility.WorldToGUIPointWithDepth(camera, candidate.Position);
+                    float distance = ((Vector2)projected - mouse).sqrMagnitude;
+                    if (distance > nearest || (Mathf.Approximately(distance, nearest) && projected.z >= depth))
+                        continue;
+                    var face = VisibleFace(camera, candidate, part == preferred ? surface.Face : null);
+                    if (face == null) continue;
+                    nearest = distance;
+                    depth = projected.z;
+                    feature = new Feature(part, candidate.A, candidate.B, face);
+                }
+            }
         }
 
         internal bool TryRaycast(Ray ray, out SurfaceHit hit, int visibleLayers = ~0) =>
@@ -83,22 +99,79 @@ namespace CsgBrush.Editor
         internal bool IsVisible(Camera camera, Part part, PlacementGeometry.Face face, Vector3 point)
         {
             int layers = camera.cullingMask & Tools.visibleLayers;
-            if (!VisiblePart(part, layers)) return false;
+            if (!VisiblePart(part, layers) || !RayToPoint(camera, point, out var ray, out float distance)) return false;
+            var toLocal = part.Owner.transform.worldToLocalMatrix;
+            return (face == null || Vector3.Dot(toLocal.MultiplyVector(ray.direction), face.Normal) < 0f) &&
+                (face == null || AuthoredSurfaceAvailable(part, point, WorldNormal(part, face))) &&
+                FindSurface(ray, layers, distance).Part == null;
+        }
+
+        internal bool IsVisible(Camera camera, Feature feature)
+        {
+            if (feature.Part == null || feature.Part.Owner is Brush cutter && cutter.operation == BrushOperation.Subtract)
+                return false;
+            if (feature.Face != null || feature.Part.Geometry.IncidentFaces(feature.A, feature.B).Count == 0)
+                return IsVisible(camera, feature.Part, feature.Face, feature.Position);
+            return VisibleFace(camera, feature) != null;
+        }
+
+        PlacementGeometry.Face VisibleFace(Camera camera, Feature feature, PlacementGeometry.Face preferred = null)
+        {
+            var part = feature.Part;
+            int layers = camera.cullingMask & Tools.visibleLayers;
+            if (!VisiblePart(part, layers) || !RayToPoint(camera, feature.Position, out var ray, out float distance))
+                return null;
+            var localDirection = part.Owner.transform.worldToLocalMatrix.MultiplyVector(ray.direction);
+            PlacementGeometry.Face face = feature.Face;
+            if (face != null)
+            {
+                if (Vector3.Dot(localDirection, face.Normal) >= 0f) return null;
+            }
+            else
+            {
+                float strongest = 0f;
+                var incident = part.Geometry.IncidentFaces(feature.A, feature.B);
+                for (int i = 0; i < incident.Count; i++)
+                {
+                    var candidate = incident[i];
+                    float facing = -Vector3.Dot(ray.direction, WorldNormal(part, candidate));
+                    if (facing <= 0f) continue;
+                    if (candidate == preferred)
+                    {
+                        face = candidate;
+                        break;
+                    }
+                    if (facing <= strongest) continue;
+                    strongest = facing;
+                    face = candidate;
+                }
+            }
+            return face != null && AuthoredSurfaceAvailable(part, feature.Position, WorldNormal(part, face)) &&
+                FindSurface(ray, layers, distance).Part == null ? face : null;
+        }
+
+        static Vector3 WorldNormal(Part part, PlacementGeometry.Face face)
+        {
+            var normal = part.Owner.transform.worldToLocalMatrix.transpose.MultiplyVector(face.Normal);
+            float length = normal.magnitude;
+            return length > 0f ? normal / length : Vector3.zero;
+        }
+
+        static bool RayToPoint(Camera camera, Vector3 point, out Ray ray, out float maxDistance)
+        {
             var forward = camera.transform.forward;
             var eye = camera.transform.position;
             var offset = point - eye;
             float depth = Vector3.Dot(forward, offset);
+            ray = default;
+            maxDistance = 0f;
             if (depth < camera.nearClipPlane || depth > camera.farClipPlane) return false;
             var near = camera.orthographic ? point - forward * (depth - camera.nearClipPlane) :
                 eye + offset * (camera.nearClipPlane / depth);
-            var ray = new Ray(near, camera.orthographic ? forward : offset.normalized);
-            var toLocal = part.Owner.transform.worldToLocalMatrix;
-            if (Vector3.Dot(toLocal.MultiplyVector(ray.direction), face.Normal) >= 0f) return false;
-            var normal = toLocal.transpose.MultiplyVector(face.Normal).normalized;
-            if (!IsRenderedBrushSurface(part, point, normal)) return false;
-            const float surfaceTolerance = 1e-4f;
-            float maxDistance = (point - near).magnitude - surfaceTolerance;
-            return FindSurface(ray, layers, maxDistance).Part == null;
+            ray = new Ray(near, camera.orthographic ? forward : offset.normalized);
+            float surfaceTolerance = Mathf.Max(1e-4f, point.magnitude * 2e-7f);
+            maxDistance = (point - near).magnitude - surfaceTolerance;
+            return true;
         }
 
         SurfaceHit FindSurface(Ray ray, int layers, float nearest)
@@ -111,55 +184,154 @@ namespace CsgBrush.Editor
                 var toLocal = part.Owner.transform.worldToLocalMatrix;
                 var origin = toLocal.MultiplyPoint3x4(ray.origin);
                 var direction = toLocal.MultiplyVector(ray.direction);
-                if (direction.sqrMagnitude == 0f ||
-                    !part.Bounds.IntersectRay(new Ray(origin, direction.normalized)) ||
+                float localScale = direction.magnitude;
+                if (localScale == 0f ||
+                    !part.Bounds.IntersectRay(new Ray(origin, direction / localScale), out float enter) ||
+                    enter > nearest * localScale ||
                     !VisiblePart(part, layers)) continue;
-                var geometry = Read(part);
-                if (geometry == null) continue;
-                foreach (var face in geometry.Faces)
+                Intersect(part);
+                if (hasMovingSolid && part.Owner is Brush brush && brush.operation == BrushOperation.Add &&
+                    LoadCsgGeometry(brush) && AuthoredPart(brush) is Part fallback)
+                    Intersect(fallback);
+
+                void Intersect(Part candidate)
                 {
-                    if (!face.Intersect(origin, direction, nearest, out float distance, out var point)) continue;
-                    if (hit.Part != null && distance >= nearest) continue;
-                    var normal = toLocal.transpose.MultiplyVector(face.Normal);
-                    float length = normal.magnitude;
-                    if (length == 0f) continue;
-                    normal /= length;
-                    var world = part.World(point);
-                    if (!IsRenderedBrushSurface(part, world, normal)) continue;
-                    nearest = distance;
-                    hit = new SurfaceHit(part, face, world, normal);
+                    var geometry = Read(candidate);
+                    if (geometry == null) return;
+                    foreach (var face in geometry.Faces)
+                    {
+                        if (!face.Intersect(origin, direction, nearest, out float distance, out var point)) continue;
+                        if (hit.Part != null && distance >= nearest) continue;
+                        var normal = WorldNormal(candidate, face);
+                        if (normal.sqrMagnitude == 0f) continue;
+                        var world = candidate.World(point);
+                        if (!AuthoredSurfaceAvailable(candidate, world, normal)) continue;
+                        nearest = distance;
+                        hit = new SurfaceHit(candidate, face, world, normal);
+                    }
                 }
             }
             return hit;
         }
 
-        bool IsRenderedBrushSurface(Part part, Vector3 point, Vector3 normal)
+        bool AuthoredSurfaceAvailable(Part part, Vector3 point, Vector3 normal)
         {
-            // An additive brush can have portions swallowed by a union or removed by a cut.
-            // The built triangle sources let picking keep the authored face while rejecting those portions.
-            if (!(part.Owner is Brush brush) || brush.operation != BrushOperation.Add) return true;
+            if (!part.Authored || !(part.Owner is Brush wall) || wall.operation != BrushOperation.Add) return true;
+            float inset = Mathf.Max(2.5e-4f, point.magnitude * 5e-8f);
+            return ExposedWithoutSource(wall, ExistingModel(wall), point, normal, inset);
+        }
+
+        bool LoadCsgGeometry(Brush brush)
+        {
             var model = ExistingModel(brush);
-            if (model == null) return true;
+            if (model == null) return false;
+            int layer = brush.gameObject.layer;
+            var key = (model, layer);
+            if (loadedCsgLayers.TryGetValue(key, out bool available)) return available;
             if (!csgMeshes.TryGetValue(model, out var meshes))
                 csgMeshes.Add(model, meshes = BrushCsg.MeshObjects(model));
 
-            bool hasRenderedMesh = false;
-            float tolerance = Mathf.Max(1e-3f, point.magnitude * 2e-7f);
-            var ray = new Ray(point + normal * tolerance, -normal);
+            var builders = new Dictionary<Part, PlacementGeometry.MeshBuilder>();
             foreach (var meshObject in meshes)
             {
-                if (meshObject == null || meshObject.gameObject.layer != brush.gameObject.layer ||
+                if (meshObject == null || meshObject.gameObject.layer != layer ||
                     !meshObject.TryGetComponent<MeshFilter>(out var filter) || filter.sharedMesh == null ||
                     !meshObject.TryGetComponent<MeshRenderer>(out var renderer)) continue;
                 var owners = BrushCsg.TriangleBrushes(meshObject);
-                if (owners == null || owners.Length == 0) continue;
-                hasRenderedMesh = true;
-                if (renderer.enabled && renderer.bounds.IntersectRay(ray, out float enter) && enter <= tolerance * 2f &&
-                    BrushHooks.IntersectRayMesh(ray, filter.sharedMesh, meshObject.localToWorldMatrix, out var hit) &&
-                    hit.distance <= tolerance * 2f && hit.triangleIndex >= 0 && hit.triangleIndex < owners.Length &&
-                    owners[hit.triangleIndex] == brush) return true;
+                if (owners == null) continue;
+                available = true;
+                if (renderer.enabled && owners.Length > 0) Collect(filter, owners);
             }
-            return !hasRenderedMesh || ExposedWithoutSource(brush, model, point, normal, tolerance * 0.25f);
+            loadedCsgLayers.Add(key, available);
+            foreach (var pair in builders) pair.Key.Geometry = pair.Value.Build(simplify: true);
+            return available;
+
+            void Collect(MeshFilter filter, Brush[] owners)
+            {
+                var toWorld = filter.transform.localToWorldMatrix;
+                using var snapshot = MeshUtility.AcquireReadOnlyMeshData(filter.sharedMesh);
+                var data = snapshot[0];
+                using var vertices = new NativeArray<Vector3>(data.vertexCount, Allocator.Temp);
+                data.GetVertices(vertices);
+                var transforms = new Dictionary<Part, Matrix4x4>();
+                int triangle = 0;
+                for (int sub = 0; sub < data.subMeshCount; sub++)
+                {
+                    var description = data.GetSubMesh(sub);
+                    if (description.topology != MeshTopology.Triangles) continue;
+                    using var indices = new NativeArray<int>(description.indexCount, Allocator.Temp);
+                    data.GetIndices(indices, sub);
+                    for (int i = 0; i + 2 < indices.Length && triangle < owners.Length; i += 3, triangle++)
+                    {
+                        var owner = owners[triangle];
+                        if (owner == null || source != null && owner.transform.IsChildOf(source)) continue;
+                        var a = vertices[indices[i]];
+                        var b = vertices[indices[i + 1]];
+                        var c = vertices[indices[i + 2]];
+                        if (owner.operation == BrushOperation.Subtract)
+                            owner = CutWall(owner, model, toWorld, a, b, c);
+                        if (owner == null || !targetBrushes.TryGetValue(owner, out var part)) continue;
+                        if (!builders.TryGetValue(part, out var builder))
+                            builders.Add(part, builder = new PlacementGeometry.MeshBuilder());
+                        if (!transforms.TryGetValue(part, out var toOwner))
+                            transforms.Add(part, toOwner = owner.transform.worldToLocalMatrix * toWorld);
+                        int ia = builder.AddVertex(toOwner.MultiplyPoint3x4(a));
+                        int ib = builder.AddVertex(toOwner.MultiplyPoint3x4(b));
+                        int ic = builder.AddVertex(toOwner.MultiplyPoint3x4(c));
+                        if (toOwner.determinant < 0f) builder.AddTriangle(ia, ic, ib);
+                        else builder.AddTriangle(ia, ib, ic);
+                    }
+                }
+            }
+        }
+
+        Brush CutWall(Brush cutter, BrushGroup model, Matrix4x4 toWorld, Vector3 a, Vector3 b, Vector3 c)
+        {
+            if (!wallsByCut.TryGetValue(cutter, out var walls))
+            {
+                wallsByCut.Add(cutter, walls = new List<Part>());
+                csgOrder ??= BrushCsg.BrushesByModel(false);
+                if (csgOrder.TryGetValue(model, out var ordered))
+                {
+                    bool addressed = BrushCutTarget.TryScope(cutter, out var scope);
+                    foreach (var wall in ordered)
+                    {
+                        if (!addressed && wall == cutter) break;
+                        if (wall == null || wall.operation != BrushOperation.Add ||
+                            wall.gameObject.layer != cutter.gameObject.layer || addressed && !scope.Contains(wall)) continue;
+                        var part = AuthoredPart(wall);
+                        if (part != null) walls.Add(part);
+                    }
+                }
+            }
+            if (walls.Count == 1) return (Brush)walls[0].Owner;
+            var u = toWorld.MultiplyVector(b - a);
+            var v = toWorld.MultiplyVector(c - a);
+            var cross = Vector3.Cross(u, v);
+            float length = cross.magnitude;
+            if (length == 0f) return null;
+            var normal = cross / length;
+            if (toWorld.determinant < 0f) normal = -normal;
+            var center = toWorld.MultiplyPoint3x4(a + ((b - a) + (c - a)) / 3f);
+            var inside = center - normal * Mathf.Max(2.5e-4f, center.magnitude * 2e-7f);
+            foreach (var part in walls)
+                if (ContainsVolume(part, inside)) return (Brush)part.Owner;
+            // At coincident authored surfaces the inset can land outside a very thin wall.
+            foreach (var part in walls)
+                if (part.Bounds.Contains(part.Owner.transform.InverseTransformPoint(center))) return (Brush)part.Owner;
+            return null;
+        }
+
+        Part AuthoredPart(Brush brush)
+        {
+            if (authoredParts.TryGetValue(brush, out var part)) return part;
+            var shape = BrushHooks.LocalShape(brush, out var bounds);
+            part = shape == null ? null : new Part(brush, bounds, authored: true)
+            {
+                Geometry = PlacementGeometry.FromPolyhedron(shape)
+            };
+            authoredParts.Add(brush, part);
+            return part;
         }
 
         bool ExposedWithoutSource(Brush wall, BrushGroup model, Vector3 point, Vector3 normal, float inset)
@@ -195,13 +367,9 @@ namespace CsgBrush.Editor
                 if (cutter == wall) afterWall = true;
                 if (cutter == null || cutter.operation != BrushOperation.Subtract ||
                     cutter.gameObject.layer != wall.gameObject.layer || cutter.transform.IsChildOf(source) ||
-                    (cutter.addressedCut ? !BrushCutTarget.Scope(cutter).Contains(wall) : !afterWall)) continue;
-                if (!independentCuts.TryGetValue(cutter, out var cut))
-                {
-                    if (BrushHooks.LocalShape(cutter, out var bounds) == null) continue;
-                    independentCuts.Add(cutter, cut = new Part(cutter, bounds));
-                }
-                cuts.Add(cut);
+                    (BrushCutTarget.TryScope(cutter, out var scope) ? !scope.Contains(wall) : !afterWall)) continue;
+                var cut = AuthoredPart(cutter);
+                if (cut != null) cuts.Add(cut);
             }
             return cuts;
         }

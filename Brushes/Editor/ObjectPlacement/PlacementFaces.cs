@@ -11,13 +11,14 @@ namespace CsgBrush.Editor
             readonly Vector3[] vertices;
             readonly int droppedAxis;
             readonly Vector3 planePoint;
+            readonly Vector2 min, max;
 
-            internal readonly Vector2Int[] Edges;
+            internal Vector2Int[] Edges { get; private set; }
             internal readonly Vector3 Center;
             internal readonly Vector3 Normal;
 
             internal Face(Vector3[] vertices, Vector2Int[] edges, Vector3 center, Vector3 normal,
-                Vector3 planePoint, Vector3? interior = null)
+                Vector3 planePoint, Vector3? interior = null, bool centerInMaterial = false)
             {
                 this.vertices = vertices;
                 this.planePoint = planePoint;
@@ -25,8 +26,18 @@ namespace CsgBrush.Editor
                 Normal = normal;
                 var abs = new Vector3(Mathf.Abs(normal.x), Mathf.Abs(normal.y), Mathf.Abs(normal.z));
                 droppedAxis = abs.x >= abs.y && abs.x >= abs.z ? 0 : abs.y >= abs.z ? 1 : 2;
+                min = Vector2.positiveInfinity;
+                max = Vector2.negativeInfinity;
+                foreach (var edge in edges)
+                {
+                    var a = Project(vertices[edge.x]);
+                    var b = Project(vertices[edge.y]);
+                    min = Vector2.Min(min, Vector2.Min(a, b));
+                    max = Vector2.Max(max, Vector2.Max(a, b));
+                }
                 center -= normal * Vector3.Dot(center - planePoint, normal);
                 if (Contains(center)) Center = center;
+                else if (centerInMaterial && TryFindInteriorCenter(center, out var resolved)) Center = resolved;
                 else if (interior.HasValue)
                     Center = interior.Value - normal * Vector3.Dot(interior.Value - planePoint, normal);
                 else
@@ -48,10 +59,55 @@ namespace CsgBrush.Editor
                 }
             }
 
+            bool TryFindInteriorCenter(Vector3 centroid, out Vector3 center)
+            {
+                // A cutout can contain the area centroid. Use the midpoint of the nearest
+                // solid span across the centroid so the anchor is independent of triangulation.
+                var axis = droppedAxis == 0 ? Vector3.up : Vector3.right;
+                var along = Vector3.ProjectOnPlane(axis, Normal).normalized;
+                var across = Vector3.Cross(Normal, along);
+                var origin = Project(centroid);
+                var crossings = new List<float>();
+                float best = float.PositiveInfinity;
+                Vector3 selected = default;
+                Scan(along);
+                Scan(across);
+                center = selected;
+                return float.IsFinite(best);
+
+                void Scan(Vector3 direction)
+                {
+                    crossings.Clear();
+                    var projected = Project(direction);
+                    foreach (var edge in Edges)
+                    {
+                        var a = Project(vertices[edge.x]) - origin;
+                        var b = Project(vertices[edge.y]) - origin;
+                        if ((Cross(a, projected) > 0f) == (Cross(b, projected) > 0f)) continue;
+                        crossings.Add(Cross(a, b - a) / Cross(projected, b - a));
+                    }
+                    crossings.Sort();
+                    for (int i = 1; i < crossings.Count; i++)
+                    {
+                        if (crossings[i] - crossings[i - 1] <= PointTolerance * 2f) continue;
+                        float middle = (crossings[i] + crossings[i - 1]) * 0.5f;
+                        if (Mathf.Abs(middle) >= best) continue;
+                        var candidate = centroid + direction * middle;
+                        if (!Contains(candidate)) continue;
+                        best = Mathf.Abs(middle);
+                        selected = candidate;
+                    }
+                }
+            }
+
+            internal void SimplifyEdges(Vector2Int[] boundary) => Edges = boundary;
+
             internal bool Contains(Vector3 point)
             {
                 if (Mathf.Abs(Vector3.Dot(point - planePoint, Normal)) > PointTolerance) return false;
                 var p = Project(point);
+                if (p.x < min.x - PointTolerance || p.x > max.x + PointTolerance ||
+                    p.y < min.y - PointTolerance || p.y > max.y + PointTolerance) return false;
                 bool inside = false;
                 foreach (var edge in Edges)
                 {
@@ -145,7 +201,7 @@ namespace CsgBrush.Editor
         }
 
         static Face[] MeshFaces(Vector3[] vertices, List<Triangle> triangles,
-            Dictionary<Vector2Int, List<int>> neighbours, HashSet<Vector2Int> features)
+            Dictionary<Vector2Int, List<int>> neighbours, HashSet<Vector2Int> features, bool centerInMaterial)
         {
             const float planeTolerance = 1e-5f;
             var groups = new int[triangles.Count];
@@ -202,11 +258,69 @@ namespace CsgBrush.Editor
                     }
                 }
                 if (boundary.Count > 0)
-                    faces.Add(new Face(vertices, boundary.ToArray(), origin + moment / area, seed.Normal, origin, interior));
+                    faces.Add(new Face(vertices, boundary.ToArray(), origin + moment / area, seed.Normal, origin,
+                        interior, centerInMaterial));
 
                 bool OnPlane(int vertex) => Mathf.Abs(Vector3.Dot(vertices[vertex] - origin, seed.Normal)) <= planeTolerance;
             }
             return faces.ToArray();
+        }
+
+        static void SimplifyBoundaries(Vector3[] vertices, Face[] faces, HashSet<Vector2Int> features)
+        {
+            var degree = new int[vertices.Length];
+            var first = new int[vertices.Length];
+            var second = new int[vertices.Length];
+            foreach (var edge in features)
+            {
+                AddEnd(edge.x, edge.y);
+                AddEnd(edge.y, edge.x);
+            }
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                if (degree[i] != 2) continue;
+                var a = vertices[first[i]] - vertices[i];
+                var b = vertices[second[i]] - vertices[i];
+                float length = Mathf.Min(a.magnitude, b.magnitude);
+                if (Vector3.Dot(a, b) >= 0f || length == 0f ||
+                    Vector3.Cross(a, b).magnitude / length > 1e-5f)
+                    degree[i] = 0;
+            }
+
+            var remaining = new HashSet<Vector2Int>();
+            var simplified = new List<Vector2Int>();
+            foreach (var face in faces)
+            {
+                remaining.UnionWith(face.Edges);
+                simplified.Clear();
+                foreach (var edge in face.Edges)
+                {
+                    if (!remaining.Remove(edge)) continue;
+                    int a = Extend(edge.y, edge.x);
+                    int b = Extend(edge.x, edge.y);
+                    simplified.Add(Key(a, b));
+                }
+                face.SimplifyEdges(simplified.ToArray());
+            }
+
+            void AddEnd(int vertex, int other)
+            {
+                int count = degree[vertex]++;
+                if (count == 0) first[vertex] = other;
+                if (count == 1) second[vertex] = other;
+            }
+
+            int Extend(int previous, int vertex)
+            {
+                while (degree[vertex] == 2)
+                {
+                    int next = first[vertex] == previous ? second[vertex] : first[vertex];
+                    if (!remaining.Remove(Key(vertex, next))) break;
+                    previous = vertex;
+                    vertex = next;
+                }
+                return vertex;
+            }
         }
     }
 }

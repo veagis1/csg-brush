@@ -10,7 +10,10 @@ namespace CsgBrush.Editor
         internal readonly Vector3[] Vertices;
         internal readonly Vector2Int[] Edges;
         internal readonly Face[] Faces;
+        internal int[] PreviewTriangles;
         readonly bool[] interiorVertices;
+        List<Face>[] vertexFaces;
+        Dictionary<Vector2Int, List<Face>> edgeFaces;
 
         PlacementGeometry(Vector3[] vertices, Vector2Int[] edges, Face[] faces, bool[] interiorVertices = null)
         {
@@ -21,6 +24,35 @@ namespace CsgBrush.Editor
         }
 
         internal bool IsFeatureVertex(int index) => interiorVertices == null || !interiorVertices[index];
+
+        internal IReadOnlyList<Face> IncidentFaces(int a, int b)
+        {
+            if (vertexFaces == null)
+            {
+                vertexFaces = new List<Face>[Vertices.Length];
+                edgeFaces = new Dictionary<Vector2Int, List<Face>>();
+                foreach (var face in Faces)
+                    foreach (var edge in face.Edges)
+                    {
+                        var key = Key(edge.x, edge.y);
+                        if (!edgeFaces.TryGetValue(key, out var incident))
+                            edgeFaces.Add(key, incident = new List<Face>(2));
+                        incident.Add(face);
+                        AddVertexFace(edge.x, face);
+                        AddVertexFace(edge.y, face);
+                    }
+            }
+            List<Face> result;
+            if (b < 0) result = vertexFaces[a];
+            else edgeFaces.TryGetValue(Key(a, b), out result);
+            return result == null ? (IReadOnlyList<Face>)System.Array.Empty<Face>() : result;
+
+            void AddVertexFace(int vertex, Face face)
+            {
+                var incident = vertexFaces[vertex] ??= new List<Face>(3);
+                if (incident.Count == 0 || incident[incident.Count - 1] != face) incident.Add(face);
+            }
+        }
 
         internal static PlacementGeometry FromBrush(Brush brush) => FromPolyhedron(BrushHooks.LocalShape(brush, out _));
 
@@ -65,25 +97,10 @@ namespace CsgBrush.Editor
             var data = snapshot[0];
             using var positions = new NativeArray<Vector3>(data.vertexCount, Allocator.Temp);
             data.GetVertices(positions);
-            var vertices = new List<Vector3>();
-            var unique = new Dictionary<Vector3, int>();
+            var builder = new MeshBuilder();
             var remap = new int[positions.Length];
             for (int i = 0; i < remap.Length; i++)
-            {
-                var p = positions[i];
-                if (!unique.TryGetValue(p, out int id))
-                {
-                    id = vertices.Count;
-                    unique.Add(p, id);
-                    vertices.Add(p);
-                }
-                remap[i] = id;
-            }
-
-            var triangles = new List<Triangle>();
-            var neighbours = new Dictionary<Vector2Int, List<int>>();
-            var features = new HashSet<Vector2Int>();
-            var interiorVertices = new bool[vertices.Count];
+                remap[i] = builder.AddVertex(positions[i]);
             for (int sub = 0; sub < data.subMeshCount; sub++)
             {
                 var desc = data.GetSubMesh(sub);
@@ -94,37 +111,52 @@ namespace CsgBrush.Editor
                 {
                     case MeshTopology.Triangles:
                         for (int i = 0; i + 2 < indices.Length; i += 3)
-                            AddTriangle(At(i), At(i + 1), At(i + 2));
+                            builder.AddTriangle(At(i), At(i + 1), At(i + 2));
                         break;
                     case MeshTopology.Quads:
                         for (int i = 0; i + 3 < indices.Length; i += 4)
                         {
-                            AddTriangle(At(i), At(i + 1), At(i + 2));
-                            AddTriangle(At(i), At(i + 2), At(i + 3));
+                            builder.AddTriangle(At(i), At(i + 1), At(i + 2));
+                            builder.AddTriangle(At(i), At(i + 2), At(i + 3));
                         }
                         break;
                     case MeshTopology.Lines:
                     case MeshTopology.LineStrip:
                         int stride = desc.topology == MeshTopology.Lines ? 2 : 1;
-                        for (int i = 0; i + 1 < indices.Length; i += stride) features.Add(Key(At(i), At(i + 1)));
+                        for (int i = 0; i + 1 < indices.Length; i += stride) builder.AddLine(At(i), At(i + 1));
                         break;
                 }
             }
-            var positionsArray = vertices.ToArray();
-            var faces = MeshFaces(positionsArray, triangles, neighbours, features);
-            features.RemoveWhere(edge => edge.x == edge.y);
-            var edges = new Vector2Int[features.Count];
-            features.CopyTo(edges);
-            foreach (var edge in edges)
-                interiorVertices[edge.x] = interiorVertices[edge.y] = false;
-            return new PlacementGeometry(positionsArray, edges, faces, interiorVertices);
+            return builder.Build();
+        }
 
-            void AddTriangle(int a, int b, int c)
+        internal sealed class MeshBuilder
+        {
+            readonly List<Vector3> vertices = new List<Vector3>();
+            readonly Dictionary<Vector3, int> unique = new Dictionary<Vector3, int>();
+            readonly List<Triangle> triangles = new List<Triangle>();
+            readonly Dictionary<Vector2Int, List<int>> neighbours = new Dictionary<Vector2Int, List<int>>();
+            readonly HashSet<Vector2Int> lines = new HashSet<Vector2Int>();
+
+            internal int AddVertex(Vector3 position)
+            {
+                if (unique.TryGetValue(position, out int index)) return index;
+                index = vertices.Count;
+                unique.Add(position, index);
+                vertices.Add(position);
+                return index;
+            }
+
+            internal void AddLine(int a, int b)
+            {
+                if (a != b) lines.Add(Key(a, b));
+            }
+
+            internal void AddTriangle(int a, int b, int c)
             {
                 var cross = Vector3.Cross(vertices[b] - vertices[a], vertices[c] - vertices[a]);
                 float area = cross.magnitude;
                 if (area <= 1e-12f) return;
-                interiorVertices[a] = interiorVertices[b] = interiorVertices[c] = true;
                 int id = triangles.Count;
                 triangles.Add(new Triangle(a, b, c, cross / area, area));
                 AddTriangleEdge(a, b, id);
@@ -138,6 +170,43 @@ namespace CsgBrush.Editor
                 if (!neighbours.TryGetValue(key, out var list))
                     neighbours.Add(key, list = new List<int>(2));
                 list.Add(id);
+            }
+
+            internal PlacementGeometry Build(bool simplify = false)
+            {
+                var positions = vertices.ToArray();
+                var features = new HashSet<Vector2Int>(lines);
+                var faces = MeshFaces(positions, triangles, neighbours, features, simplify);
+                var interior = new bool[positions.Length];
+                if (simplify)
+                {
+                    SimplifyBoundaries(positions, faces, features);
+                    features.Clear();
+                    foreach (var face in faces) features.UnionWith(face.Edges);
+                    // Generated vertices can come from triangles that collapse in float precision.
+                    for (int i = 0; i < positions.Length; i++) interior[i] = true;
+                }
+                else
+                {
+                    foreach (var triangle in triangles)
+                        interior[triangle.A] = interior[triangle.B] = interior[triangle.C] = true;
+                }
+                var edges = new Vector2Int[features.Count];
+                features.CopyTo(edges);
+                foreach (var edge in edges)
+                    interior[edge.x] = interior[edge.y] = false;
+                var result = new PlacementGeometry(positions, edges, faces, interior);
+                if (!simplify)
+                {
+                    result.PreviewTriangles = new int[triangles.Count * 3];
+                    for (int i = 0; i < triangles.Count; i++)
+                    {
+                        result.PreviewTriangles[3 * i] = triangles[i].A;
+                        result.PreviewTriangles[3 * i + 1] = triangles[i].B;
+                        result.PreviewTriangles[3 * i + 2] = triangles[i].C;
+                    }
+                }
+                return result;
             }
         }
 

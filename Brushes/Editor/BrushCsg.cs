@@ -15,10 +15,9 @@ namespace CsgBrush.Editor
     /// Builds the render mesh of every <see cref="BrushGroup"/> with the Manifold library, then hands the brushes'
     /// convex parts to the collider builder.
     ///
-    /// Ordered CSG, as in Quake and Unreal editors: a subtract brush cuts every brush above it in the hierarchy.
-    /// Because union distributes over subtraction, that equals "every additive brush minus every later cutter
-    /// that overlaps it, all unioned", which is what is computed: each brush's solid and each brush's cut piece
-    /// are cached by content, so an edit only recomputes the pieces it touches, plus the final union.
+    /// Unscoped subtract brushes cut earlier brushes in hierarchy order. Addressed and nested cutters affect
+    /// only their target parts. Each additive brush is cut separately before the pieces are unioned. Its solid
+    /// and cut piece are cached by content, so an edit only recomputes the pieces it touches, plus the final union.
     ///
     /// Every build re-derives the brush list from the scene and compares every key, so nothing stale can survive
     /// an undo, a delete or a reorder; the caches only skip work.
@@ -264,7 +263,7 @@ namespace CsgBrush.Editor
         public static List<Brush> UncutBelow(Brush cutter)
         {
             var result = new List<Brush>();
-            if (cutter == null || cutter.operation != BrushOperation.Subtract || cutter.addressedCut) return result;
+            if (cutter == null || cutter.operation != BrushOperation.Subtract || BrushCutTarget.TryScope(cutter, out _)) return result;
             var byModel = BrushesByModel();
             var cutterModel = ModelOf(cutter);
             if (cutterModel == null || !byModel.TryGetValue(cutterModel, out var list)) return result;
@@ -303,7 +302,7 @@ namespace CsgBrush.Editor
             public List<int> pieceRecord = new List<int>();          // per additive piece: record index
             public List<string> pieceKeys = new List<string>();
             public List<List<int>> pieceCutters = new List<List<int>>(); // record indices of the cutters
-            public Dictionary<Brush, HashSet<object>> addressedRecipients = new Dictionary<Brush, HashSet<object>>();
+            public Dictionary<Brush, HashSet<object>> scopedRecipients = new Dictionary<Brush, HashSet<object>>();
             public List<PieceEntry> pieceEntries = new List<PieceEntry>(); // cached or built
             public List<bool> pieceBuilt = new List<bool>();
             public bool needMesh;
@@ -457,8 +456,7 @@ namespace CsgBrush.Editor
             foreach (int j in subtracts)
             {
                 var cutter = job.records[j].brush;
-                if (!cutter.addressedCut) continue;
-                var scope = BrushCutTarget.Scope(cutter);
+                if (!BrushCutTarget.TryScope(cutter, out var scope)) continue;
                 var scopeKey = (scope.Brush, scope.Plan, scope.Start, scope.End);
                 if (!scopes.TryGetValue(scopeKey, out var recipients))
                 {
@@ -468,7 +466,7 @@ namespace CsgBrush.Editor
                             recipients.Add(record.brush);
                     scopes.Add(scopeKey, recipients);
                 }
-                job.addressedRecipients.Add(cutter, recipients);
+                job.scopedRecipients.Add(cutter, recipients);
             }
             var keyBuilder = new System.Text.StringBuilder();
             for (int i = 0; i < job.records.Count; i++)
@@ -480,11 +478,11 @@ namespace CsgBrush.Editor
                 foreach (int j in subtracts)
                 {
                     var c = job.records[j];
-                    bool addressed = job.addressedRecipients.TryGetValue(c.brush, out var recipients);
-                    if (addressed ? !recipients.Contains(r.brush) : j <= i) continue;
+                    bool scoped = job.scopedRecipients.TryGetValue(c.brush, out var recipients);
+                    if (scoped ? !recipients.Contains(r.brush) : j <= i) continue;
                     if (c.layer != r.layer || !Overlap(job, i, j)) continue; // each layer is combined on its own
                     cutters.Add(j); keyBuilder.Append('-').Append(c.key);
-                    if (addressed) keyBuilder.Append('@').Append(j);
+                    if (scoped) keyBuilder.Append('@').Append(j);
                 }
                 string pieceKey = keyBuilder.ToString();
                 s_Pieces.TryGetValue(r.brush, out var pe);
@@ -854,7 +852,7 @@ namespace CsgBrush.Editor
                 }
                 if (r.solid.partsProblem != null && r.brush.problem == null) r.brush.problem = r.solid.partsProblem;
                 var info = Info(r.brush);
-                job.addressedRecipients.TryGetValue(r.brush, out var recipients);
+                job.scopedRecipients.TryGetValue(r.brush, out var recipients);
                 inputs.Add(new ConvexColliderBuilder.Input { name = info.name, subtract = r.subtract, kind = info.kind, fingerprint = info.fingerprint, layer = r.layer, origin = r.solid.colliderOrigin, add = r.solid.partsAdd, remove = r.solid.partsRemove, onPiece = info.onPiece, owner = r.brush, key = r.key, addressedRecipients = recipients });
             }
             var settings = model.GetComponent<ConvexColliderSettings>();

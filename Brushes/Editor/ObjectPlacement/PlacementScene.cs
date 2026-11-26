@@ -13,14 +13,16 @@ namespace CsgBrush.Editor
             internal readonly Component Owner;
             internal readonly Bounds Bounds;
             internal readonly Mesh Mesh;
+            internal readonly bool Authored;
             internal PlacementGeometry Geometry;
             internal int[] WireIndices;
 
-            internal Part(Component owner, Bounds bounds, Mesh mesh = null)
+            internal Part(Component owner, Bounds bounds, Mesh mesh = null, bool authored = false)
             {
                 Owner = owner;
                 Bounds = bounds;
                 Mesh = mesh;
+                Authored = authored;
             }
 
             internal Vector3 World(int vertex) => Owner.transform.TransformPoint(Geometry.Vertices[vertex]);
@@ -49,8 +51,10 @@ namespace CsgBrush.Editor
         const float MagnetRadius = 14f; // Scene GUI points
         readonly List<Part> targets = new List<Part>();
         readonly List<Part> moving = new List<Part>();
+        readonly Dictionary<Brush, Part> targetBrushes = new Dictionary<Brush, Part>();
         readonly Dictionary<Mesh, PlacementGeometry> meshes = new Dictionary<Mesh, PlacementGeometry>();
         readonly Transform source;
+        readonly bool hasMovingSolid;
 
         internal PlacementScene(Transform source)
         {
@@ -63,7 +67,9 @@ namespace CsgBrush.Editor
                 bool carried = source != null && owner.transform.IsChildOf(source);
                 if (!ObjectPlacement.IsSelectableGeometry(owner.transform)) return;
                 occupied.Add(owner.transform);
-                (carried ? moving : targets).Add(new Part(owner, bounds, mesh));
+                var part = new Part(owner, bounds, mesh, authored: carried);
+                (carried ? moving : targets).Add(part);
+                if (!carried && owner is Brush brush) targetBrushes.Add(brush, part);
             }
             foreach (var brush in stage.FindComponentsOfType<Brush>())
                 if (brush.isActiveAndEnabled && BrushHooks.LocalShape(brush, out var bounds) != null) Add(brush, bounds);
@@ -76,12 +82,18 @@ namespace CsgBrush.Editor
                 if (collider.enabled && collider.sharedMesh != null) Add(collider, collider.sharedMesh.bounds, collider.sharedMesh);
             foreach (var box in stage.FindComponentsOfType<BoxCollider>())
                 if (box.enabled) Add(box, new Bounds(box.center, box.size));
+            hasMovingSolid = moving.Exists(part => part.Owner is Brush brush && brush.operation == BrushOperation.Add);
         }
 
         PlacementGeometry Read(Part part)
         {
             if (part.Geometry != null) return part.Geometry;
-            if (part.Owner is Brush brush) return part.Geometry = PlacementGeometry.FromBrush(brush);
+            if (part.Owner is Brush brush)
+            {
+                if (!part.Authored && brush.operation == BrushOperation.Subtract) return null;
+                if (!part.Authored && LoadCsgGeometry(brush)) return part.Geometry;
+                return part.Geometry = PlacementGeometry.FromBrush(brush);
+            }
             if (part.Mesh != null)
             {
                 if (!meshes.TryGetValue(part.Mesh, out var data))
@@ -108,9 +120,12 @@ namespace CsgBrush.Editor
         {
             Feature best = default;
             float nearest = MagnetRadius * MagnetRadius, depth = float.PositiveInfinity;
-            foreach (var part in targets)
+            foreach (var target in targets)
             {
-                if (part.Owner == null || !MayContainPointer(camera, part, mouse) || !Available(camera, part)) continue;
+                if (target.Owner == null || !MayContainPointer(camera, target, mouse) || !Available(camera, target)) continue;
+                var part = target.Owner is Brush cutter && cutter.operation == BrushOperation.Subtract
+                    ? AuthoredPart(cutter) : target;
+                if (part == null) continue;
                 var geometry = Read(part);
                 if (geometry == null) continue;
                 var matrix = part.Owner.transform.localToWorldMatrix;
@@ -135,6 +150,19 @@ namespace CsgBrush.Editor
                     Consider(face.Center, -1, -1, face);
             }
             return best;
+        }
+
+        internal void GetFeatures(Part part, List<Feature> features)
+        {
+            if (part.Owner is Brush cutter && cutter.operation == BrushOperation.Subtract) return;
+            var geometry = Read(part);
+            if (geometry == null) return;
+            for (int i = 0; i < geometry.Vertices.Length; i++)
+                if (geometry.IsFeatureVertex(i)) features.Add(new Feature(part, i, -1));
+            foreach (var edge in geometry.Edges)
+                features.Add(new Feature(part, edge.x, edge.y));
+            foreach (var face in geometry.Faces)
+                features.Add(new Feature(part, -1, -1, face));
         }
 
         internal bool Available(Camera camera, Part part) =>
@@ -190,11 +218,11 @@ namespace CsgBrush.Editor
                 window = source.GetComponent<Brush>();
                 previewSize = placement.size;
             }
-            DrawMovingWire(rootMatrix, color, window, previewSize);
+            DrawMovingGeometry(rootMatrix, color, window, previewSize);
             return true;
         }
 
-        void DrawMovingWire(Matrix4x4 rootMatrix, Color color, Brush window = null, Vector3 previewSize = default)
+        void DrawMovingGeometry(Matrix4x4 rootMatrix, Color color, Brush window = null, Vector3 previewSize = default)
         {
             foreach (var part in moving)
             {
@@ -218,9 +246,36 @@ namespace CsgBrush.Editor
                     matrix *= Matrix4x4.Translate(pivotShift) * Matrix4x4.Scale(new Vector3(1f, 1f, depthScale)) *
                         Matrix4x4.Translate(-pivotShift);
                 }
+                DrawPreviewFill(part, data, matrix, color);
                 using (new Handles.DrawingScope(color, matrix))
                     Handles.DrawLines(data.Vertices, part.WireIndices);
             }
+        }
+
+        static void DrawPreviewFill(Part part, PlacementGeometry data, Matrix4x4 matrix, Color color)
+        {
+            if (data.PreviewTriangles == null)
+            {
+                BrushPolyhedron poly = null;
+                if (part.Owner is Brush brush) poly = BrushHooks.LocalShape(brush, out _);
+                else if (part.Owner is BoxCollider box) poly = BrushPolyhedron.Box(box.size);
+                var indices = new List<int>();
+                if (poly != null && poly.IsValid)
+                    for (int i = 0; i < poly.faces.Length; i++)
+                        foreach (var triangle in ConvexDecomposition.Triangulate(poly, i)) indices.AddRange(triangle);
+                data.PreviewTriangles = indices.ToArray();
+            }
+            if (data.PreviewTriangles.Length == 0 || !BrushSurfaceGrid.UseOverlayMaterial()) return;
+            GL.PushMatrix();
+            try
+            {
+                GL.MultMatrix(matrix);
+                GL.Begin(GL.TRIANGLES);
+                GL.Color(new Color(color.r, color.g, color.b, 0.22f));
+                foreach (var index in data.PreviewTriangles) GL.Vertex(data.Vertices[index]);
+                GL.End();
+            }
+            finally { GL.PopMatrix(); }
         }
 
         Matrix4x4 PartToSource(Transform part)

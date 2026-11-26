@@ -73,6 +73,30 @@ namespace CsgBrush.Editor
             return false;
         }
 
+        /// <summary>A restricted cut may have no valid target. Only an unscoped cut uses hierarchy order.</summary>
+        internal static bool TryScope(Brush cutter, out BrushCutTarget scope)
+        {
+            if (cutter.addressedCut)
+            {
+                scope = Scope(cutter);
+                return true;
+            }
+
+            if (!cutter.TryGetComponent<BrushGroup>(out _))
+                for (var parent = cutter.transform.parent; parent != null; parent = parent.parent)
+                {
+                    if (parent.TryGetComponent<Brush>(out var brush) && brush.operation == BrushOperation.Add)
+                    {
+                        scope = FromBrush(brush);
+                        return true;
+                    }
+                    if (parent.TryGetComponent<BrushGroup>(out _)) break;
+                }
+
+            scope = default;
+            return false;
+        }
+
         internal static BrushCutTarget Scope(Brush cutter)
         {
             var plan = cutter.cutPlan;

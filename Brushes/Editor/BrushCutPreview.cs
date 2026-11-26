@@ -103,7 +103,7 @@ namespace CsgBrush.Editor
                 {
                     var cut = group[j];
                     if (cut == ignore || cut.operation != BrushOperation.Subtract || cut.gameObject.layer != target.Layer) continue;
-                    if (cut.addressedCut ? !BrushCutTarget.Scope(cut).Contains(brush) : j <= i) continue;
+                    if (BrushCutTarget.TryScope(cut, out var scope) ? !scope.Contains(brush) : j <= i) continue;
                     if (!knownCutters.TryGetValue(cut, out var operand))
                         knownCutters.Add(cut, operand = FromBrush(cut));
                     if (operand != null && operand.bounds.Intersects(source.bounds)) part.cuts.Add(operand);

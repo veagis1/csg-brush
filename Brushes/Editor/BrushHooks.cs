@@ -245,7 +245,7 @@ namespace CsgBrush.Editor
         {
             var e = Event.current;
             EditModeMouse.ReleaseStaleAfter(e); // once every edit mode and tool has had the event
-            if (Application.isPlaying || BrushPivotTool.Active || ObjectPlacementTool.Active) return;
+            if (Application.isPlaying || BrushPivotTool.Active) return;
             if (SurfacePlacementMode.OnSceneGUI(view)) { s_MouseDownValid = false; return; }
             if (BrushSurfaceGrid.OnSceneGUI(view)) { s_MouseDownValid = false; return; }
             if (BrushSettings.instance.showDimensions && !e.alt)

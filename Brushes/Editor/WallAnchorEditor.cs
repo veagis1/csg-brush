@@ -33,7 +33,7 @@ namespace CsgBrush.Editor
             var a = (WallAnchor)target;
             if (a.Plan == null) EditorGUILayout.HelpBox(Tr("Объект свободен. Чтобы привязать его к плану, выберите стену."), MessageType.Info);
             bool picking;
-            using (new EditorGUI.DisabledScope(ObjectPlacementTool.Active || SurfacePlacementMode.Active))
+            using (new EditorGUI.DisabledScope(ObjectPlacementTool.Active))
                 picking = GUILayout.Toggle(Picking, new GUIContent(Tr("Выбрать стену"), Tr("Щёлкните по стене в окне сцены, чтобы привязать объект. Escape отменяет выбор.")), EditorStyles.miniButton);
             if (picking != Picking) { Picking = picking; m_HoverPlan = null; SceneView.RepaintAll(); }
             if (a.Plan == null) return;

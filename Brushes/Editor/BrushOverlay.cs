@@ -23,7 +23,6 @@ namespace CsgBrush.Editor
             var toolbar = new OverlayToolbar();
             toolbar.Add(new IMGUIContainer(DrawCreateMenu));
             toolbar.Add(new IMGUIContainer(ObjectPlacementTool.DrawButton));
-            toolbar.Add(new IMGUIContainer(SurfacePlacementMode.DrawButton));
             toolbar.Add(new IMGUIContainer(() => DrawGridAndVisibility(BrushSettings.instance)));
             toolbar.Add(new IMGUIContainer(DrawSnapMenus));
             toolbar.Add(new IMGUIContainer(DrawTransformTools));
@@ -176,7 +175,6 @@ namespace CsgBrush.Editor
             {
                 DrawCreateMenu();
                 ObjectPlacementTool.DrawButton();
-                SurfacePlacementMode.DrawButton();
             }
 
             DrawGridAndVisibility(s);
