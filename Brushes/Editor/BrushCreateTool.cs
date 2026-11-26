@@ -152,6 +152,23 @@ namespace CsgBrush.Editor
             if (Mathf.Abs(denom) < 1e-8f) return 0f; // parallel: no height information
             return (b * e - c * d) / denom;
         }
+
+        internal static float SphereHeightFromMotion(Vector2 mouseDelta, float diameter, float heightDelta, float grid)
+        {
+            const float movementThreshold = 2f;
+            if (mouseDelta.sqrMagnitude <= movementThreshold * movementThreshold) return diameter;
+            return diameter + (grid > 0f ? BrushSnap.Round(heightDelta, grid) : heightDelta);
+        }
+
+        internal static bool TryGridPoint(Ray ray, Plane plane, out Vector3 point)
+        {
+            point = Vector3.zero;
+            if (!plane.Raycast(ray, out float distance) || distance <= 0f) return false;
+            point = ray.GetPoint(distance);
+            // A float ray intersection can leave a residual above or below the world floor.
+            if (plane.distance == 0f && Mathf.Abs(plane.normal.y) == 1f) point.y = 0f;
+            return true;
+        }
     }
 
     /// <summary>
@@ -192,6 +209,8 @@ namespace CsgBrush.Editor
         enum State { Idle, Base, Width, Height }
         State state;
         Vector3 origin, opposite, normal; Quaternion planeRotation; float height;
+        Vector2 sphereRadiusRelease;
+        float sphereDiameter, sphereHeightReference;
         float side; bool centred;
         Vector3 hoverPoint, hoverNormal, surfaceNormal;
         bool hoverValid, pickingTarget, hadDrawTarget;
@@ -448,6 +467,14 @@ namespace CsgBrush.Editor
                         if (tooSmall) { ResetGesture(); break; } // a click, not a drag
                         if (IsDirected(Shape)) { state = State.Width; side = 0f; centred = false; break; }
                         state = State.Height; height = 0f;
+                        if (Shape == BrushShape.Sphere)
+                        {
+                            CurrentPose(out _, out var size, out _);
+                            sphereDiameter = height = size.y;
+                            sphereRadiusRelease = e.mousePosition;
+                            var ray = HandleUtility.GUIPointToWorldRay(sphereRadiusRelease);
+                            sphereHeightReference = BrushDraw.HeightFromRay(origin, normal, ray);
+                        }
                     }
                     if (e.type == EventType.Repaint) DrawPreview();
                     break;
@@ -477,7 +504,9 @@ namespace CsgBrush.Editor
                     {
                         var ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
                         float h = BrushDraw.HeightFromRay(IsRadial(Shape) || IsCentred(Shape) ? origin : opposite, normal, ray);
-                        height = Grid > 0f ? BrushSnap.Round(h, Grid) : h;
+                        height = Shape == BrushShape.Sphere
+                            ? BrushDraw.SphereHeightFromMotion(e.mousePosition - sphereRadiusRelease, sphereDiameter, h - sphereHeightReference, Grid)
+                            : Grid > 0f ? BrushSnap.Round(h, Grid) : h;
                         e.Use(); SceneView.RepaintAll();
                     }
                     if (e.type == EventType.MouseDown && e.button == 0) { EditModeMouse.Take(controlId); e.Use(); }
@@ -540,8 +569,7 @@ namespace CsgBrush.Editor
             if (view == null) { point = Vector3.zero; normal = Vector3.up; return false; }
             var plane = GridPlane(view);
             normal = plane.normal;
-            if (plane.Raycast(ray, out float t) && t > 0f) { point = ray.GetPoint(t); return true; }
-            point = Vector3.zero; return false;
+            return BrushDraw.TryGridPoint(ray, plane, out point);
         }
 
         /// <summary>

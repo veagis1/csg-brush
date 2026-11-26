@@ -73,7 +73,7 @@ namespace CsgBrush.Editor
                 return TryWindowPlacement(source, candidate, destination, out var placement) &&
                     WallAnchors.MoveWindow(source.GetComponent<Brush>(), placement);
             if (source.position == destination) return false;
-            Undo.RecordObject(source, Tr("Переместить объект к вершине или ребру"));
+            Undo.RecordObject(source, Tr(ObjectPlacementTool.Label));
             source.position = destination;
             foreach (var brush in source.GetComponentsInChildren<Brush>(true))
             {
@@ -82,6 +82,68 @@ namespace CsgBrush.Editor
             }
             PrefabUtility.RecordPrefabInstancePropertyModifications(source);
             return true;
+        }
+
+        internal static bool ApplySurfacePreview(Transform source, Pose pose)
+        {
+            // The original pose must still be restorable if the selection or editability changes during the drag.
+            if (source == null || !ValidSurfacePose(pose)) return false;
+            source.SetPositionAndRotation(pose.position, pose.rotation);
+            RefreshSurfaceSource(source);
+            return true;
+        }
+
+        internal static Quaternion SurfaceLocalRotation(Transform parent, Quaternion worldRotation)
+        {
+            if (parent == null) return worldRotation;
+            var rotation = Quaternion.Inverse(parent.rotation) * worldRotation;
+            var scaleSigns = Vector3.one;
+            for (var ancestor = parent; ancestor != null; ancestor = ancestor.parent)
+            {
+                var scale = ancestor.localScale;
+                scaleSigns.x *= Mathf.Sign(scale.x);
+                scaleSigns.y *= Mathf.Sign(scale.y);
+                scaleSigns.z *= Mathf.Sign(scale.z);
+            }
+            // Unity converts rotations through each reflected ancestor. Conjugating by the
+            // accumulated reflection changes the signs of the quaternion's vector components.
+            return new Quaternion(rotation.x * scaleSigns.y * scaleSigns.z,
+                rotation.y * scaleSigns.x * scaleSigns.z, rotation.z * scaleSigns.x * scaleSigns.y, rotation.w);
+        }
+
+        internal static void RestoreSurfacePreview(Transform source, Vector3 localPosition, Quaternion localRotation)
+        {
+            if (source == null) return;
+            source.SetLocalPositionAndRotation(localPosition, localRotation);
+            RefreshSurfaceSource(source);
+        }
+
+        static void RefreshSurfaceSource(Transform source)
+        {
+            BrushSnap.InvalidateParents();
+            foreach (var brush in source.GetComponentsInChildren<Brush>(true))
+            {
+                BrushSnap.Accept(brush);
+                BrushSync.NotifyTransformChanged(brush);
+                brush.transform.hasChanged = false;
+            }
+        }
+
+        internal static bool CommitSurface(Transform source, Pose pose)
+        {
+            if (!CanMove(source) || IsWallWindow(source) || !ValidSurfacePose(pose)) return false;
+            if (source.position.Equals(pose.position) && Quaternion.Angle(source.rotation, pose.rotation) < 0.001f) return false;
+            Undo.RegisterCompleteObjectUndo(source, Tr("Переместить на"));
+            ApplySurfacePreview(source, pose);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(source);
+            return true;
+        }
+
+        static bool ValidSurfacePose(Pose pose)
+        {
+            float rotationLengthSquared = Quaternion.Dot(pose.rotation, pose.rotation);
+            return float.IsFinite(pose.position.sqrMagnitude) &&
+                float.IsFinite(rotationLengthSquared) && rotationLengthSquared > 1e-8f;
         }
     }
 }

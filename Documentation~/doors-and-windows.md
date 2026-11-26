@@ -41,7 +41,7 @@ A door or window is an ordinary brush. Its **Size** in the Brush Inspector sets 
 
 To move an opening along its wall, use the **Move** tool. The opening snaps back onto the nearest wall. If you drag it far from every wall, it stays where you put it as a free cut.
 
-For a window attached to a Floor Plan, edit **WCS origin** in the Brush Inspector or choose **WCS** > **Snap WCS to Vertex** to pick a corner or an edge midpoint. The anchor still sets the opening's position and sill height. To move the window by its chosen origin, select **Move to**, pick the destination wall and then click the position along it. The sill keeps its height above the destination floor. See [placement in 0.6.1](fork-0.6.1.md).
+For a window attached to a Floor Plan, edit **WCS origin** in the Brush Inspector or choose **WCS** > **Snap WCS** to pick a corner, an edge midpoint or a face centre. The anchor still sets the opening's position and sill height. To move the window by its chosen origin, select **Move to**, pick the destination wall and then click the position along it. The sill keeps its height above the destination floor. [Placement in 0.6.1](fork-0.6.1.md).
 
 ## Additional resources
 

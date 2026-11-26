@@ -6,7 +6,7 @@ using UnityEngine;
 namespace CsgBrush.Editor
 {
     // One catalogue per gesture. Read a mesh's indices only when the pointer reaches its bounds.
-    internal sealed class PlacementScene
+    internal sealed partial class PlacementScene
     {
         internal sealed class Part
         {
@@ -24,15 +24,26 @@ namespace CsgBrush.Editor
             }
 
             internal Vector3 World(int vertex) => Owner.transform.TransformPoint(Geometry.Vertices[vertex]);
+            internal Vector3 World(Vector3 local) => Owner.transform.TransformPoint(local);
         }
 
         internal readonly struct Feature
         {
             internal readonly Part Part;
             internal readonly int A, B;
-            internal Feature(Part part, int a, int b) { Part = part; A = a; B = b; }
+            internal readonly PlacementGeometry.Face Face;
+            internal Feature(Part part, int a, int b, PlacementGeometry.Face face = null)
+            {
+                Part = part;
+                A = a;
+                B = b;
+                Face = face;
+            }
+
+            internal bool FaceCenter => Face != null && A < 0;
             internal bool Midpoint => B >= 0;
-            internal Vector3 Position => Midpoint ? (Part.World(A) + Part.World(B)) * 0.5f : Part.World(A);
+            internal Vector3 Position => FaceCenter ? Part.World(Face.Center) :
+                Midpoint ? (Part.World(A) + Part.World(B)) * 0.5f : Part.World(A);
         }
 
         const float MagnetRadius = 14f; // Scene GUI points
@@ -49,9 +60,8 @@ namespace CsgBrush.Editor
             void Add(Component owner, Bounds bounds, Mesh mesh = null)
             {
                 if (owner == null || occupied.Contains(owner.transform)) return;
-                bool carried = owner.transform.IsChildOf(source);
-                if (carried ? !ObjectPlacement.IsSelectableGeometry(owner.transform) :
-                    !ObjectPlacement.CanTarget(source, owner.transform)) return;
+                bool carried = source != null && owner.transform.IsChildOf(source);
+                if (!ObjectPlacement.IsSelectableGeometry(owner.transform)) return;
                 occupied.Add(owner.transform);
                 (carried ? moving : targets).Add(new Part(owner, bounds, mesh));
             }
@@ -104,31 +114,40 @@ namespace CsgBrush.Editor
                 var geometry = Read(part);
                 if (geometry == null) continue;
                 var matrix = part.Owner.transform.localToWorldMatrix;
-                void Consider(Vector3 local, int a, int b)
+                void Consider(Vector3 local, int a, int b, PlacementGeometry.Face face = null)
                 {
-                    var p = HandleUtility.WorldToGUIPointWithDepth(camera, matrix.MultiplyPoint3x4(local));
+                    var world = matrix.MultiplyPoint3x4(local);
+                    var p = HandleUtility.WorldToGUIPointWithDepth(camera, world);
                     if (p.z < camera.nearClipPlane || p.z > camera.farClipPlane) return;
                     float distance = ((Vector2)p - mouse).sqrMagnitude;
                     if (distance > nearest || (Mathf.Approximately(distance, nearest) && p.z >= depth)) return;
-                    best = new Feature(part, a, b);
+                    if (face != null && !IsVisible(camera, part, face, world)) return;
+                    best = new Feature(part, a, b, face);
                     nearest = distance;
                     depth = p.z;
                 }
                 var vertices = geometry.Vertices;
-                for (int i = 0; i < vertices.Length; i++) Consider(vertices[i], i, -1);
+                for (int i = 0; i < vertices.Length; i++)
+                    if (geometry.IsFeatureVertex(i)) Consider(vertices[i], i, -1);
                 foreach (var edge in geometry.Edges)
                     Consider((vertices[edge.x] + vertices[edge.y]) * 0.5f, edge.x, edge.y);
+                foreach (var face in geometry.Faces)
+                    Consider(face.Center, -1, -1, face);
             }
             return best;
         }
 
-        internal bool Available(Camera camera, Part part)
+        internal bool Available(Camera camera, Part part) =>
+            VisiblePart(part, camera.cullingMask & Tools.visibleLayers) && ObjectPlacement.CanTarget(source, part.Owner.transform);
+
+        static bool VisiblePart(Part part, int layers)
         {
-            if (part.Owner == null || (camera.cullingMask & Tools.visibleLayers & (1 << part.Owner.gameObject.layer)) == 0)
+            if (part.Owner == null || (layers & (1 << part.Owner.gameObject.layer)) == 0 ||
+                !ObjectPlacement.IsSelectableGeometry(part.Owner.transform))
                 return false;
             if (part.Owner is Brush brush && (!brush.isActiveAndEnabled ||
                 (brush.operation == BrushOperation.Subtract && !brush.IsOpening && !BrushSettings.instance.showCuts))) return false;
-            return ObjectPlacement.CanTarget(source, part.Owner.transform);
+            return true;
         }
 
         static bool MayContainPointer(Camera camera, Part part, Vector2 mouse)
@@ -156,7 +175,7 @@ namespace CsgBrush.Editor
 
         internal bool DrawPreview(Component candidate, Vector3 destination, Color color, out Vector3 workingOrigin)
         {
-            var shift = Matrix4x4.Translate(destination - source.position);
+            var rootMatrix = Matrix4x4.Translate(destination - source.position) * source.localToWorldMatrix;
             workingOrigin = destination;
             Brush window = null;
             Vector3 previewSize = default;
@@ -165,16 +184,21 @@ namespace CsgBrush.Editor
                 if (!ObjectPlacement.TryWindowPlacement(source, candidate, destination, out var placement)) return false;
                 var plan = placement.plan.transform;
                 var inverseRotation = Quaternion.Inverse(plan.rotation);
-                var toDestination = plan.localToWorldMatrix * Matrix4x4.TRS(plan.InverseTransformPoint(placement.position),
+                rootMatrix = plan.localToWorldMatrix * Matrix4x4.TRS(plan.InverseTransformPoint(placement.position),
                     inverseRotation * placement.rotation, placement.localScale);
-                shift = toDestination * source.worldToLocalMatrix;
                 workingOrigin = placement.position;
                 window = source.GetComponent<Brush>();
                 previewSize = placement.size;
             }
+            DrawMovingWire(rootMatrix, color, window, previewSize);
+            return true;
+        }
+
+        void DrawMovingWire(Matrix4x4 rootMatrix, Color color, Brush window = null, Vector3 previewSize = default)
+        {
             foreach (var part in moving)
             {
-                if (part.Owner == null) continue;
+                if (part.Owner == null || !part.Owner.transform.IsChildOf(source)) continue;
                 var data = Read(part);
                 if (data == null) continue;
                 if (part.WireIndices == null)
@@ -186,7 +210,7 @@ namespace CsgBrush.Editor
                         part.WireIndices[i * 2 + 1] = data.Edges[i].y;
                     }
                 }
-                var matrix = shift * part.Owner.transform.localToWorldMatrix;
+                var matrix = rootMatrix * PartToSource(part.Owner.transform);
                 if (window != null && part.Owner == window)
                 {
                     var pivotShift = window.PivotShift;
@@ -197,7 +221,14 @@ namespace CsgBrush.Editor
                 using (new Handles.DrawingScope(color, matrix))
                     Handles.DrawLines(data.Vertices, part.WireIndices);
             }
-            return true;
+        }
+
+        Matrix4x4 PartToSource(Transform part)
+        {
+            var matrix = Matrix4x4.identity;
+            for (var item = part; item != source; item = item.parent)
+                matrix = Matrix4x4.TRS(item.localPosition, item.localRotation, item.localScale) * matrix;
+            return matrix;
         }
     }
 }

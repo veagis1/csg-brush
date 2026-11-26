@@ -7,6 +7,41 @@ namespace CsgBrush.Tests
     /// <summary>The geometry behind the Create tools: base rectangle on a plane, height along its normal, always on the grid.</summary>
     public class BrushDrawTests
     {
+        [TestCase(60.456f, -1f)]
+        [TestCase(-60.456f, 2f)]
+        [TestCase(231.123f, -1f)]
+        public void WorldFloorIntersectionHasExactlyZeroHeight(float originY, float directionY)
+        {
+            var ray = new Ray(new Vector3(0.2f, originY, -0.3f), new Vector3(17f, directionY, 11f));
+            var normal = originY > 0f ? Vector3.up : Vector3.down;
+            var plane = new Plane(normal, Vector3.zero);
+            Assert.That(BrushDraw.TryGridPoint(ray, plane, out var point), Is.True);
+            Assert.That(point.y, Is.Zero);
+
+            var frame = BrushSurfaceGrid.Frame.OnPlane(point, normal);
+            Assert.That(BrushDraw.SnapInPlane(point, frame.Origin, frame.Rotation, 0f).y, Is.Zero);
+            Assert.That(BrushDraw.SnapInPlane(point, frame.Origin, frame.Rotation, 0.125f).y, Is.Zero);
+        }
+
+        [Test]
+        public void AGridPlaneAboveTheWorldFloorKeepsItsHeight()
+        {
+            var plane = new Plane(Vector3.up, new Vector3(0f, 0.75f, 0f));
+            var ray = new Ray(new Vector3(1f, 2f, 3f), Vector3.down);
+            Assert.That(BrushDraw.TryGridPoint(ray, plane, out var point), Is.True);
+            Assert.That(point.y, Is.EqualTo(0.75f));
+        }
+
+        [Test]
+        public void SphereHeightChangesOnlyAfterMovingPastTheRadiusRelease()
+        {
+            const float diameter = 4f;
+            Assert.That(BrushDraw.SphereHeightFromMotion(Vector2.zero, diameter, -1.42f, 0f), Is.EqualTo(diameter));
+            Assert.That(BrushDraw.SphereHeightFromMotion(Vector2.one, diameter, -1.42f, 0.5f), Is.EqualTo(diameter));
+            Assert.That(BrushDraw.SphereHeightFromMotion(Vector2.right * 5f, diameter, -1.42f, 0.5f), Is.EqualTo(2.5f));
+            Assert.That(BrushDraw.SphereHeightFromMotion(Vector2.right * 5f, diameter, 1.25f, 0f), Is.EqualTo(5.25f));
+        }
+
         [Test]
         public void GroundPlaneBoxFromDragAndHeight()
         {

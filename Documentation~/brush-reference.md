@@ -25,7 +25,7 @@ Some shapes are drawn differently:
 | **Box** | Drag the base rectangle, then set the height. |
 | **Wedge**, **Linear Stairs** | Press at the low end and drag to the high end, then release. Click to set the width; it goes to the side the pointer is on, and **Shift** centres it on the line. Then click to set the height. The direction snaps to the rotation snap, and the length to the grid. |
 | **Arch** | As a wedge, but the line is the span: press at one foot and drag to the other, then release. Click to set the depth, then the height. |
-| **Cylinder**, **Cone**, **Sphere** | Press on the centre of the base, drag the radius, then set the height. A sphere with no height is round; lift it to make an ellipsoid. |
+| **Cylinder**, **Cone**, **Sphere** | Press on the centre of the base and drag to set the radius. For a round sphere, release and click again at the same spot. Move the pointer after releasing to adjust the height from the sphere's diameter. |
 | **Curved Stairs**, **Spiral Stairs** | Press where the column's axis goes and drag the outer radius. The drag direction is where the first step starts. Then set the height. The brush's transform is on the axis, at floor level. |
 | **Door**, **Window** | Click once. See [Doors and windows](doors-and-windows.md). |
 | **Floor Plan** | Click the corners of the walls. See [Floor plans](floor-plans.md). |
@@ -125,7 +125,11 @@ Useful pivots:
 
 Setting the pivot moves the transform, never the shape. Switching the pivot mode doesn't move anything. On a Custom shape, setting the pivot moves the vertices instead.
 
-Select one editable brush and choose **WCS** > **Snap WCS to Vertex** in the CSG Brush overlay, or click **Snap WCS to Vertex** in the Inspector. Pick a vertex or an edge midpoint. Move and Rotate now use that origin and the local axes. **Reset WCS** returns the origin to the centre of the geometry. A [window on a floor plan wall](doors-and-windows.md#change-a-door-or-window) can have its own origin. For generated geometry, set the origin on its floor plan or spline.
+Select one editable brush and choose **WCS** > **Snap WCS** in the CSG Brush overlay, or click **Snap WCS** in the Inspector. Pick a vertex, an edge midpoint or a face centre. Move and Rotate now use that origin and the local axes. **Reset WCS** returns the origin to the centre of the geometry. A window on a floor plan wall can have its own origin. For generated geometry, set the origin on its floor plan or spline. [Window settings](doors-and-windows.md#change-a-door-or-window).
+
+**Move to** places the WCS at the selected point. **Move onto** switches to the Move tool. Hold Shift and drag a rod onto a visible face to seat its base there with local +Y pointing out of the surface. Release on a free point to place it. On a yellow marker, release and click again to align exactly. A solid square marks a vertex, an open square marks an edge midpoint, and a diamond with a dot inside marks a face centre.
+
+From a face centre, move toward an edge midpoint to choose a guide. Hold Ctrl to measure from the centre in grid steps, or enter the distance in **Offset (m)** and click **Apply**. Zero returns to the centre. Esc cancels the preview. Undo restores the previous pose.
 
 ## Add and subtract
 

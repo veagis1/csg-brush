@@ -220,7 +220,7 @@ namespace CsgBrush.Editor
         /// selects a brush only then, so every tool keeps its clicks, as with Unity's selection. Unity's control is read from
         /// the Scene view; if a future Unity hides it, only whether something holds the mouse is checked.
         /// </summary>
-        static bool UnitySelectionTakes(SceneView view)
+        internal static bool UnitySelectionTakes(SceneView view)
         {
             if (GUIUtility.hotControl != 0) return false;
             if (!s_RectSelectionLooked)
@@ -246,6 +246,7 @@ namespace CsgBrush.Editor
             var e = Event.current;
             EditModeMouse.ReleaseStaleAfter(e); // once every edit mode and tool has had the event
             if (Application.isPlaying || BrushPivotTool.Active || ObjectPlacementTool.Active) return;
+            if (SurfacePlacementMode.OnSceneGUI(view)) { s_MouseDownValid = false; return; }
             if (BrushSurfaceGrid.OnSceneGUI(view)) { s_MouseDownValid = false; return; }
             if (BrushSettings.instance.showDimensions && !e.alt)
                 BrushShapeDrawing.DrawSelectionDimensions();

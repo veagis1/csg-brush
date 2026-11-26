@@ -241,8 +241,8 @@ namespace CsgBrush.Editor
             }
             float height = last.HasValue ? last.Value.y : spline.GraphToWorld(Vector3.zero).y;
             var level = new Plane(Vector3.up, new Vector3(0f, height, 0f));
-            if (!level.Raycast(ray, out float t) || t <= 0f) { world = default; return false; }
-            world = SnapAcross(ray.GetPoint(t), Vector3.up, g);
+            if (!BrushDraw.TryGridPoint(ray, level, out point)) { world = default; return false; }
+            world = SnapAcross(point, Vector3.up, g);
             return true;
         }
 
@@ -404,11 +404,10 @@ namespace CsgBrush.Editor
             if (surface == null)
             {
                 normal = Vector3.up;
-                if (!new Plane(normal, Vector3.zero).Raycast(ray, out float t) || t <= 0f)
+                if (!BrushDraw.TryGridPoint(ray, new Plane(normal, Vector3.zero), out point))
                 {
                     grid = default; world = default; return false;
                 }
-                point = ray.GetPoint(t);
             }
             grid = surface != null && BrushSurfaceGrid.Local ? BrushSurfaceGrid.ForSurface(surface, point, normal)
                 : BrushSurfaceGrid.Frame.OnPlane(point, normal);

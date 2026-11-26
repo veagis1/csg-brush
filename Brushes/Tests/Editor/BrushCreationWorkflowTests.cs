@@ -80,6 +80,18 @@ namespace CsgBrush.Tests
             Assert.That(frame.Plane.GetDistanceToPoint(snapped), Is.EqualTo(0f).Within(0.0001f));
         }
 
+        [TestCase(BrushShape.Door)]
+        [TestCase(BrushShape.Window)]
+        public void AFreeOpeningStartsExactlyOnTheWorldFloor(BrushShape shape)
+        {
+            var ray = new Ray(new Vector3(0.2f, 60.456f, -0.3f), new Vector3(17f, -1f, 11f));
+            Assert.That(WallAnchors.Find(ray, shape, out var placement), Is.True);
+            Assert.That(placement.drawingPoint.HasValue, Is.True);
+            Assert.That(placement.drawingPoint.Value.y, Is.Zero);
+            var opening = WallAnchors.Create(shape, placement);
+            Assert.That(opening.transform.position.y, Is.Zero);
+        }
+
         [Test]
         public void CreationCommandsAreRegisteredInBothMenus()
         {

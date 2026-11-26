@@ -84,8 +84,7 @@ namespace CsgBrush.Editor
             if (hit == null)
             {
                 var ground = new Plane(Vector3.up, Vector3.zero);
-                if (!ground.Raycast(ray, out float t) || t <= 0f) return false;
-                point = ray.GetPoint(t);
+                if (!BrushDraw.TryGridPoint(ray, ground, out point)) return false;
             }
             var f = -ray.direction; f.y = 0f;
             var facing = Mathf.Abs(f.x) > Mathf.Abs(f.z) ? new Vector3(Mathf.Sign(f.x), 0f, 0f) : new Vector3(0f, 0f, Mathf.Sign(f.z == 0f ? 1f : f.z));
