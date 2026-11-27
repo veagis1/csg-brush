@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &54548632
+--- !u!1 &145408962
 GameObject:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,296 +127,10 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 54548633}
-  - component: {fileID: 54548635}
-  - component: {fileID: 54548634}
-  m_Layer: 0
-  m_Name: solid Box
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 87
-  m_IsActive: 1
---- !u!4 &54548633
-Transform:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 54548632}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0, y: 0, z: -0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 506383677}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &54548634
-MonoBehaviour:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 54548632}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9137c0abd57e4619ba5713a85fa7d808, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: CsgBrush.Colliders::CsgBrush.Colliders.ConvexPiece
-  planes:
-  - {x: 0, y: 0, z: -1, w: -200.25}
-  - {x: 1, y: 0, z: 0, w: 42.5}
-  - {x: -1, y: 0, z: 0, w: -77.625}
-  - {x: 0, y: 0, z: 1, w: 109}
-  - {x: 0, y: 1, z: 0, w: -49}
-  - {x: -0, y: -1, z: -0, w: 48.375}
-  hash: 2126096678
-  fingerprint: 1129631580
-  trigger: 0
-  layer: 0
-  brushName: Box
---- !u!65 &54548635
-BoxCollider:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 54548632}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 35.125, y: 0.625, z: 91.25}
-  m_Center: {x: -60.0625, y: 48.6875, z: -154.625}
---- !u!1 &56418617
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 56418619}
-  - component: {fileID: 56418618}
-  m_Layer: 0
-  m_Name: Box
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 87
-  m_IsActive: 1
---- !u!114 &56418618
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 56418617}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9c7a22e872ebd4138911afc312347e36, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: CsgBrush::CsgBrush.Brush
-  polyhedron:
-    vertices: []
-    faces: []
-  customFrom: 0
-  shape: 0
-  operation: 0
-  collision: 0
-  physicsMaterial: {fileID: 0}
-  provideContacts: 0
-  legacySurface: 0
-  legacyNoFallDamage: 0
-  size: {x: 35.125, y: 57.375, z: 91.25}
-  exactSizeMeters: {x: 35.125, y: 57.375, z: 91.25}
-  workGridOwner: {fileID: 0}
-  workGridOrigin: {x: 0, y: 0, z: 0}
-  workGridRotation: {x: 0, y: 0, z: 0, w: 1}
-  compoundPart: 0
-  addressedCut: 0
-  cutTarget: {fileID: 0}
-  cutPlan: {fileID: 0}
-  cutWallStartId: 0
-  cutWallEndId: 0
-  generatedWallStartId: 0
-  generatedWallEndId: 0
-  pivot: {x: 1, y: 0, z: 0}
-  pivotMode: 0
-  pivotOutsideBounds: 0
-  shapeOriginOffsetMeters: {x: 0, y: 0, z: 0}
-  gridSnap: 0
-  hollow: 0
-  wallThickness: 0.5
-  sides: 16
-  tessellation: 2
-  stepHeight: 0.25
-  innerRadius: 0.125
-  stepWidth: 35
-  stepThickness: 0.1
-  supportUnderSteps: 1
-  curveAngle: 90
-  numSteps: 230
-  stepsPer360: 16
-  addToFirstStep: 0
-  counterClockwise: 0
-  slopedFloor: 0
-  slopedCeiling: 0
-  material: {fileID: 0}
-  cutFaces: 0
-  generatedBy: {fileID: 0}
---- !u!4 &56418619
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 56418617}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -42.5, y: -8.375, z: -200.25}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &506383676
-GameObject:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 506383677}
-  m_Layer: 0
-  m_Name: <[convex colliders]>
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &506383677
-Transform:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 506383676}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 1579646829}
-  - {fileID: 729330437}
-  - {fileID: 1338627822}
-  - {fileID: 1718076779}
-  - {fileID: 1996519794}
-  - {fileID: 54548633}
-  - {fileID: 1984531432}
-  m_Father: {fileID: 1999193872}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &729330436
-GameObject:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 729330437}
-  - component: {fileID: 729330439}
-  - component: {fileID: 729330438}
-  m_Layer: 0
-  m_Name: solid Box
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 87
-  m_IsActive: 1
---- !u!4 &729330437
-Transform:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 729330436}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0, y: 0, z: -0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 506383677}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &729330438
-MonoBehaviour:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 729330436}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9137c0abd57e4619ba5713a85fa7d808, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: CsgBrush.Colliders::CsgBrush.Colliders.ConvexPiece
-  planes:
-  - {x: -1, y: 0, z: 0, w: -56.5}
-  - {x: 0, y: 0, z: -1, w: -72.75}
-  - {x: 1, y: 0, z: 0, w: 32.125}
-  - {x: 0, y: 1, z: 0, w: -33}
-  - {x: 0, y: -1, z: 0, w: 17.375}
-  - {x: -0, y: -0, z: 1, w: 62.25}
-  hash: -66541274
-  fingerprint: 1129631580
-  trigger: 0
-  layer: 0
-  brushName: Box
---- !u!65 &729330439
-BoxCollider:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 729330436}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 24.375, y: 15.625, z: 10.5}
-  m_Center: {x: -44.3125, y: 25.1875, z: -67.5}
---- !u!1 &890334638
-GameObject:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 890334639}
-  - component: {fileID: 890334642}
-  - component: {fileID: 890334641}
-  - component: {fileID: 890334640}
+  - component: {fileID: 145408963}
+  - component: {fileID: 145408966}
+  - component: {fileID: 145408965}
+  - component: {fileID: 145408964}
   m_Layer: 0
   m_Name: <[mesh]>
   m_TagString: Untagged
@@ -424,13 +138,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 87
   m_IsActive: 1
---- !u!4 &890334639
+--- !u!4 &145408963
 Transform:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 890334638}
+  m_GameObject: {fileID: 145408962}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -439,33 +153,32 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1999193872}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &890334640
+--- !u!114 &145408964
 MonoBehaviour:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 890334638}
+  m_GameObject: {fileID: 145408962}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ffc713a59b9d460e900e8e8e050e3e8e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: CsgBrush::CsgBrush.BrushMeshSources
-  runStarts: 00000000060000001c00000030000000i
+  runStarts: 00000000120000001c000000i
   runBrushes:
-  - {fileID: 1748675270}
-  - {fileID: 56418618}
-  - {fileID: 2060699459}
-  - {fileID: 1012328722}
-  triangles: 56
+  - {fileID: 214214232}
+  - {fileID: 1964295195}
+  - {fileID: 2092637128}
+  triangles: 40
   lightmapUVSettings: 278676357
---- !u!23 &890334641
+--- !u!23 &145408965
 MeshRenderer:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 890334638}
+  m_GameObject: {fileID: 145408962}
   m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
@@ -508,107 +221,15 @@ MeshRenderer:
   m_SortingOrder: 0
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &890334642
+--- !u!33 &145408966
 MeshFilter:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 890334638}
-  m_Mesh: {fileID: 1369200025}
---- !u!1 &1012328720
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1012328721}
-  - component: {fileID: 1012328722}
-  m_Layer: 0
-  m_Name: Box
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 87
-  m_IsActive: 1
---- !u!4 &1012328721
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1012328720}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -16.25, y: 33, z: 10.5}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 2060699460}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1012328722
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1012328720}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9c7a22e872ebd4138911afc312347e36, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: CsgBrush::CsgBrush.Brush
-  polyhedron:
-    vertices: []
-    faces: []
-  customFrom: 0
-  shape: 0
-  operation: 1
-  collision: 0
-  physicsMaterial: {fileID: 0}
-  provideContacts: 0
-  legacySurface: 0
-  legacyNoFallDamage: 0
-  size: {x: 23.5, y: 15.625, z: 38}
-  exactSizeMeters: {x: 23.5, y: 15.625, z: 38}
-  workGridOwner: {fileID: 2060699460}
-  workGridOrigin: {x: 0, y: 33, z: 0}
-  workGridRotation: {x: 0, y: 0, z: 0, w: 1}
-  compoundPart: 0
-  addressedCut: 1
-  cutTarget: {fileID: 2060699459}
-  cutPlan: {fileID: 0}
-  cutWallStartId: 0
-  cutWallEndId: 0
-  generatedWallStartId: 0
-  generatedWallEndId: 0
-  pivot: {x: 0, y: 1, z: 0}
-  pivotMode: 0
-  pivotOutsideBounds: 0
-  shapeOriginOffsetMeters: {x: 0, y: 0, z: 0}
-  gridSnap: 0
-  hollow: 0
-  wallThickness: 0.5
-  sides: 16
-  tessellation: 2
-  stepHeight: 0.25
-  innerRadius: 0.125
-  stepWidth: 23.375
-  stepThickness: 0.1
-  supportUnderSteps: 1
-  curveAngle: 90
-  numSteps: 62
-  stepsPer360: 16
-  addToFirstStep: 0
-  counterClockwise: 0
-  slopedFloor: 0
-  slopedCeiling: 0
-  material: {fileID: 0}
-  cutFaces: 0
-  generatedBy: {fileID: 0}
---- !u!1 &1338627821
+  m_GameObject: {fileID: 145408962}
+  m_Mesh: {fileID: 996260423}
+--- !u!1 &184375917
 GameObject:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
@@ -616,9 +237,9 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1338627822}
-  - component: {fileID: 1338627824}
-  - component: {fileID: 1338627823}
+  - component: {fileID: 184375918}
+  - component: {fileID: 184375920}
+  - component: {fileID: 184375919}
   m_Layer: 0
   m_Name: solid Box
   m_TagString: Untagged
@@ -626,52 +247,52 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 87
   m_IsActive: 1
---- !u!4 &1338627822
+--- !u!4 &184375918
 Transform:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1338627821}
+  m_GameObject: {fileID: 184375917}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0, y: 0, z: -0}
+  m_LocalPosition: {x: -4.5, y: 0, z: -69.125}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 506383677}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1338627823
+--- !u!114 &184375919
 MonoBehaviour:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1338627821}
+  m_GameObject: {fileID: 184375917}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9137c0abd57e4619ba5713a85fa7d808, type: 3}
   m_Name: 
   m_EditorClassIdentifier: CsgBrush.Colliders::CsgBrush.Colliders.ConvexPiece
   planes:
-  - {x: 0, y: 0, z: 1, w: 17.25}
-  - {x: -1, y: 0, z: 0, w: -56.5}
-  - {x: 1, y: 0, z: 0, w: 32.125}
-  - {x: 0, y: 1, z: 0, w: -33}
-  - {x: 0, y: -1, z: 0, w: 17.375}
-  - {x: -0, y: -0, z: -1, w: -24.25}
-  hash: -1467340506
+  - {x: 0, y: 0, z: -1, w: -0}
+  - {x: 1, y: 0, z: 0, w: -0}
+  - {x: -1, y: 0, z: 0, w: -44.5}
+  - {x: 0, y: -1, z: 0, w: 2}
+  - {x: 0, y: 1, z: 0, w: -7}
+  - {x: -0, y: -0, z: 1, w: -17}
+  hash: 2145823014
   fingerprint: 1129631580
   trigger: 0
   layer: 0
   brushName: Box
---- !u!65 &1338627824
+--- !u!65 &184375920
 BoxCollider:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1338627821}
+  m_GameObject: {fileID: 184375917}
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2
@@ -684,9 +305,451 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 24.375008, y: 15.625, z: 7.000004}
-  m_Center: {x: -44.312504, y: 25.1875, z: -20.749998}
---- !u!43 &1369200025
+  m_Size: {x: 44.500004, y: 5, z: 17}
+  m_Center: {x: -22.250002, y: 4.5, z: 8.5}
+--- !u!1 &191109059
+GameObject:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 191109060}
+  - component: {fileID: 191109062}
+  - component: {fileID: 191109061}
+  m_Layer: 0
+  m_Name: solid Box
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 87
+  m_IsActive: 1
+--- !u!4 &191109060
+Transform:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 191109059}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -4.5, y: 0, z: -69.125}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 506383677}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &191109061
+MonoBehaviour:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 191109059}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9137c0abd57e4619ba5713a85fa7d808, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CsgBrush.Colliders::CsgBrush.Colliders.ConvexPiece
+  planes:
+  - {x: 0, y: 0, z: -1, w: -0}
+  - {x: 1, y: 0, z: 0, w: -0}
+  - {x: -1, y: 0, z: 0, w: -44.5}
+  - {x: 0, y: 0, z: 1, w: -55.375}
+  - {x: 0, y: 1, z: 0, w: -12.125}
+  - {x: -0, y: -1, z: -0, w: 7}
+  hash: 1941842214
+  fingerprint: 1129631580
+  trigger: 0
+  layer: 0
+  brushName: Box
+--- !u!65 &191109062
+BoxCollider:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 191109059}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 44.500008, y: 5.125, z: 55.375}
+  m_Center: {x: -22.250004, y: 9.5625, z: 27.6875}
+--- !u!1 &212404505
+GameObject:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 212404506}
+  - component: {fileID: 212404508}
+  - component: {fileID: 212404507}
+  m_Layer: 0
+  m_Name: solid Box
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 87
+  m_IsActive: 1
+--- !u!4 &212404506
+Transform:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 212404505}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 506383677}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &212404507
+MonoBehaviour:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 212404505}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9137c0abd57e4619ba5713a85fa7d808, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CsgBrush.Colliders::CsgBrush.Colliders.ConvexPiece
+  planes:
+  - {x: 0, y: -1, z: 0, w: -5.75}
+  - {x: 0, y: 1, z: 0, w: -0}
+  - {x: 0, y: 0, z: -1, w: -82.625}
+  - {x: 0, y: 0, z: 1, w: 69.125}
+  - {x: -1, y: 0, z: 0, w: -20.375}
+  - {x: 1, y: 0, z: 0, w: -11.375}
+  hash: -1775425242
+  fingerprint: 1129631580
+  trigger: 0
+  layer: 0
+  brushName: Box
+--- !u!65 &212404508
+BoxCollider:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 212404505}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 31.750008, y: 5.750009, z: 13.500015}
+  m_Center: {x: -4.500004, y: -2.8750026, z: -75.875}
+--- !u!1 &214214231
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 214214233}
+  - component: {fileID: 214214232}
+  m_Layer: 0
+  m_Name: Box
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 87
+  m_IsActive: 1
+--- !u!114 &214214232
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 214214231}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9c7a22e872ebd4138911afc312347e36, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CsgBrush::CsgBrush.Brush
+  polyhedron:
+    vertices: []
+    faces: []
+  customFrom: 0
+  shape: 0
+  operation: 0
+  collision: 0
+  physicsMaterial: {fileID: 0}
+  provideContacts: 0
+  legacySurface: 0
+  legacyNoFallDamage: 0
+  size: {x: 44.5, y: 12.125, z: 55.375}
+  exactSizeMeters: {x: 44.5, y: 12.125, z: 55.375}
+  workGridOwner: {fileID: 0}
+  workGridOrigin: {x: 0, y: 0, z: 0}
+  workGridRotation: {x: 0, y: 0, z: 0, w: 1}
+  compoundPart: 0
+  addressedCut: 0
+  cutTarget: {fileID: 0}
+  cutPlan: {fileID: 0}
+  cutWallStartId: 0
+  cutWallEndId: 0
+  generatedWallStartId: 0
+  generatedWallEndId: 0
+  pivot: {x: 1, y: 0, z: 0}
+  pivotMode: 0
+  pivotOutsideBounds: 0
+  shapeOriginOffsetMeters: {x: 0, y: 0, z: 0}
+  gridSnap: 1
+  hollow: 0
+  wallThickness: 0.5
+  sides: 16
+  tessellation: 2
+  stepHeight: 0.25
+  innerRadius: 0.125
+  stepWidth: 44.375
+  stepThickness: 0.1
+  supportUnderSteps: 1
+  curveAngle: 90
+  numSteps: 48
+  stepsPer360: 16
+  addToFirstStep: 0
+  counterClockwise: 0
+  slopedFloor: 0
+  slopedCeiling: 0
+  material: {fileID: 0}
+  cutFaces: 0
+  generatedBy: {fileID: 0}
+--- !u!4 &214214233
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 214214231}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -4.5, y: 0, z: -69.125}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1964295196}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &271073427
+GameObject:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 271073428}
+  - component: {fileID: 271073430}
+  - component: {fileID: 271073429}
+  m_Layer: 0
+  m_Name: solid Box
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 87
+  m_IsActive: 1
+--- !u!4 &271073428
+Transform:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 271073427}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -4.5, y: 0, z: -69.125}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 506383677}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &271073429
+MonoBehaviour:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 271073427}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9137c0abd57e4619ba5713a85fa7d808, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CsgBrush.Colliders::CsgBrush.Colliders.ConvexPiece
+  planes:
+  - {x: 0, y: 0, z: -1, w: -0}
+  - {x: 0, y: -1, z: 0, w: -0}
+  - {x: 1, y: 0, z: 0, w: -0}
+  - {x: -1, y: 0, z: 0, w: -44.5}
+  - {x: 0, y: 0, z: 1, w: -55.375}
+  - {x: -0, y: 1, z: -0, w: -2}
+  hash: -1755567834
+  fingerprint: 1129631580
+  trigger: 0
+  layer: 0
+  brushName: Box
+--- !u!65 &271073430
+BoxCollider:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 271073427}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 44.500008, y: 2, z: 55.374996}
+  m_Center: {x: -22.250004, y: 1, z: 27.687498}
+--- !u!1 &506383676
+GameObject:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 506383677}
+  m_Layer: 0
+  m_Name: <[convex colliders]>
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &506383677
+Transform:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 506383676}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 271073428}
+  - {fileID: 191109060}
+  - {fileID: 184375918}
+  - {fileID: 586895704}
+  - {fileID: 1276836270}
+  - {fileID: 212404506}
+  m_Father: {fileID: 1999193872}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &586895703
+GameObject:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 586895704}
+  - component: {fileID: 586895706}
+  - component: {fileID: 586895705}
+  m_Layer: 0
+  m_Name: solid Box
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 87
+  m_IsActive: 1
+--- !u!4 &586895704
+Transform:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 586895703}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -4.5, y: 0, z: -69.125}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 506383677}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &586895705
+MonoBehaviour:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 586895703}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9137c0abd57e4619ba5713a85fa7d808, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CsgBrush.Colliders::CsgBrush.Colliders.ConvexPiece
+  planes:
+  - {x: 1, y: 0, z: 0, w: -0}
+  - {x: -1, y: 0, z: 0, w: -44.5}
+  - {x: 0, y: 0, z: 1, w: -55.375}
+  - {x: 0, y: -1, z: 0, w: 2}
+  - {x: 0, y: 1, z: 0, w: -7}
+  - {x: -0, y: -0, z: -1, w: 39}
+  hash: 81275174
+  fingerprint: 1129631580
+  trigger: 0
+  layer: 0
+  brushName: Box
+--- !u!65 &586895706
+BoxCollider:
+  m_ObjectHideFlags: 9
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 586895703}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 44.499996, y: 5, z: 16.375}
+  m_Center: {x: -22.250002, y: 4.5, z: 47.1875}
+--- !u!43 &996260423
 Mesh:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -697,14 +760,14 @@ Mesh:
   m_SubMeshes:
   - serializedVersion: 2
     firstByte: 0
-    indexCount: 168
+    indexCount: 120
     topology: 0
     baseVertex: 0
     firstVertex: 0
-    vertexCount: 96
+    vertexCount: 72
     localAABB:
-      m_Center: {x: -54.875, y: 20.3125, z: -108.75}
-      m_Extent: {x: 22.75, y: 28.6875, z: 91.5}
+      m_Center: {x: -18.8125, y: 3.1875, z: -48.1875}
+      m_Extent: {x: 30.1875, y: 8.9375, z: 34.4375}
   m_Shapes:
     vertices: []
     shapes: []
@@ -721,10 +784,10 @@ Mesh:
   m_KeepVertices: 0
   m_KeepIndices: 0
   m_IndexFormat: 0
-  m_IndexBuffer: 00000100020003000400050006000700080003000500090001000a000200080007000b000c000d000e000c000e000f001000110012001300140015000d0016000e001700180019000c000f001a001a000f001b001c001d001e001b000f001f0020002100220023002400250023002600240012001100270018002800190025002400290014002a00150026002b00240026002c002b001d002d001e00200022002e002c002f002b0030003100320033003400350036003700380039003a003b0039003b003c0031003d0032003a003e003b003f00400041003a0042003e004300440045003500340046003f004700400043004500480037004900380043004a0044003c003b004b004a004c004400480045004d0042004e003e004d0045004f005000510052005200510053005400550056005700580059005a005600550057005b0058005c005d005e005c005e005f00y
+  m_IndexBuffer: 0000010002000200010003000400050006000700080009000a000b000c0005000d00060008000e0009000f00100011000f00120010000b0013000c00140015001600140017001500140018001700180019001700160015001a0016001a001900170019001b001a001b0019001c001d001e001c001e001f00200021002200210023002200240025002600260025002700280029002a0029002b002a002c002d002e002c002e002f003000310032003100330032003400350036003700380039003a003b003c003d003e003f003600350040003a0041003b003800420039004300440045004500440046003f003e004700y
   m_VertexData:
     serializedVersion: 3
-    m_VertexCount: 96
+    m_VertexCount: 72
     m_Channels:
     - stream: 0
       offset: 0
@@ -782,8 +845,8 @@ Mesh:
       offset: 0
       format: 0
       dimension: 0
-    m_DataSize: 3840
-    _typelessdata: 00409bc20000000000802ac300000000000000000000803f00409bc2000000003c98283f8b1d423f00002ac20000000000802ac300000000000000000000803f00002ac2000000003d98283f69066c3f00409bc20080414200802ac300000000000000000000803f00409bc2008041425cc0dd3e8b1d423f00409bc20000000000802ac3000000000000803f0000000000409bc200802ac30000803b0fd3363f00409bc2000000000000dac2000000000000803f0000000000409bc20000dac226c2943e0fd3363f00002ac2000000000000dac2000000000000803f0000000000002ac20000dac227c2943eecbb603f00409bc2008041420000dac200000000000080bf0000000000409bc20000dac262c0dd3e2cea8c3e00409bc20080414200802ac300000000000080bf0000000000409bc200802ac34041383f2cea8c3e00002ac2008041420000dac200000000000080bf0000000000002ac20000dac25cc0dd3eeabbe03e00002ac20000000000802ac3000000000000803f0000000000002ac200802ac33800803becbb603f00002ac20080414200802ac300000000000000000000803f00002ac2008041425dc0dd3e69066c3f00002ac20080414200802ac300000000000080bf0000000000002ac200802ac33d41383feabbe03e00409bc2000006c1004048c3000080bf0000000000000000004048c3000006c10000803b2dea8c3e00409bc2000006c10000dac2000080bf00000000000000000000dac2000006c15cc0db3e2cea8c3e00409bc20000000000802ac3000080bf000000000000000000802ac30000000062fc113e70e6a03e00409bc20080414200802ac3000080bf000000000000000000802ac30080414263fc113e4a2b0a3f00409bc2000006c1004048c300000000000080bf0000000000409bc2004048c3c1c05b3f0000803b00002ac2000006c1004048c300000000000080bf0000000000002ac2004048c3c1c05b3f74a32b3e00409bc2000006c10000dac200000000000080bf0000000000409bc20000dac22fc1dd3e0000803b00409bc2000006c1004048c30000000000000000000080bf00409bc2000006c14141393f2cea8c3e00409bc200004442004048c30000000000000000000080bf00409bc20000444258b67d3f2cea8c3e00002ac2000006c1004048c30000000000000000000080bf00002ac2000006c14041393fe9bbe03e00409bc2000000000000dac2000080bf00000000000000000000dac20000000055c0db3e6fe6a03e00409bc2000006c10000dac200000000000000000000803f00409bc2000006c160c0dd3e69066d3f00002ac2000006c10000dac200000000000000000000803f00002ac2000006c10dc9183f69066d3f00409bc2000000000000dac200000000000000000000803f00409bc2000000005cc0dd3e8a04773f00409bc200004442004048c3000080bf0000000000000000004048c3000044422a00803b30ea0a3f00409bc2000044420000dac2000080bf00000000000000000000dac20000444283bedb3e30ea0a3f00409bc200004442004048c3000000000000803f0000000000409bc2004048c3e502803b30ea0b3f00409bc2000044420000dac2000000000000803f0000000000409bc20000dac252c0db3e30ea0b3f00002ac200004442004048c3000000000000803f0000000000002ac2004048c30000803b0fd3353f00409bc2008041420000dac2000080bf00000000000000000000dac20080414283bedb3e4a2b0a3f00409bc2000044420000dac200000000000000000000803f00409bc20000444232c1dd3e9916823e00409bc2008041420000dac200000000000000000000803f00409bc2008041422fc1dd3eca98803e00002ac2008041420000dac200000000000000000000803f00002ac20080414277c9183fca98803e00002ac2000006c1004048c30000803f0000000000000000004048c3000006c12fc1db3e0000803b00002ac20000000000802ac30000803f000000000000000000802ac30000000004c3943e0fe22f3d00002ac2000006c10000dac20000803f00000000000000000000dac2000006c16139803b3b00803b00002ac200004442004048c30000803f0000000000000000004048c3000044422fc1db3e2cea8a3e00002ac2000006c10000dac200000000000080bf0000000000002ac20000dac231c1dd3e74a32b3e00002ac2000000000000dac200000000000000000000803f00002ac2000000000bc9183f8a04773f00002ac2000000000000dac20000803f00000000000000000000dac2000000006c39803b0ce22f3d00002ac200004442004048c30000000000000000000080bf00002ac20000444256b67d3fe9bbe03e00002ac20080414200802ac30000803f000000000000000000802ac30080414204c3943e5b6c893e00002ac2000044420000dac20000803f00000000000000000000dac2000044420000803b27ea8a3e00002ac2000044420000dac2000000000000803f0000000000002ac20000dac247c0db3e0fd3353f00002ac2000044420000dac200000000000000000000803f00002ac20000444278c9183f9916823e00002ac2008041420000dac20000803f00000000000000000000dac2008041424c00803b556c893e000062c200000000008091c2000080bf0000000000000000008091c2000000005fc0dd3ec0bd193f000062c20000000000008ac1000080bf000000000000000000008ac1000000008e18313fc0bd193f000062c200000442008091c2000080bf0000000000000000008091c2000004425cc0dd3e8b1d413f000062c200000000008091c200000000000080bf00000000000062c2008091c2c370863eecbb613f008000c200000000008091c200000000000080bf00000000008000c2008091c2c570863e38d17e3f000062c20000000000008ac100000000000080bf00000000000062c200008ac10000803becbb613f000062c200000000008091c20000000000000000000080bf000062c2000000008f18323fc0bd193f000062c200000442008091c20000000000000000000080bf000062c2000004425978593fc0bd193f008000c200000000008091c20000000000000000000080bf008000c2000000008e18323f0dd3363f000062c200000442008091c2000000000000803f00000000000062c2008091c28f18323feabbe23e000062c20000044200008ac1000000000000803f00000000000062c200008ac1f050743feabbe23e008041c200000442000079c2000000000000803f00000000008041c2000079c2c49f3e3f721ff63e008000c200000442008091c2000000000000803f00000000008000c2008091c28f18323f41730e3f000062c20000044200008ac1000080bf000000000000000000008ac1000004428d18313f8b1d413f008041c2000004420000c2c1000000000000803f00000000008041c20000c2c1cbf66b3f731ff63e000062c20000000000008ac100000000000000000000803f000062c2000000005978593f0dd3373f008000c20000044200008ac100000000000000000000803f008000c2000004428e18323f59e8543f000062c20000044200008ac100000000000000000000803f000062c2000004428f18323f0dd3373f008000c20000044200008ac1000000000000803f00000000008000c200008ac1ed50743f44730e3f008000c200000000008091c20000803f0000000000000000008091c2000000008f18313feabbe23e008000c200008b41000079c20000803f0000000000000000000079c200008b415a91243f1f19063f008000c200008b410000c2c10000803f00000000000000000000c2c100008b41a374ee3e1f19063f008000c20000000000008ac100000000000080bf00000000008000c200008ac15400803b38d17e3f008000c20000000000008ac100000000000000000000803f008000c2000000005978593f59e8543f008000c20000000000008ac10000803f000000000000000000008ac1000000005cc0dd3eebbbe23e008000c200000442008091c20000000000000000000080bf008000c2000004425978593f0dd3363f008000c200000442008091c20000803f0000000000000000008091c2000004428f18313fc0bd183f008000c200000442000079c2000000000000803f00000000008000c2000079c2c49f3e3f40730e3f008000c200000442000079c20000803f0000000000000000000079c2000004425a91243fc0bd183f008000c20000044200008ac10000803f000000000000000000008ac10000044261c0dd3ebebd183f008000c2000004420000c2c1000000000000803f00000000008000c20000c2c1c9f66b3f42730e3f008000c2000004420000c2c10000803f00000000000000000000c2c100000442a474ee3ebebd183f008041c200008b41000079c20000803f0000000000000000000079c200008b41aa8e4a3f74a32f3e008041c200000442000079c20000803f0000000000000000000079c200000442ab8e4a3ff5357a3e008041c200008b410000c2c10000803f00000000000000000000c2c100008b41a1371d3f74a32f3e008041c2000004420000c2c10000803f00000000000000000000c2c100000442a1371d3ff5357a3e008041c200008b41000079c200000000000000000000803f008041c200008b41c1c05c3f6100803b008000c200008b41000079c200000000000000000000803f008000c200008b414b24703f0000803b008041c200000442000079c200000000000000000000803f008041c200000442c2c05c3f06259d3d008041c200008b41000079c2000000000000803f00000000008041c2000079c22fc1dd3e74a32f3e008000c200008b410000c2c1000000000000803f00000000008000c20000c2c1a1371c3f94317d3e008000c200008b41000079c2000000000000803f00000000008000c2000079c230c1dd3e94317d3e008000c200000442000079c200000000000000000000803f008000c2000004424b24703f00259d3d008041c200008b410000c2c1000000000000803f00000000008041c20000c2c1a1371c3f74a32f3e008041c200008b410000c2c10000000000000000000080bf008041c200008b414b24703f0c25a53d008041c2000004420000c2c10000000000000000000080bf008041c2000004424b24703f06251d3e008000c2000004420000c2c10000000000000000000080bf008000c200000442c1c05c3f03251d3e008000c200008b410000c2c10000000000000000000080bf008000c200008b41c2c05c3f0625a53d
+    m_DataSize: 2880
+    _typelessdata: 000044c20000000000408ac200000000000080bf00000000000044c200408ac224f8fc3e3851033f000090c00000000000408ac200000000000080bf00000000000090c000408ac225f8fc3e8028683f000044c20000000000005cc100000000000080bf00000000000044c200005cc10000803b3851033f000090c00000000000005cc100000000000080bf00000000000090c000005cc14100803b8028683f000044c20000000000408ac20000000000000000000080bf000044c2000000005e53643f88cfeb3d000044c20000424100408ac20000000000000000000080bf000044c2000042415e53643f83cf633e000090c00000000000408ac20000000000000000000080bf000090c00000000027f8fe3e88cfeb3d000044c20000000000408ac2000080bf000000000000000000408ac2000000004503803b0000803b000044c20000000000005cc1000080bf000000000000000000005cc1000000002bf8fc3e0000803b000044c20000424100408ac2000080bf000000000000000000408ac2000042410000803b88cfe33d000044c20000424100408ac2000000000000803f00000000000044c200408ac20800803b88cfeb3d000044c20000424100005cc1000000000000803f00000000000044c200005cc127f8fc3e88cfeb3d000090c00000424100408ac2000000000000803f00000000000090c000408ac20000803b3851023f000090c00000424100408ac20000000000000000000080bf000090c00000424127f8fe3e83cf633e000044c20000424100005cc1000080bf000000000000000000005cc1000042411ef8fc3e88cfe33d000044c20000000000005cc100000000000000000000803f000044c20000000027f8fe3e83cf673e000090c00000424100005cc100000000000000000000803f000090c0000042415e53643fa1dbaa3e000044c20000424100005cc100000000000000000000803f000044c20000424127f8fe3ea1dbaa3e000090c00000000000005cc100000000000000000000803f000090c0000000005e53643f83cf673e000090c00000424100005cc1000000000000803f00000000000090c000005cc127f8fc3e3851023f000090c000000040008050c20000803f0000000000000000008050c2000000402372563f9407b13c000090c00000000000408ac20000803f000000000000000000408ac20000000029f87c3f0000803b000090c00000e040008050c20000803f0000000000000000008050c20000e0402472563fa5e6863d000090c00000000000005cc10000803f000000000000000000005cc1000000002cf8fe3e0000803b000090c0000000400000f1c10000803f00000000000000000000f1c1000000408697243f9207b13c000090c00000e0400000f1c10000803f00000000000000000000f1c10000e0408797243fa5e6863d000090c00000424100408ac20000803f000000000000000000408ac20000424129f87c3f83cfe33d000090c00000424100005cc10000803f000000000000000000005cc1000042412bf8fe3e81cfe33d000080c100000040008050c2000000000000803f00000000000080c1008050c2da6e483fd50aec3e000080c1000000400000f1c1000000000000803f00000000000080c10000f1c178497a3fd50aec3e000090c0000000400000f1c1000000000000803f00000000000090c00000f1c178497a3fc714103f000090c000000040008050c2000000000000803f00000000000090c0008050c2da6e483fc714103f000080c100000040008050c200000000000000000000803f000080c1000000406053653f253a273e000090c000000040008050c200000000000000000000803f000090c000000040bc627f3f253a273e000080c10000e040008050c200000000000000000000803f000080c10000e0405e53653f868c543e000090c00000e040008050c200000000000000000000803f000090c00000e040bb627f3f868c543e000080c100000040008050c20000803f0000000000000000008050c200000040c89af73e8028693f000080c10000e040008050c20000803f0000000000000000008050c20000e040c99af73e187d743f000080c1000000400000f1c10000803f00000000000000000000f1c1000000408de5933e8028693f000080c10000e0400000f1c10000803f00000000000000000000f1c10000e0408de5933e187d743f000080c10000e040008050c200000000000080bf00000000000080c1008050c279497a3fa1dbac3e000090c00000e040008050c200000000000080bf00000000000090c0008050c279497a3f5afae03e000080c10000e0400000f1c100000000000080bf00000000000080c10000f1c1db6e483fa1dbac3e000090c00000e0400000f1c100000000000080bf00000000000090c00000f1c1dc6e483f5afae03e000080c1000000400000f1c10000000000000000000080bf000080c100000040bc627f3f88cfeb3d000080c10000e0400000f1c10000000000000000000080bf000080c10000e040bb627f3f253a233e000090c00000e0400000f1c10000000000000000000080bf000090c00000e0405e53653f253a233e000090c0000000400000f1c10000000000000000000080bf000090c0000000406053653f88cfeb3d0000a3c10000b8c00040a5c2000080bf00000000000000000040a5c20000b8c02af8fe3eb5a4233f0000a3c10000b8c000408ac2000080bf000000000000000000408ac20000b8c0ae131e3fb5a4233f0000a3c1000000000040a5c2000080bf00000000000000000040a5c20000000027f8fe3e64ac303f0000a3c10000000000408ac2000080bf000000000000000000408ac200000000ad131e3f64ac303f0000a3c10000b8c00040a5c200000000000080bf000000000000a3c10040a5c22ef8fe3ed50aec3e000036410000b8c00040a5c200000000000080bf00000000000036410040a5c2da6e473fd50aec3e0000a3c10000b8c000408ac200000000000080bf000000000000a3c100408ac227f8fe3e069d143f0000a3c10000b8c00040a5c20000000000000000000080bf0000a3c10000b8c08de5913e8028693f0000a3c1000000000040a5c20000000000000000000080bf0000a3c1000000008de5913e2f30763f000036410000b8c00040a5c20000000000000000000080bf000036410000b8c00000803b8028693f0000a3c10000b8c000408ac200000000000000000000803f0000a3c10000b8c027f8fe3e069d153f000036410000000000408ac200000000000000000000803f0000364100000000da6e473fb5a4223f0000a3c10000000000408ac200000000000000000000803f0000a3c10000000027f8fe3eb4a4223f0000a3c1000000000040a5c2000000000000803f000000000000a3c10040a5c2da6e473fa1dbac3e0000a3c10000000000408ac2000000000000803f000000000000a3c100408ac2db6e473fd30aea3e00003641000000000040a5c2000000000000803f00000000000036410040a5c227f8fe3ea3dbac3e000036410000b8c000408ac200000000000080bf000000000000364100408ac2d66e473f069d143f000036410000b8c000408ac200000000000000000000803f000036410000b8c0da6e473f069d153f00003641000000000040a5c20000000000000000000080bf00003641000000001200803b2f30763f000036410000b8c00040a5c20000803f00000000000000000040a5c20000b8c07506673f069d153f00003641000000000040a5c20000803f00000000000000000040a5c2000000007506673fb4a4223f000036410000b8c000408ac20000803f000000000000000000408ac20000b8c0da6e483f069d153f000036410000000000408ac20000803f000000000000000000408ac200000000da6e483fb4a4223f000036410000000000408ac2000000000000803f000000000000364100408ac229f8fe3ed50aea3e
   m_CompressedMesh:
     m_Vertices:
       m_NumItems: 0
@@ -837,8 +900,8 @@ Mesh:
       m_BitSize: 0
     m_UVInfo: 0
   m_LocalAABB:
-    m_Center: {x: -54.875, y: 20.3125, z: -108.75}
-    m_Extent: {x: 22.75, y: 28.6875, z: 91.5}
+    m_Center: {x: -18.8125, y: 3.1875, z: -48.1875}
+    m_Extent: {x: 30.1875, y: 8.9375, z: 34.4375}
   m_CookingOptions: 30
   m_PreBakeConvexCollisionMesh: 0
   m_PreBakeTriangleCollisionMesh: 0
@@ -865,7 +928,7 @@ Mesh:
       - serializedVersion: 1
         m_IndexStart: 0
         m_IndexCount: 0
---- !u!1 &1579646828
+--- !u!1 &1276836269
 GameObject:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
@@ -873,9 +936,9 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1579646829}
-  - component: {fileID: 1579646831}
-  - component: {fileID: 1579646830}
+  - component: {fileID: 1276836270}
+  - component: {fileID: 1276836272}
+  - component: {fileID: 1276836271}
   m_Layer: 0
   m_Name: solid Box
   m_TagString: Untagged
@@ -883,52 +946,52 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 87
   m_IsActive: 1
---- !u!4 &1579646829
+--- !u!4 &1276836270
 Transform:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1579646828}
+  m_GameObject: {fileID: 1276836269}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0, y: 0, z: -0}
+  m_LocalPosition: {x: -4.5, y: 0, z: -69.125}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 506383677}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1579646830
+--- !u!114 &1276836271
 MonoBehaviour:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1579646828}
+  m_GameObject: {fileID: 1276836269}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9137c0abd57e4619ba5713a85fa7d808, type: 3}
   m_Name: 
   m_EditorClassIdentifier: CsgBrush.Colliders::CsgBrush.Colliders.ConvexPiece
   planes:
-  - {x: 0, y: -1, z: 0, w: 0}
-  - {x: 0, y: 0, z: 1, w: 17.25}
-  - {x: -1, y: 0, z: 0, w: -56.5}
-  - {x: 0, y: 0, z: -1, w: -72.75}
-  - {x: 1, y: 0, z: 0, w: 32.125}
-  - {x: -0, y: 1, z: -0, w: -17.375}
-  hash: -870995674
+  - {x: -1, y: 0, z: 0, w: -44.5}
+  - {x: 0, y: -1, z: 0, w: 2}
+  - {x: 0, y: 1, z: 0, w: -7}
+  - {x: 0, y: 0, z: -1, w: 17}
+  - {x: 0, y: 0, z: 1, w: -39}
+  - {x: 1, y: -0, z: -0, w: 11.5}
+  hash: -1858426586
   fingerprint: 1129631580
   trigger: 0
   layer: 0
   brushName: Box
---- !u!65 &1579646831
+--- !u!65 &1276836272
 BoxCollider:
   m_ObjectHideFlags: 9
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1579646828}
+  m_GameObject: {fileID: 1276836269}
   m_Material: {fileID: 0}
   m_IncludeLayers:
     serializedVersion: 2
@@ -941,87 +1004,9 @@ BoxCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Size: {x: 24.375008, y: 17.375, z: 55.500008}
-  m_Center: {x: -44.312504, y: 8.6875, z: -44.999996}
---- !u!1 &1718076778
-GameObject:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1718076779}
-  - component: {fileID: 1718076781}
-  - component: {fileID: 1718076780}
-  m_Layer: 0
-  m_Name: solid Box
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 87
-  m_IsActive: 1
---- !u!4 &1718076779
-Transform:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1718076778}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0, y: 0, z: -0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 506383677}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1718076780
-MonoBehaviour:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1718076778}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9137c0abd57e4619ba5713a85fa7d808, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: CsgBrush.Colliders::CsgBrush.Colliders.ConvexPiece
-  planes:
-  - {x: -1, y: 0, z: 0, w: -56.5}
-  - {x: 0, y: 1, z: 0, w: -33}
-  - {x: 0, y: -1, z: 0, w: 17.375}
-  - {x: 0, y: 0, z: -1, w: -62.25}
-  - {x: 0, y: 0, z: 1, w: 24.25}
-  - {x: 1, y: -0, z: -0, w: 48.375}
-  hash: -1652938458
-  fingerprint: 1129631580
-  trigger: 0
-  layer: 0
-  brushName: Box
---- !u!65 &1718076781
-BoxCollider:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1718076778}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 8.125008, y: 15.625, z: 38}
-  m_Center: {x: -52.437504, y: 25.1875, z: -43.25}
---- !u!1 &1748675269
+  m_Size: {x: 33, y: 5, z: 22}
+  m_Center: {x: -28, y: 4.5, z: 28}
+--- !u!1 &1964295194
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1029,8 +1014,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1748675271}
-  - component: {fileID: 1748675270}
+  - component: {fileID: 1964295196}
+  - component: {fileID: 1964295195}
   m_Layer: 0
   m_Name: Box
   m_TagString: Untagged
@@ -1038,13 +1023,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 87
   m_IsActive: 1
---- !u!114 &1748675270
+--- !u!114 &1964295195
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1748675269}
+  m_GameObject: {fileID: 1964295194}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9c7a22e872ebd4138911afc312347e36, type: 3}
@@ -1061,35 +1046,35 @@ MonoBehaviour:
   provideContacts: 0
   legacySurface: 0
   legacyNoFallDamage: 0
-  size: {x: 113.625, y: 48.375, z: 171.25}
-  exactSizeMeters: {x: 113.625, y: 48.375, z: 171.25}
-  workGridOwner: {fileID: 0}
-  workGridOrigin: {x: 0, y: 0, z: 0}
+  size: {x: 18, y: 5, z: 22}
+  exactSizeMeters: {x: 18, y: 5.75, z: 22}
+  workGridOwner: {fileID: 214214233}
+  workGridOrigin: {x: 0, y: 12.125, z: 0}
   workGridRotation: {x: 0, y: 0, z: 0, w: 1}
   compoundPart: 0
-  addressedCut: 0
-  cutTarget: {fileID: 0}
+  addressedCut: 1
+  cutTarget: {fileID: 214214232}
   cutPlan: {fileID: 0}
   cutWallStartId: 0
   cutWallEndId: 0
   generatedWallStartId: 0
   generatedWallEndId: 0
-  pivot: {x: 1, y: 0, z: 1}
+  pivot: {x: 0.5, y: 0.5, z: 0.5}
   pivotMode: 0
   pivotOutsideBounds: 0
   shapeOriginOffsetMeters: {x: 0, y: 0, z: 0}
-  gridSnap: 0
+  gridSnap: 1
   hollow: 0
   wallThickness: 0.5
   sides: 16
   tessellation: 2
   stepHeight: 0.25
   innerRadius: 0.125
-  stepWidth: 113.5
+  stepWidth: 17.875
   stepThickness: 0.1
   supportUnderSteps: 1
   curveAngle: 90
-  numSteps: 194
+  numSteps: 23
   stepsPer360: 16
   addToFirstStep: 0
   counterClockwise: 0
@@ -1098,177 +1083,21 @@ MonoBehaviour:
   material: {fileID: 0}
   cutFaces: 0
   generatedBy: {fileID: 0}
---- !u!4 &1748675271
+--- !u!4 &1964295196
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1748675269}
+  m_GameObject: {fileID: 1964295194}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -25.75, y: 0, z: 0.75}
+  m_LocalPosition: {x: -2.5, y: 4.5, z: 28}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 214214233}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1984531431
-GameObject:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1984531432}
-  - component: {fileID: 1984531434}
-  - component: {fileID: 1984531433}
-  m_Layer: 0
-  m_Name: solid Box
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 87
-  m_IsActive: 1
---- !u!4 &1984531432
-Transform:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1984531431}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0, y: 0, z: -0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 506383677}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1984531433
-MonoBehaviour:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1984531431}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9137c0abd57e4619ba5713a85fa7d808, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: CsgBrush.Colliders::CsgBrush.Colliders.ConvexPiece
-  planes:
-  - {x: 0, y: 0, z: -1, w: -200.25}
-  - {x: 1, y: 0, z: 0, w: 42.5}
-  - {x: -1, y: 0, z: 0, w: -77.625}
-  - {x: 0, y: -1, z: 0, w: 0}
-  - {x: 0, y: 1, z: 0, w: -48.375}
-  - {x: -0, y: -0, z: 1, w: 170.5}
-  hash: 29763878
-  fingerprint: 1129631580
-  trigger: 0
-  layer: 0
-  brushName: Box
---- !u!65 &1984531434
-BoxCollider:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1984531431}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 35.125, y: 48.375, z: 29.75}
-  m_Center: {x: -60.0625, y: 24.187498, z: -185.375}
---- !u!1 &1996519793
-GameObject:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1996519794}
-  - component: {fileID: 1996519796}
-  - component: {fileID: 1996519795}
-  m_Layer: 0
-  m_Name: solid Box
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 87
-  m_IsActive: 1
---- !u!4 &1996519794
-Transform:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1996519793}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0, y: 0, z: -0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 506383677}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1996519795
-MonoBehaviour:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1996519793}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9137c0abd57e4619ba5713a85fa7d808, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: CsgBrush.Colliders::CsgBrush.Colliders.ConvexPiece
-  planes:
-  - {x: 0, y: -1, z: 0, w: -8.375}
-  - {x: 0, y: 0, z: -1, w: -200.25}
-  - {x: 1, y: 0, z: 0, w: 42.5}
-  - {x: -1, y: 0, z: 0, w: -77.625}
-  - {x: 0, y: 0, z: 1, w: 109}
-  - {x: -0, y: 1, z: -0, w: -0}
-  hash: 163195174
-  fingerprint: 1129631580
-  trigger: 0
-  layer: 0
-  brushName: Box
---- !u!65 &1996519796
-BoxCollider:
-  m_ObjectHideFlags: 9
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1996519793}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 35.125, y: 8.374998, z: 91.25003}
-  m_Center: {x: -60.0625, y: -4.187499, z: -154.625}
 --- !u!1 &1999193869
 GameObject:
   m_ObjectHideFlags: 9
@@ -1303,12 +1132,12 @@ MonoBehaviour:
   minPieceVolume: 0.000001
   showInHierarchy: 0
   lastGeometryHash: 1
-  brushCount: 4
-  pieceCount: 7
-  boxColliders: 7
+  brushCount: 3
+  pieceCount: 6
+  boxColliders: 6
   meshColliders: 0
   triggerVolumes: 0
-  buildMilliseconds: 0.01
+  buildMilliseconds: 0.0086
 --- !u!114 &1999193871
 MonoBehaviour:
   m_ObjectHideFlags: 9
@@ -1322,7 +1151,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: CsgBrush::CsgBrush.BrushGroup
   isDefault: 1
-  builtKey: -277759118
+  builtKey: -234017431
   moving: 0
   rendering:
     castShadows: 1
@@ -1356,10 +1185,10 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 506383677}
-  - {fileID: 890334639}
+  - {fileID: 145408963}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &2060699458
+--- !u!1 &2092637127
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1367,8 +1196,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 2060699460}
-  - component: {fileID: 2060699459}
+  - component: {fileID: 2092637129}
+  - component: {fileID: 2092637128}
   m_Layer: 0
   m_Name: Box
   m_TagString: Untagged
@@ -1376,13 +1205,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 87
   m_IsActive: 1
---- !u!114 &2060699459
+--- !u!114 &2092637128
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2060699458}
+  m_GameObject: {fileID: 2092637127}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9c7a22e872ebd4138911afc312347e36, type: 3}
@@ -1399,8 +1228,8 @@ MonoBehaviour:
   provideContacts: 0
   legacySurface: 0
   legacyNoFallDamage: 0
-  size: {x: 24.375, y: 33, z: 55.5}
-  exactSizeMeters: {x: 24.375, y: 33, z: 55.5}
+  size: {x: 31.75, y: 5.75, z: 13.5}
+  exactSizeMeters: {x: 31.75, y: 5.75, z: 13.5}
   workGridOwner: {fileID: 0}
   workGridOrigin: {x: 0, y: 0, z: 0}
   workGridRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -1412,7 +1241,7 @@ MonoBehaviour:
   cutWallEndId: 0
   generatedWallStartId: 0
   generatedWallEndId: 0
-  pivot: {x: 1, y: 0, z: 0}
+  pivot: {x: 0, y: 1, z: 1}
   pivotMode: 0
   pivotOutsideBounds: 0
   shapeOriginOffsetMeters: {x: 0, y: 0, z: 0}
@@ -1423,11 +1252,11 @@ MonoBehaviour:
   tessellation: 2
   stepHeight: 0.25
   innerRadius: 0.125
-  stepWidth: 24.25
+  stepWidth: 31.625
   stepThickness: 0.1
   supportUnderSteps: 1
   curveAngle: 90
-  numSteps: 132
+  numSteps: 23
   stepsPer360: 16
   addToFirstStep: 0
   counterClockwise: 0
@@ -1436,20 +1265,19 @@ MonoBehaviour:
   material: {fileID: 0}
   cutFaces: 0
   generatedBy: {fileID: 0}
---- !u!4 &2060699460
+--- !u!4 &2092637129
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2060699458}
+  m_GameObject: {fileID: 2092637127}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -32.125, y: 0, z: -72.75}
+  m_LocalPosition: {x: -20.375, y: 0, z: -69.125}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 1012328721}
+  m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
@@ -1457,6 +1285,5 @@ SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
   - {fileID: 1999193872}
-  - {fileID: 56418619}
-  - {fileID: 1748675271}
-  - {fileID: 2060699460}
+  - {fileID: 214214233}
+  - {fileID: 2092637129}
