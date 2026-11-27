@@ -317,6 +317,132 @@ namespace CsgBrush.Tests
             finally { BrushCreateTool.ManualOperation = previousOperation; }
         }
 
+        [TestCase(BrushShape.Box, false)]
+        [TestCase(BrushShape.Box, true)]
+        [TestCase(BrushShape.Cylinder, true)]
+        [TestCase(BrushShape.Sphere, true)]
+        public void CreationUsesTheVisiblePocketPlaneAndKeepsTheAutomaticCutTarget(BrushShape shape, bool locked)
+        {
+            var cutter = OpenTowerPocket(locked);
+            var settings = BrushSettings.instance;
+            var previousOperation = BrushCreateTool.ManualOperation;
+            bool previousLocalGrid = BrushSurfaceGrid.Local;
+            bool previousSnap = settings.snapToGrid;
+            var previousGridSizes = settings.gridSizes;
+            int previousGridIndex = settings.gridIndex;
+            try
+            {
+                BrushCreateTool.ManualOperation = null;
+                BrushSurfaceGrid.Local = true;
+                settings.snapToGrid = true;
+                settings.gridSizes = new[] { 0.5f };
+                settings.gridIndex = 0;
+                switch (shape)
+                {
+                    case BrushShape.Box: BrushMenu.ActivateCreation<CreateBoxBrushTool>(); break;
+                    case BrushShape.Cylinder: BrushMenu.ActivateCreation<CreateCylinderBrushTool>(); break;
+                    case BrushShape.Sphere: BrushMenu.ActivateCreation<CreateSphereBrushTool>(); break;
+                }
+
+                var corner = TowerPocketCenter;
+                var opposite = corner + new Vector3(0.5f, 0.5f, 0f);
+                var start = Gui(corner + new Vector3(0.09f, 0.11f, 0f));
+                var end = Gui(opposite);
+                Send(EventType.MouseDown, start);
+                MoveTo(start, end, EventType.MouseDrag);
+                Send(EventType.MouseUp, end);
+                Assert.That(BrushCreateTool.Active.Drawing, Is.True);
+
+                var finish = shape == BrushShape.Box ? Gui(opposite + Vector3.forward * 0.5f) :
+                    shape == BrushShape.Cylinder ? Gui(corner + Vector3.back * 0.5f) : end;
+                if (shape != BrushShape.Sphere) MoveTo(end, finish);
+                Click(finish);
+
+                var created = Selection.activeGameObject?.GetComponent<Brush>();
+                Assert.That(created, Is.Not.Null);
+                Assert.That(created, Is.Not.SameAs(m_Tower));
+                Assert.That(created, Is.Not.SameAs(cutter));
+                Assert.That(created.shape, Is.EqualTo(shape));
+                Assert.That(Vector3.Distance(created.transform.position, corner), Is.LessThan(0.001f));
+                Assert.That(Vector3.Dot(created.transform.up, Vector3.back), Is.GreaterThan(0.9999f));
+                using var serialized = new SerializedObject(created);
+                Assert.That(serialized.FindProperty("workGridOwner").objectReferenceValue, Is.SameAs(m_Tower.transform));
+                Assert.That(created.operation, Is.EqualTo(shape == BrushShape.Box ? BrushOperation.Subtract : BrushOperation.Add));
+                if (shape == BrushShape.Box)
+                {
+                    Assert.That(serialized.FindProperty("addressedCut").boolValue, Is.True);
+                    Assert.That(serialized.FindProperty("cutTarget").objectReferenceValue, Is.SameAs(m_Tower));
+                    Assert.That(created.transform.parent, Is.SameAs(m_Tower.transform));
+                    Assert.That(created.transform.parent, Is.Not.SameAs(cutter.transform));
+                }
+            }
+            finally
+            {
+                ToolManager.RestorePreviousPersistentTool();
+                SceneVisibilityManager.instance.EnablePicking(cutter.gameObject, false);
+                BrushCreateTool.ManualOperation = previousOperation;
+                BrushSurfaceGrid.Local = previousLocalGrid;
+                settings.snapToGrid = previousSnap;
+                settings.gridSizes = previousGridSizes;
+                settings.gridIndex = previousGridIndex;
+            }
+        }
+
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public void MoveToUsesTheVisiblePocketWithMagnetAndFreeGrid(bool locked, bool magnet)
+        {
+            var cutter = OpenTowerPocket(locked);
+            var settings = BrushSettings.instance;
+            var previousGridSizes = settings.gridSizes;
+            int previousGridIndex = settings.gridIndex;
+            try
+            {
+                settings.gridSizes = new[] { 0.5f };
+                settings.gridIndex = 0;
+                var source = GameObject.CreatePrimitive(PrimitiveType.Cube).transform;
+                source.position = new Vector3(-4f, 2f, 0f);
+                Selection.activeGameObject = source.gameObject;
+                SurfacePlacementMode.Perpendicular = true;
+                SurfacePlacementMode.Magnet = magnet;
+                ObjectPlacementTool.Begin();
+
+                var centre = TowerPocketCenter;
+                var contact = magnet ? centre : centre + new Vector3(0.17f, 0.13f, 0f);
+                var mouse = Gui(contact);
+                var modifiers = EventModifiers.Shift | (magnet ? EventModifiers.None : EventModifiers.Control);
+                Send(EventType.MouseDown, mouse, modifiers);
+                Assert.That(Vector3.Dot(source.up, Vector3.back), Is.GreaterThan(0.9999f));
+                Assert.That(Vector3.Distance(source.position, centre + Vector3.back * 0.5f), Is.LessThan(0.02f));
+                Send(EventType.MouseUp, mouse, modifiers);
+                if (magnet) Click(mouse);
+                Assert.That(SurfacePlacementMode.Active, Is.False);
+                Assert.That(Vector3.Distance(source.position, centre + Vector3.back * 0.5f), Is.LessThan(0.02f));
+            }
+            finally
+            {
+                SceneVisibilityManager.instance.EnablePicking(cutter.gameObject, false);
+                settings.gridSizes = previousGridSizes;
+                settings.gridIndex = previousGridIndex;
+            }
+        }
+
+        static readonly Vector3 TowerPocketCenter = new Vector3(4f, 3f, 3.375f);
+
+        Brush OpenTowerPocket(bool locked)
+        {
+            var cutter = BrushApi.CreateBox(new Vector3(2.75f, 1.5f, 1f), new Vector3(5.25f, 4.5f, TowerPocketCenter.z),
+                name: "Выемка", operation: BrushOperation.Subtract, snap: false);
+            cutter.transform.SetParent(m_Tower.transform, true);
+            BrushCutTarget.FromBrush(m_Tower).Assign(cutter);
+            BrushApi.ForceUpdate();
+            if (locked) SceneVisibilityManager.instance.DisablePicking(cutter.gameObject, false);
+            m_View.LookAt(TowerPocketCenter, Quaternion.Euler(10f, 18f, 0f), 7f, true, true);
+            return cutter;
+        }
+
         [Test]
         public void MovePlaneReadoutIncludesTheNativePickMarginOutsideTheSquare()
         {

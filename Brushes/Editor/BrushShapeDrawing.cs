@@ -118,7 +118,7 @@ namespace CsgBrush.Editor
                 var bounds = renderer.localBounds;
                 if (BrushGroup.IsMeshChildName(renderer.name))
                 {
-                    var mesh = BrushSceneVisibility.MeshFor(renderer.transform, false);
+                    var mesh = BrushSceneVisibility.MeshFor(renderer.transform);
                     if (mesh == null || mesh.vertexCount == 0) continue;
                     bounds = mesh.bounds;
                 }

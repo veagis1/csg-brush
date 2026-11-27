@@ -212,13 +212,22 @@ namespace CsgBrush.Colliders.Editor
                             if (cutter.layer != input.layer || !Overlaps(BoundsOf(i), BoundsOf(j), cutter.origin - input.origin)) continue;
                             mine.Add(j);
                             key = key * 1000003 + cutter.key;
-                            key = key * 31 + cutter.origin.GetHashCode();
+                            var offset = cutter.origin - input.origin;
+                            key = key * 31 + offset.x.GetHashCode();
+                            key = key * 31 + offset.y.GetHashCode();
+                            key = key * 31 + offset.z.GetHashCode();
                         }
                 }
                 var owner = input.owner ?? input;
                 seen.Add(owner);
-                if (built.TryGetValue(owner, out var was) && was.key == key && was.origin.Equals(input.origin) && Alive(was))
+                if (built.TryGetValue(owner, out var was) && was.key == key && Alive(was))
                 {
+                    // The planes and all reaching cuts stayed fixed relative to the input.
+                    if (!was.origin.Equals(input.origin))
+                    {
+                        foreach (var piece in was.pieces) piece.transform.localPosition = input.origin;
+                        was.origin = input.origin;
+                    }
                     LastReusedPieces += was.pieces.Count;
                     continue;
                 }

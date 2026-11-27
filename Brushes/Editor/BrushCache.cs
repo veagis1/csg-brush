@@ -20,7 +20,7 @@ namespace CsgBrush.Editor
         // building (BrushCsg)
         public BrushGroup keyModel; // the group the key was taken in; null until then
         public Matrix4x4 toModel;
-        public int key;
+        public int shapeKey, key;
 
         // collider data (BrushCsg): what the brush puts on its pieces, taken again when the brush or its structure changes
         public int infoEpoch = -1;

@@ -47,12 +47,9 @@ namespace CsgBrush.Tests
             {
                 visibility.Hide(changed, false);
 
-                var drawn = BrushSceneVisibility.MeshFor(meshObject, picking: false);
-                var pickable = BrushSceneVisibility.MeshFor(meshObject, picking: true);
+                var drawn = BrushSceneVisibility.MeshFor(meshObject);
                 Assert.That(drawn, Is.Not.SameAs(fullMesh));
-                Assert.That(pickable, Is.Not.SameAs(fullMesh));
                 AssertRayHits(meshObject, drawn, 4f);
-                AssertRayHits(meshObject, pickable, 4f);
                 Assert.That(filter.sharedMesh, Is.SameAs(fullMesh));
                 Assert.That(fullMesh.triangles, Is.EqualTo(fullTriangles));
                 AssertRayHits(meshObject, fullMesh, 0f);
@@ -78,11 +75,8 @@ namespace CsgBrush.Tests
             {
                 visibility.DisablePicking(changed, false);
 
-                var drawn = BrushSceneVisibility.MeshFor(meshObject, picking: false);
-                var pickable = BrushSceneVisibility.MeshFor(meshObject, picking: true);
+                var drawn = BrushSceneVisibility.MeshFor(meshObject);
                 AssertRayHits(meshObject, drawn, 0f);
-                Assert.That(pickable, Is.Not.SameAs(fullMesh));
-                AssertRayHits(meshObject, pickable, 4f);
                 Assert.That(filter.sharedMesh, Is.SameAs(fullMesh));
                 Assert.That(fullMesh.triangles, Is.EqualTo(fullTriangles));
                 AssertUnavailable(front, back, moving, meshObject);
@@ -105,14 +99,14 @@ namespace CsgBrush.Tests
             try
             {
                 visibility.Hide(changed, false);
-                var preview = BrushSceneVisibility.MeshFor(meshObject, picking: false);
+                var preview = BrushSceneVisibility.MeshFor(meshObject);
                 Assert.That(preview, Is.Not.SameAs(fullMesh));
                 Assert.That(preview.uv2, Is.EqualTo(System.Array.ConvertAll(preview.vertices, BakedUV)));
                 Assert.That(fullMesh.uv2, Is.EqualTo(fullUV));
             }
             finally { visibility.Show(changed, false); }
 
-            Assert.That(BrushSceneVisibility.MeshFor(meshObject, picking: false), Is.SameAs(fullMesh));
+            Assert.That(BrushSceneVisibility.MeshFor(meshObject), Is.SameAs(fullMesh));
 
             Vector2 BakedUV(Vector3 point) => new Vector2(0.4f + point.x * 0.03f, 0.4f + point.z * 0.07f);
         }
@@ -176,10 +170,9 @@ namespace CsgBrush.Tests
             try
             {
                 visibility.Hide(cutter.gameObject, false);
-                AssertRayHits(meshObject, BrushSceneVisibility.MeshFor(meshObject, picking: false), 0f);
-                AssertRayHits(meshObject, BrushSceneVisibility.MeshFor(meshObject, picking: true), 0f);
+                AssertRayHits(meshObject, BrushSceneVisibility.MeshFor(meshObject), 0f);
                 Assert.That(BrushHooks.BrushUnder(ThroughBothBrushes, meshObject.gameObject), Is.SameAs(wall));
-                AssertPlacement(wall, 0f);
+                AssertSurfaces(ThroughBothBrushes, wall, new Vector3(0.2f, 0.7f, 0f), Vector3.back);
                 Assert.That(filter.sharedMesh, Is.SameAs(fullMesh));
                 Assert.That(fullMesh.triangles, Is.EqualTo(fullTriangles));
                 AssertRayHits(meshObject, fullMesh, 1.25f);
@@ -187,18 +180,17 @@ namespace CsgBrush.Tests
                 visibility.Show(cutter.gameObject, false);
                 AssertPocketRestored();
                 visibility.DisablePicking(cutter.gameObject, false);
-                AssertRayHits(meshObject, BrushSceneVisibility.MeshFor(meshObject, picking: false), 1.25f);
-                // Placement skips the locked cut. Object selection uses the visible pocket floor and sides.
-                AssertRayHits(meshObject, BrushSceneVisibility.MeshFor(meshObject, picking: true), 2f);
+                AssertRayHits(meshObject, BrushSceneVisibility.MeshFor(meshObject), 1.25f);
                 Assert.That(BrushHooks.BrushUnder(ThroughBothBrushes, meshObject.gameObject), Is.SameAs(wall));
                 var side = new Ray(new Vector3(0f, 0.7f, 0.4f), Vector3.right);
                 Assert.That(BrushHooks.BrushUnder(side, null), Is.SameAs(wall));
-                Assert.That(BrushHooks.PickConstructionSurface(ThroughBothBrushes, out var gridPoint, out _), Is.SameAs(back));
-                Assert.That(gridPoint.z, Is.EqualTo(4f).Within(0.0001f));
-                AssertPlacement(back, 4f);
+                AssertPocketSurfaces();
+                visibility.DisablePicking(wall.gameObject, false);
+                AssertSurfaces(ThroughBothBrushes, back, new Vector3(0.2f, 0.7f, 4f), Vector3.back);
             }
             finally
             {
+                visibility.EnablePicking(wall.gameObject, false);
                 visibility.EnablePicking(cutter.gameObject, false);
                 visibility.Show(cutter.gameObject, false);
             }
@@ -207,18 +199,30 @@ namespace CsgBrush.Tests
 
             void AssertPocketRestored()
             {
-                AssertRayHits(meshObject, BrushSceneVisibility.MeshFor(meshObject, picking: false), 1.25f);
-                AssertRayHits(meshObject, BrushSceneVisibility.MeshFor(meshObject, picking: true), 1.25f);
+                AssertRayHits(meshObject, BrushSceneVisibility.MeshFor(meshObject), 1.25f);
                 Assert.That(BrushHooks.BrushUnder(ThroughBothBrushes, meshObject.gameObject), Is.SameAs(cutter));
-                AssertPlacement(wall, 1.25f);
+                AssertPocketSurfaces();
             }
 
-            void AssertPlacement(Brush expected, float frontZ)
+            void AssertPocketSurfaces()
             {
+                AssertSurfaces(ThroughBothBrushes, wall, new Vector3(0.2f, 0.7f, 1.25f), Vector3.back);
+                AssertSurfaces(new Ray(new Vector3(0f, 0.7f, 0.4f), Vector3.right), wall,
+                    new Vector3(1f, 0.7f, 0.4f), Vector3.left);
+                AssertSurfaces(new Ray(new Vector3(1.1f, 0.7f, -5f), Vector3.forward), wall,
+                    new Vector3(1.1f, 0.7f, 0f), Vector3.back);
+            }
+
+            void AssertSurfaces(Ray ray, Brush owner, Vector3 point, Vector3 normal)
+            {
+                Assert.That(BrushHooks.PickConstructionSurface(ray, out var gridPoint, out var gridNormal), Is.SameAs(owner));
+                Assert.That(Vector3.Distance(gridPoint, point), Is.LessThan(0.0001f));
+                Assert.That(Vector3.Dot(gridNormal, normal), Is.GreaterThan(0.9999f));
                 var placement = new PlacementScene(source);
-                Assert.That(placement.TryRaycast(ThroughBothBrushes, out var hit), Is.True);
-                Assert.That(hit.Part.Owner, Is.SameAs(expected));
-                Assert.That(hit.Position.z, Is.EqualTo(frontZ).Within(0.0001f));
+                Assert.That(placement.TryRaycast(ray, out var hit), Is.True);
+                Assert.That(hit.Part.Owner, Is.SameAs(owner));
+                Assert.That(Vector3.Distance(hit.Position, point), Is.LessThan(0.0001f));
+                Assert.That(Vector3.Dot(hit.Normal, normal), Is.GreaterThan(0.9999f));
             }
         }
 
@@ -290,8 +294,7 @@ namespace CsgBrush.Tests
 
         static void AssertVisibleAndSelectable(Brush front, Brush moving, Transform meshObject, Mesh fullMesh)
         {
-            Assert.That(BrushSceneVisibility.MeshFor(meshObject, picking: false), Is.SameAs(fullMesh));
-            Assert.That(BrushSceneVisibility.MeshFor(meshObject, picking: true), Is.SameAs(fullMesh));
+            Assert.That(BrushSceneVisibility.MeshFor(meshObject), Is.SameAs(fullMesh));
             AssertSelectionAndPlacement(front, moving, meshObject, 0f);
             Assert.That(ObjectPlacement.CanMove(front.transform), Is.True);
             Assert.That(ObjectPlacement.CanTarget(moving.transform, front.transform), Is.True);

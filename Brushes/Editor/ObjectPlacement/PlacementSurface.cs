@@ -248,7 +248,7 @@ namespace CsgBrush.Editor
                 if (meshObject == null || meshObject.gameObject.layer != layer ||
                     !meshObject.TryGetComponent<MeshFilter>(out var filter) || filter.sharedMesh == null ||
                     !meshObject.TryGetComponent<MeshRenderer>(out var renderer)) continue;
-                var mesh = BrushSceneVisibility.MeshFor(meshObject, true, out var owners);
+                var mesh = BrushSceneVisibility.MeshFor(meshObject, out var owners);
                 if (owners == null) continue;
                 available = true;
                 if (renderer.enabled && BrushSceneVisibility.CanPick(meshObject) && mesh != null && owners.Length > 0)

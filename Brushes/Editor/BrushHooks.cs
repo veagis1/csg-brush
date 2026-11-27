@@ -326,7 +326,7 @@ namespace CsgBrush.Editor
             else
             {
                 float frontDistance = front != null ? Found(front, ray) : float.PositiveInfinity;
-                onLevel = LevelMeshUnder(ray, out brush, out distance) && distance < frontDistance; // the level in front of what Unity found
+                onLevel = LevelMeshUnder(ray, false, out brush, out distance, out _) && distance < frontDistance; // the level in front of what Unity found
                 if (!onLevel) { brush = null; distance = frontDistance; }
             }
             if (onLevel)
@@ -338,41 +338,31 @@ namespace CsgBrush.Editor
             }
             var cut = PickBrushSurface(ray, out var cutPoint, out _, cutsOnly: true);
             if (cut != null && (cutPoint - ray.origin).magnitude <= distance + SameSurface) return cut;
-            if (front == null && !onLevel) return PickBrushSurface(ray, out _, out _, false, false, unbuiltOnlyWhenRestricted: true);
+            if (front == null && !onLevel) return PickBrushSurface(ray, out _, out _, false, false, unbuiltOnly: true);
             return brush;
         }
-
-        static readonly List<Brush> s_InView = new List<Brush>();
-        static readonly HashSet<BrushGroup> s_Groups = new HashSet<BrushGroup>();
 
         /// <summary>
         /// The nearest hit along the ray on the generated meshes of the groups in view, measured here because Unity's
         /// picking skips them while they are hidden in the Hierarchy. <paramref name="brush"/> is the brush that made the
         /// triangle hit, null while the mesh's table isn't there yet (a scene just loaded). False when no mesh is hit.
         /// </summary>
-        static bool LevelMeshUnder(Ray ray, out Brush brush, out float distance)
+        static bool LevelMeshUnder(Ray ray, bool construction, out Brush brush, out float distance, out Vector3 normal)
         {
             brush = null; distance = float.PositiveInfinity;
-            BrushesInView(s_InView);
-            s_Groups.Clear();
-            foreach (var b in s_InView)
-            {
-                var group = b.GetComponentInParent<BrushGroup>(true);
-                if (group == null) group = BrushCsg.DefaultModel(b.gameObject.scene, false);
-                if (group != null) s_Groups.Add(group);
-            }
+            normal = Vector3.up;
             bool hit = false;
             int layers = SceneLayers;
-            foreach (var group in s_Groups)
-                foreach (Transform t in group.transform)
-                {
-                    if (!BrushGroup.IsMeshChildName(t.name) || !t.gameObject.activeInHierarchy) continue;
-                    if ((layers & (1 << t.gameObject.layer)) == 0 || !BrushSceneVisibility.CanPick(t) ||
-                        !t.TryGetComponent<MeshRenderer>(out var renderer) || !renderer.enabled) continue;
-                    if (!BrushSceneVisibility.PickMesh(t, ray, out var owner, out var depth) || depth >= distance) continue;
-                    hit = true; distance = depth; brush = owner;
-                }
-            s_Groups.Clear(); s_InView.Clear();
+            foreach (var t in BrushSceneVisibility.MeshObjects)
+            {
+                if (t == null || !t.gameObject.activeInHierarchy || (layers & (1 << t.gameObject.layer)) == 0 ||
+                    !BrushSceneVisibility.CanPick(t) || !t.TryGetComponent<MeshRenderer>(out var renderer) || !renderer.enabled) continue;
+                if (!BrushSceneVisibility.PickMesh(t, ray, construction, out var owner, out var depth, out var faceNormal) || depth >= distance) continue;
+                hit = true;
+                distance = depth;
+                brush = owner;
+                normal = faceNormal;
+            }
             return hit;
         }
 
@@ -473,16 +463,16 @@ namespace CsgBrush.Editor
         internal static Brush PickConstructionSurface(Ray ray, out Vector3 point, out Vector3 normal)
         {
             BrushSceneVisibility.SyncForPicking();
-            var shape = PickBrushSurface(ray, out point, out normal, false, true, unbuiltOnlyWhenRestricted: true);
-            var visible = BrushSceneVisibility.RestrictedConstructionSurface(ray, SceneLayers, out var surface, out var faceNormal);
-            if (visible == null || shape != null && (point - ray.origin).sqrMagnitude <= (surface - ray.origin).sqrMagnitude) return shape;
-            point = surface;
+            var shape = PickBrushSurface(ray, out point, out normal, false, true, unbuiltOnly: true);
+            if (!LevelMeshUnder(ray, true, out var visible, out var distance, out var faceNormal) ||
+                shape != null && (point - ray.origin).sqrMagnitude <= distance * distance) return shape;
+            point = ray.GetPoint(distance);
             normal = faceNormal;
             return visible;
         }
 
         static Brush PickBrushSurface(Ray ray, out Vector3 point, out Vector3 normal, bool cutsOnly, bool construction,
-            bool unbuiltOnlyWhenRestricted = false)
+            bool unbuiltOnly = false)
         {
             bool cuts = BrushSettings.instance.showCuts;
             Brush bestAdd = null, bestSub = null; float tAdd = float.MaxValue, tSub = float.MaxValue, sizeAdd = 0f, sizeSub = 0f;
@@ -496,6 +486,7 @@ namespace CsgBrush.Editor
             for (int i = 0; i < active.Count; i++)
             {
                 var brush = active[i]; // registered brushes are alive: OnDisable always runs before a brush is destroyed
+                if (unbuiltOnly && BrushSceneVisibility.HasBuiltMesh(brush)) continue;
                 if (construction && brush.operation != BrushOperation.Add) continue;
                 if (brush.operation == BrushOperation.Subtract && !cuts && !brush.IsOpening) continue; // an invisible cut is not clickable; a door or window always is
                 if (cutsOnly && brush.operation != BrushOperation.Subtract) continue;
@@ -503,7 +494,6 @@ namespace CsgBrush.Editor
                 if (!e.pickReady) MeasureForPicking(brush, e);
                 if (e.polyhedron == null || !RayHitsBox(o, inv, e.min, e.max)) continue; // most brushes end here, without a call into Unity
                 if ((layers & (1 << brush.gameObject.layer)) == 0 || !BrushSceneVisibility.CanPick(brush.transform)) continue;
-                if (unbuiltOnlyWhenRestricted && BrushSceneVisibility.HasRestrictedMesh(brush)) continue;
                 var scene = brush.gameObject.scene;
                 if (stage != null ? scene != stageScene : EditorSceneManager.IsPreviewScene(scene)) continue; // not in the Scene view
                 var poly = e.polyhedron;

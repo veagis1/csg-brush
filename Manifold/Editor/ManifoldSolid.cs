@@ -173,6 +173,9 @@ namespace CsgBrush.Manifold
             if (ring.Count >= 3) for (int k = 1; k + 1 < ring.Count; k++) { result.Add(ring[0]); result.Add(ring[k]); result.Add(ring[k + 1]); }
         }
 
+        public ManifoldSolid Translated(Vector3 offset) => new ManifoldSolid(
+            manifold_translate(manifold_alloc_manifold(), handle, offset.x, offset.y, offset.z)) { OriginalId = OriginalId };
+
         public static ManifoldSolid Boolean(ManifoldSolid a, ManifoldSolid b, OpType op)
         {
             var mem = manifold_alloc_manifold();

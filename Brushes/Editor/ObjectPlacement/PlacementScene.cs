@@ -89,35 +89,14 @@ namespace CsgBrush.Editor
             hasMovingSolid = moving.Exists(part => part.Owner is Brush brush && brush.operation == BrushOperation.Add);
         }
 
-        PlacementScene() { }
+        // Ray picking only needs the cut-to-wall lookup; no moving object or target catalogue.
+        internal PlacementScene() { }
 
         internal bool HierarchyAccessChanged()
         {
             foreach (var (item, access) in hierarchyAccess)
                 if (item == null || BrushSceneVisibility.AccessOf(item) != access) return true;
             return false;
-        }
-
-        internal static PlacementScene ForConstruction(IEnumerable<Brush> brushes)
-        {
-            var scene = new PlacementScene();
-            foreach (var brush in brushes)
-            {
-                if (brush == null || !brush.isActiveAndEnabled || !BrushSceneVisibility.CanPick(brush.transform) ||
-                    BrushHooks.LocalShape(brush, out var bounds) == null) continue;
-                var part = new Part(brush, bounds);
-                scene.targets.Add(part);
-                scene.targetBrushes.Add(brush, part);
-            }
-            return scene;
-        }
-
-        internal Brush ConstructionSurface(Ray ray, int layers, out Vector3 point, out Vector3 normal)
-        {
-            var hit = FindSurface(ray, layers, float.PositiveInfinity);
-            point = hit.Position;
-            normal = hit.Normal;
-            return hit.Part?.Owner as Brush;
         }
 
         PlacementGeometry Read(Part part)

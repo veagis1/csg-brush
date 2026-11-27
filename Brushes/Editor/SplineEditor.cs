@@ -232,7 +232,7 @@ namespace CsgBrush.Editor
         public static bool FreePoint(Spline spline, Ray ray, Vector3? last, out Vector3 world)
         {
             float g = BrushSettings.instance.snapToGrid ? BrushSettings.instance.GridMeters : 0f;
-            var hit = BrushHooks.PickBrushSurface(ray, out var point, out var normal);
+            var hit = BrushHooks.PickConstructionSurface(ray, out var point, out var normal);
             if (hit != null && hit.generatedBy != spline) // never on its own pieces
             {
                 float rest = spline.profile == Spline.Profile.Circle ? spline.size.x * 0.5f : spline.size.y * 0.5f;
@@ -400,7 +400,7 @@ namespace CsgBrush.Editor
         {
             float g = BrushSettings.instance.snapToGrid ? BrushSettings.instance.GridMeters : 0f;
             float rest = Spline.DefaultSize.x * 0.5f; // a new spline's circle
-            var surface = BrushHooks.PickBrushSurface(ray, out var point, out var normal);
+            var surface = BrushHooks.PickConstructionSurface(ray, out var point, out var normal);
             if (surface == null)
             {
                 normal = Vector3.up;

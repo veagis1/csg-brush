@@ -47,7 +47,7 @@ namespace CsgBrush.Editor
             var s = BrushSettings.instance;
             var opening = s.NewOpeningSize(shape); float sill = s.NewOpeningSill(shape);
             p = default;
-            var hit = BrushHooks.PickBrushSurface(ray, out var point, out var normal);
+            var hit = BrushHooks.PickConstructionSurface(ray, out var point, out var normal);
             p.surface = hit != null ? hit.transform : null;
             p.grid = hit != null
                 ? BrushSurfaceGrid.Frame.OnPlane(point, normal)

@@ -33,12 +33,13 @@ namespace CsgBrush.Editor
 
             // Trace front faces of the rendered CSG result. A blind pocket has a wall surface
             // to select even when the cutter is locked. A through opening has no such triangle.
-            internal bool Hit(Transform child, Ray ray, out Brush brush, out float distance)
+            internal bool Hit(Transform child, Ray ray, bool construction, out Brush brush, out float distance, out Vector3 normal)
             {
                 var toLocal = child.worldToLocalMatrix;
                 var origin = toLocal.MultiplyPoint3x4(ray.origin);
                 var direction = toLocal.MultiplyVector(ray.direction);
                 brush = null;
+                normal = Vector3.up;
                 distance = float.PositiveInfinity;
                 for (int i = 0; i < indices.Length; i += 3)
                 {
@@ -56,14 +57,15 @@ namespace CsgBrush.Editor
                     float t = Vector3.Dot(ac, q) / det;
                     if (t < 0f || t >= distance) continue;
                     var owner = i / 3 < sources.Length ? sources[i / 3] : null;
-                    if (locked.Contains(owner))
+                    if (owner != null && owner.operation == BrushOperation.Subtract && (construction || locked.Contains(owner)))
                     {
-                        if (owner.operation != BrushOperation.Subtract) continue;
                         var group = child.parent.GetComponent<BrushGroup>();
-                        owner = Construction.CutWall(owner, group, child.localToWorldMatrix,
+                        owner = WallResolver.CutWall(owner, group, child.localToWorldMatrix,
                             a, vertices[indices[i + 1]], vertices[indices[i + 2]], ray.GetPoint(t));
-                        if (owner == null || locked.Contains(owner) || hidden.Contains(owner)) continue;
                     }
+                    if (owner == null || locked.Contains(owner) || hidden.Contains(owner)) continue;
+                    var faceNormal = toLocal.transpose.MultiplyVector(Vector3.Cross(ab, ac));
+                    normal = faceNormal / faceNormal.magnitude; // The determinant above excludes degenerate faces.
                     distance = t;
                     brush = owner;
                 }
@@ -72,14 +74,14 @@ namespace CsgBrush.Editor
         }
 
         static readonly Dictionary<Transform, Preview> visible = new Dictionary<Transform, Preview>();
-        static readonly Dictionary<Transform, Preview> selectable = new Dictionary<Transform, Preview>();
         static readonly Dictionary<Transform, PickGeometry> pickGeometry = new Dictionary<Transform, PickGeometry>();
         static readonly Dictionary<BrushGroup, List<Brush>> groupBrushes = new Dictionary<BrushGroup, List<Brush>>();
         static readonly HashSet<Brush> hidden = new HashSet<Brush>();
         static readonly HashSet<Brush> locked = new HashSet<Brush>();
-        static readonly HashSet<Brush> builtWithRestrictions = new HashSet<Brush>();
-        static PlacementScene construction;
-        static PlacementScene Construction => construction ??= PlacementScene.ForConstruction(builtWithRestrictions);
+        static readonly HashSet<Brush> builtBrushes = new HashSet<Brush>();
+        static readonly List<Transform> meshObjects = new List<Transform>();
+        static PlacementScene wallResolver;
+        static PlacementScene WallResolver => wallResolver ??= new PlacementScene();
         static bool dirty = true;
 
         static BrushSceneVisibility()
@@ -126,15 +128,14 @@ namespace CsgBrush.Editor
         {
             RestoreRenderers();
             foreach (var preview in visible.Values) Object.DestroyImmediate(preview.Mesh);
-            foreach (var preview in selectable.Values) if (preview != null) Object.DestroyImmediate(preview.Mesh);
             visible.Clear();
-            selectable.Clear();
             pickGeometry.Clear();
             groupBrushes.Clear();
             hidden.Clear();
             locked.Clear();
-            builtWithRestrictions.Clear();
-            construction = null;
+            builtBrushes.Clear();
+            meshObjects.Clear();
+            wallResolver = null;
             dirty = true;
         }
 
@@ -148,7 +149,6 @@ namespace CsgBrush.Editor
                 if (!stage.Contains(group.gameObject)) continue;
                 groupBrushes.Add(group, brushes);
                 HashSet<int> hiddenLayers = null;
-                HashSet<int> restrictedLayers = null;
                 for (int i = 0; i < brushes.Count; i++)
                 {
                     var brush = brushes[i];
@@ -159,13 +159,18 @@ namespace CsgBrush.Editor
                         (hiddenLayers ??= new HashSet<int>()).Add(brush.gameObject.layer);
                     }
                     if (access == Access.Locked) locked.Add(brush);
-                    if (access != Access.Pickable) (restrictedLayers ??= new HashSet<int>()).Add(brush.gameObject.layer);
                 }
                 if (hiddenLayers != null)
                     BrushCsg.BuildScenePreview(group, brushes.FindAll(b => !hidden.Contains(b) && hiddenLayers.Contains(b.gameObject.layer)), hiddenLayers, visible);
-                if (restrictedLayers != null && BrushCsg.MeshObjects(group).Count != 0)
-                    foreach (var brush in brushes)
-                        if (restrictedLayers.Contains(brush.gameObject.layer)) builtWithRestrictions.Add(brush);
+                var builtLayers = new HashSet<int>();
+                foreach (var child in BrushCsg.MeshObjects(group))
+                {
+                    meshObjects.Add(child);
+                    if (MeshFor(child, out var owners) != null && owners != null)
+                        builtLayers.Add(child.gameObject.layer);
+                }
+                foreach (var brush in brushes)
+                    if (builtLayers.Contains(brush.gameObject.layer)) builtBrushes.Add(brush);
             }
             dirty = false;
         }
@@ -180,55 +185,39 @@ namespace CsgBrush.Editor
             Refresh();
         }
 
-        internal static bool HasRestrictedMesh(Brush brush) => builtWithRestrictions.Contains(brush);
+        internal static bool HasBuiltMesh(Brush brush) => builtBrushes.Contains(brush);
+        internal static IReadOnlyList<Transform> MeshObjects => meshObjects;
 
-        internal static Brush RestrictedConstructionSurface(Ray ray, int layers, out Vector3 point, out Vector3 normal)
-        {
-            point = default;
-            normal = Vector3.up;
-            if (builtWithRestrictions.Count == 0) return null;
-            return Construction.ConstructionSurface(ray, layers, out point, out normal);
-        }
-
-        internal static Mesh MeshFor(Transform child, bool picking)
+        internal static Mesh MeshFor(Transform child)
         {
             SyncForPicking();
-            return MeshFor(child, picking, out _);
+            return MeshFor(child, out _);
         }
 
-        internal static Mesh MeshFor(Transform child, bool picking, out Brush[] sources)
+        internal static Mesh MeshFor(Transform child, out Brush[] sources)
         {
             var canonical = child.GetComponent<MeshFilter>();
             visible.TryGetValue(child, out var preview);
             var mesh = preview != null ? preview.Mesh : canonical != null ? canonical.sharedMesh : null;
             sources = preview != null ? preview.Sources : BrushCsg.TriangleBrushes(child);
-            if (!picking || mesh == null || sources == null || locked.Count == 0) return mesh;
-            if (!selectable.TryGetValue(child, out var filtered))
-            {
-                filtered = FilterLocked(mesh, sources);
-                selectable.Add(child, filtered);
-            }
-            if (filtered == null) return mesh;
-            sources = filtered.Sources;
-            return filtered.Mesh;
+            return mesh;
         }
 
-        internal static bool PickMesh(Transform child, Ray ray, out Brush brush, out float distance)
+        internal static bool PickMesh(Transform child, Ray ray, bool construction, out Brush brush, out float distance, out Vector3 normal)
         {
             brush = null;
+            normal = Vector3.up;
             distance = float.PositiveInfinity;
-            var mesh = MeshFor(child, false, out var sources);
+            var mesh = MeshFor(child, out var sources);
             if (mesh == null || mesh.vertexCount == 0) return false;
             var toLocal = child.worldToLocalMatrix;
             if (!mesh.bounds.IntersectRay(new Ray(toLocal.MultiplyPoint3x4(ray.origin), toLocal.MultiplyVector(ray.direction)))) return false;
-            if (locked.Count != 0 && sources != null)
+            if (construction || locked.Count != 0 && sources != null)
             {
+                if (sources == null) return false;
                 if (!pickGeometry.TryGetValue(child, out var geometry))
-                {
-                    geometry = System.Array.Exists(sources, locked.Contains) ? new PickGeometry(mesh, sources) : null;
-                    pickGeometry.Add(child, geometry);
-                }
-                if (geometry != null) return geometry.Hit(child, ray, out brush, out distance);
+                    pickGeometry.Add(child, geometry = new PickGeometry(mesh, sources));
+                return geometry.Hit(child, ray, construction, out brush, out distance, out normal);
             }
             if (!BrushHooks.IntersectRayMesh(ray, mesh, child.localToWorldMatrix, out var hit)) return false;
             int triangle = hit.triangleIndex;
@@ -246,34 +235,6 @@ namespace CsgBrush.Editor
                 if (AccessOf(brush.transform) != previous) return true;
             }
             return false;
-        }
-
-        static Preview FilterLocked(Mesh mesh, Brush[] sources)
-        {
-            if (!System.Array.Exists(sources, locked.Contains)) return null;
-            var filtered = new Preview();
-            var kept = new List<Brush>();
-            filtered.Mesh.indexFormat = mesh.indexFormat;
-            filtered.Mesh.vertices = mesh.vertices;
-            filtered.Mesh.subMeshCount = mesh.subMeshCount;
-            int triangle = 0;
-            for (int sub = 0; sub < mesh.subMeshCount; sub++)
-            {
-                var indices = mesh.GetTriangles(sub);
-                var keptIndices = new List<int>(indices.Length);
-                for (int i = 0; i < indices.Length; i += 3, triangle++)
-                {
-                    var owner = triangle < sources.Length ? sources[triangle] : null;
-                    if (locked.Contains(owner)) continue;
-                    kept.Add(owner);
-                    keptIndices.Add(indices[i]);
-                    keptIndices.Add(indices[i + 1]);
-                    keptIndices.Add(indices[i + 2]);
-                }
-                filtered.Mesh.SetTriangles(keptIndices, sub);
-            }
-            filtered.Sources = kept.ToArray();
-            return filtered;
         }
 
         // Temporarily substitute the mesh on the existing renderer so materials, layer, shadows and
