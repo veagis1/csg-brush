@@ -73,6 +73,37 @@ namespace CsgBrush.Tests
         }
 
         [Test]
+        public void DraggingASplineToTheHorizonBuildsTheIslandWholeAndReturnsToCells()
+        {
+            Chain();
+            var spline = new GameObject("Spline").AddComponent<Spline>();
+            GameObjectUtility.SetStaticEditorFlags(spline.gameObject, BrushSettings.instance.defaultModelStaticFlags);
+            spline.profile = Spline.Profile.Rectangle;
+            spline.size = new Vector2(1f, 0.5f);
+            var near = new Vector3(10f, 0f, 3f);
+            int start = spline.AddPoint(new Vector3(0f, 0f, 3f));
+            int end = spline.AddPoint(near);
+            spline.AddLink(start, end);
+            BrushGenerators.Update(spline, true);
+            BrushApi.ForceUpdate();
+            Assert.That(BrushCsg.LastBuiltIslands + BrushCsg.LastCachedIslands, Is.GreaterThan(1));
+
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            spline.points[1] = new Vector3(100000f, 0f, 30000f);
+            BrushGenerators.Update(spline, false);
+            BrushApi.ForceUpdate();
+            Assert.That(watch.ElapsedMilliseconds, Is.LessThan(10000));
+            Assert.That(BrushCsg.Busy || BrushCsg.HasDirty, Is.False);
+            Assert.That(BrushCsg.LastBuiltIslands, Is.EqualTo(1));
+            Assert.That(BrushCsg.LastCachedIslands, Is.Zero);
+
+            spline.points[1] = near;
+            BrushGenerators.Update(spline, false);
+            BrushApi.ForceUpdate();
+            Assert.That(BrushCsg.LastBuiltIslands + BrushCsg.LastCachedIslands, Is.GreaterThan(1));
+        }
+
+        [Test]
         public void MovingADistantBrushUpdatesItsRenderMeshAndTriangleSources()
         {
             var start = new Vector3(1210099f, 88.75f, 2624193f);

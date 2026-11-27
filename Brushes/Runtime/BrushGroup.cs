@@ -34,6 +34,9 @@ namespace CsgBrush
         [InspectorName("Подвижная группа")]
         public bool moving;
 
+        /// <summary>The last Blender export path, relative to the Unity project when stored inside it.</summary>
+        [HideInInspector] public string blenderFile = "";
+
         /// <summary>What every render mesh of the group gets on its renderer (the materials come from the brushes).</summary>
         public RenderingSettings rendering = new RenderingSettings();
     }

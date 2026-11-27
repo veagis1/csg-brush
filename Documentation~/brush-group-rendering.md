@@ -101,3 +101,9 @@ To control lightmap texel density, set **Scale In Lightmap** in the group's **Re
 
 * [Lightmapping](https://docs.unity3d.com/Manual/Lightmappers.html) in the Unity Manual
 * [Mesh Renderer component](https://docs.unity3d.com/Manual/class-MeshRenderer.html) in the Unity Manual
+
+## Save to Blender
+
+Select one Brush Group and choose **Save to Blender…** in its Inspector. The export writes the group's final render meshes in metres, relative to the group, with Z up. It includes mesh normals, the material UVs, existing lightmap UVs and supported Standard or URP Lit material properties. The editable brush operations belong to the Unity scene.
+
+The exporter finds Blender 3.6 or later on your machine. You can also select its executable in **Project Settings** > **CSG Brush**. Enable **Pack textures in Blender files** to include images. On the next export, the group offers to overwrite the previous file or save a new copy. Saving under Assets imports the file into Unity.

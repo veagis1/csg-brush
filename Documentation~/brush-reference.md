@@ -30,7 +30,7 @@ Some shapes are drawn differently:
 | **Door**, **Window** | Click once. See [Doors and windows](doors-and-windows.md). |
 | **Floor Plan** | Click the corners of the walls. See [Floor plans](floor-plans.md). |
 
-A new brush starts with the settings shown in the **CSG Brush** overlay while the Create tool is active. After you create a brush, change them on the brush itself. Its static flags come from **Project Settings** > **CSG Brush** > **Static flags**.
+A new brush starts with the settings shown in the **CSG Brush** overlay while the Create tool is active. The overlay keeps a working copy for that shape until you switch shapes or leave Create. Edit **Project Settings** > **CSG Brush** > **New brush defaults** to change the shared defaults. The manual Add and Subtract buttons keep their selection until toggled off. After you create a brush, change them on the brush itself. Its static flags come from **Project Settings** > **CSG Brush** > **Static flags**.
 
 You can also create a brush in these ways:
 
@@ -101,7 +101,7 @@ Parent GameObjects may only organise brushes. If a brush's parent is rotated or 
 
 ### Grid steps
 
-**Project Settings** > **CSG Brush** sets the grid steps and the default box size in metres. Separate grid steps with spaces. The **CSG Brush** overlay shows the current grid step in metres.
+**Project Settings** > **CSG Brush** sets the grid steps and the default box size in metres. Separate grid steps with spaces. The **CSG Brush** overlay shows the current grid step in metres. Its grid step, snapping, cuts, sizes, shape handles and shape edit selection last for the editor session, as do the extrusion distance and mode. Shared tool defaults are in Project Settings.
 
 Existing project settings are converted on first use. The former units-per-metre ratio converts each saved length. For example, on a project that used 32 units per metre, a grid step of 16 becomes 0.5 m and a default box edge of 64 becomes 2 m. Existing brushes, scenes and prefabs already store lengths in metres.
 
@@ -221,7 +221,7 @@ A trigger brush made of several pieces still raises one enter and one exit per c
 
 A module carries the game-specific values of a surface, such as ice, water, or fall damage. A module is a `BrushModule` component on the brush, or on a parent GameObject, where it applies to every brush below it. Its values go onto each collider piece of the brush, and changing them rebuilds only those pieces. A module can also make a brush a trigger, for example for water.
 
-To give every new brush a module, choose it from the **Modules** dropdown in the **CSG Brush** overlay while the Create tool is active. The dropdown lists every module; choose one again to turn it off, or choose **Nothing** to turn them all off. The Quake controller's module, `QuakeBrushSurface`, is part of the project, not of this package.
+To give every new brush a module, add its full type name under **New brush defaults** in Project Settings. To change modules for the shape you are currently drawing, use the **Modules** dropdown in the **CSG Brush** overlay. The dropdown lists every module; choose one again to turn it off, or choose **Nothing** to turn them all off. The Quake controller's module, `QuakeBrushSurface`, is part of the project, not of this package.
 
 ## Shape settings
 

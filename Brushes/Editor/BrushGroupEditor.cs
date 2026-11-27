@@ -1,4 +1,5 @@
 using static CsgBrush.Editor.BrushLanguage;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 
@@ -163,9 +164,92 @@ namespace CsgBrush.Editor
                 if (stage != null && stage.scene.isDirty) unsaved = true;
             }
             using (new EditorGUI.DisabledScope(unsaved))
+            {
                 if (GUILayout.Button(new GUIContent(Tr("Перестроить"), unsaved ? Tr("Сначала сохраните префаб. Перестроение читает сохранённый файл.") : Tr("Перестроить меш и коллайдеры. Для группы в префабе результат записывается в префаб."))))
                     foreach (var t in targets) BrushCsg.Rebuild((BrushGroup)t);
+                if (targets.Length == 1 && GUILayout.Button(new GUIContent(
+                    BlenderExport.Text("Сохранить в Blender…", "Save to Blender…"),
+                    BlenderExport.Text("Сохранить меши группы в файл .blend через установленный Blender.", "Save the group meshes as a .blend file using the installed Blender."))))
+                    SaveToBlender((BrushGroup)target);
+            }
             DrawRendering();
+        }
+
+        static void SaveToBlender(BrushGroup group)
+        {
+            string Text(string russian, string english) => BlenderExport.Text(russian, english);
+            string title = Text("Сохранение в Blender", "Save to Blender");
+            string cancel = Text("Отмена", "Cancel");
+            while (BlenderExport.FindBlender(out _, out var missing) == null)
+            {
+                int choice = EditorUtility.DisplayDialogComplex(title, missing,
+                    Text("Скачать Blender", "Download Blender"), cancel, Text("Указать путь…", "Locate Blender…"));
+                if (choice == 0) Application.OpenURL("https://www.blender.org/download/");
+                if (choice != 2) return;
+                var picked = BlenderExport.ChooseExecutable();
+                if (string.IsNullOrEmpty(picked)) return;
+                BrushSettings.instance.blenderPath = picked;
+                BrushSettings.instance.NotifyChanged();
+                BlenderExport.Forget();
+            }
+
+            string project = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            string remembered = null;
+            if (!string.IsNullOrEmpty(group.blenderFile))
+            {
+                try { remembered = Path.GetFullPath(Path.Combine(project, group.blenderFile)); }
+                catch (System.ArgumentException) { }
+                catch (System.NotSupportedException) { }
+            }
+            string path = null;
+            if (remembered != null && File.Exists(remembered))
+            {
+                int choice = EditorUtility.DisplayDialogComplex(title,
+                    Text($"Перезаписать файл {remembered}?", $"Overwrite {remembered}?"),
+                    Text("Перезаписать", "Overwrite"), cancel, Text("Сохранить как…", "Save As…"));
+                if (choice == 1) return;
+                if (choice == 0) path = remembered;
+            }
+            if (path == null)
+            {
+                string folder = remembered != null ? Path.GetDirectoryName(remembered) : "";
+                path = EditorUtility.SaveFilePanel(title, folder, group.name, "blend");
+                if (string.IsNullOrEmpty(path)) return;
+            }
+
+            string error;
+            try
+            {
+                EditorUtility.DisplayProgressBar(title, Text("Blender записывает файл…", "Blender is saving the file…"), 0.5f);
+                error = ExportToBlender(group, path);
+            }
+            finally { EditorUtility.ClearProgressBar(); }
+            if (error != null) EditorUtility.DisplayDialog(title, error, "OK");
+        }
+
+        internal static string ExportToBlender(BrushGroup group, string path)
+        {
+            var error = BlenderExport.Save(group, path);
+            if (error != null) return error;
+
+            string project = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            Undo.RecordObject(group, BlenderExport.Text("Сохранение в Blender", "Save to Blender"));
+            group.blenderFile = ProjectRelative(path, project);
+            EditorUtility.SetDirty(group);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(group);
+            if (group.blenderFile.StartsWith("Assets/", System.StringComparison.Ordinal))
+                AssetDatabase.ImportAsset(group.blenderFile, ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+            Debug.Log(BlenderExport.Text($"CSG Brush: группа {group.name} сохранена в {path}.", $"CSG Brush: saved {group.name} to {path}."), group);
+            return null;
+        }
+
+        static string ProjectRelative(string path, string project)
+        {
+            var full = Path.GetFullPath(path).Replace('\\', '/');
+            var root = project.Replace('\\', '/').TrimEnd('/') + "/";
+            var comparison = Application.platform == RuntimePlatform.WindowsEditor
+                ? System.StringComparison.OrdinalIgnoreCase : System.StringComparison.Ordinal;
+            return full.StartsWith(root, comparison) ? full.Substring(root.Length) : full;
         }
     }
 

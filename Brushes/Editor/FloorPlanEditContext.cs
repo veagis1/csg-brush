@@ -33,6 +33,8 @@ namespace CsgBrush.Editor
         }
         public static void Exit() { if (IsActive) ToolManager.SetActiveContext<GameObjectToolContext>(); }
 
+        public override void PopulateMenu(DropdownMenu menu) => FloorPlanEditState.FillMenu(menu);
+
         protected abstract Type MoveTool { get; }
         protected abstract Type RotateTool { get; }
         protected abstract Type ScaleTool { get; }
@@ -600,8 +602,7 @@ namespace CsgBrush.Editor
         static bool MouseOnDragPlane(Vector2 mouse, out Vector3 world)
         {
             var ray = HandleUtility.GUIPointToWorldRay(mouse);
-            if (s_DragPlane.Raycast(ray, out float t) && t > 0f) { world = ray.GetPoint(t); return true; }
-            world = default; return false;
+            return BrushDraw.TryGridPoint(ray, s_DragPlane, out world) && BrushDraw.WithinViewDepth(BrushDraw.DrawingCamera, world);
         }
         static readonly int s_DragHash = "FloorPlanPointDrag".GetHashCode();
         static readonly Color AddColor = new Color(0.55f, 0.85f, 1f, 1f); // light blue: not a point (white), not selected (yellow)
@@ -707,6 +708,21 @@ namespace CsgBrush.Editor
             }
         }
 
+        internal static void FillMenu(DropdownMenu menu)
+        {
+            menu.AppendAction(Tr("Выделить всё"), _ => { foreach (var p in SelectedPlans()) SelectAll(p); SceneView.RepaintAll(); });
+            menu.AppendAction(Tr("Инвертировать выделение"), _ => { foreach (var p in SelectedPlans()) Invert(p); SceneView.RepaintAll(); });
+            menu.AppendAction(Tr("Снять выделение"), _ => ClearSelection());
+            menu.AppendAction(Tr("Удалить  ⌫"), _ => DeleteSelection(), CanDelete() ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled);
+            menu.AppendAction(Tr("Плавная / угловая точка  S"), _ => ToggleSmoothSelection(), CanToggleSmooth() ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled);
+            menu.AppendSeparator();
+            menu.AppendAction(Tr("Режим точек  1"), _ => Mode = BrushEditMode.Vertex, Mode == BrushEditMode.Vertex ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+            menu.AppendAction(Tr("Режим стен  2"), _ => Mode = BrushEditMode.Edge, Mode == BrushEditMode.Edge ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+            menu.AppendAction(Tr("Режим комнат  3"), _ => Mode = BrushEditMode.Face, Mode == BrushEditMode.Face ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+            menu.AppendSeparator();
+            menu.AppendAction(Tr("Завершить редактирование"), _ => PointGraphEditContext.Exit());
+        }
+
         static void HandlePicking(PointGraph plan, Event e, int passive)
         {
             if (dragStart != null || e.alt) return;
@@ -715,23 +731,6 @@ namespace CsgBrush.Editor
             {
                 marquee = true; marqueeStart = e.mousePosition;
                 EditModeMouse.Take(passive); e.Use();
-            }
-            else if (e.type == EventType.ContextClick && GUIUtility.hotControl == 0) // a right click, not the end of a fly-through (right drag)
-            {
-                var menu = new GenericMenu();
-                menu.AddItem(new GUIContent(Tr("Выделить всё")), false, () => { foreach (var p in SelectedPlans()) SelectAll(p); SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent(Tr("Инвертировать выделение")), false, () => { foreach (var p in SelectedPlans()) Invert(p); SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent(Tr("Снять выделение")), false, ClearSelection);
-                if (CanDelete()) menu.AddItem(new GUIContent(Tr("Удалить  ⌫")), false, DeleteSelection); else menu.AddDisabledItem(new GUIContent(Tr("Удалить  ⌫")));
-                if (CanToggleSmooth()) menu.AddItem(new GUIContent(Tr("Плавная / угловая точка  S")), false, ToggleSmoothSelection); else menu.AddDisabledItem(new GUIContent(Tr("Плавная / угловая точка  S")));
-                menu.AddSeparator("");
-                menu.AddItem(new GUIContent(Tr("Режим точек  1")), Mode == BrushEditMode.Vertex, () => Mode = BrushEditMode.Vertex);
-                menu.AddItem(new GUIContent(Tr("Режим стен  2")), Mode == BrushEditMode.Edge, () => Mode = BrushEditMode.Edge);
-                menu.AddItem(new GUIContent(Tr("Режим комнат  3")), Mode == BrushEditMode.Face, () => Mode = BrushEditMode.Face);
-                menu.AddSeparator("");
-                menu.AddItem(new GUIContent(Tr("Завершить редактирование")), false, FloorPlanEditContext.Exit);
-                menu.ShowAsContext();
-                e.Use();
             }
             else if (e.type == EventType.MouseDrag && marquee && GUIUtility.hotControl == passive) { e.Use(); SceneView.RepaintAll(); }
             else if (e.type == EventType.MouseUp && marquee && GUIUtility.hotControl == passive)
@@ -926,8 +925,8 @@ namespace CsgBrush.Editor
             var ray = HandleUtility.GUIPointToWorldRay(mouse);
             var floor = new Plane(plan.transform.up, centre);
             fromCentre = default;
-            if (!floor.Raycast(ray, out float t)) return false;
-            fromCentre = ray.GetPoint(t) - centre;
+            if (!BrushDraw.TryGridPoint(ray, floor, out var point) || !BrushDraw.WithinViewDepth(BrushDraw.DrawingCamera, point)) return false;
+            fromCentre = point - centre;
             return fromCentre.sqrMagnitude > 1e-8f;
         }
     }

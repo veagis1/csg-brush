@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace CsgBrush.Editor
 {
@@ -18,9 +19,43 @@ namespace CsgBrush.Editor
         [InspectorName("Одинаковое значение")] Match = 2,
     }
 
+    /// <summary>Persist the original project field names for scene tools. Unity's JSON overwrite also reads these names.</summary>
+    public abstract class BrushToolDefaults : ScriptableSingleton<BrushSettings>
+    {
+        [SerializeField, FormerlySerializedAs("defaultGridIndex")] int gridIndex = 2;
+        internal int defaultGridIndex { get => gridIndex; set => gridIndex = value; }
+
+        [Tooltip("Расстояние в метрах. Ноль соответствует шагу сетки.")]
+        [SerializeField, FormerlySerializedAs("defaultExtrudeDistance")] float extrudeDistance = 0f;
+        internal float defaultExtrudeDistance { get => extrudeDistance; set => extrudeDistance = value; }
+
+        [SerializeField, FormerlySerializedAs("defaultExtrudeIndividual")] bool extrudeIndividual = false;
+        internal bool defaultExtrudeIndividual { get => extrudeIndividual; set => extrudeIndividual = value; }
+
+        [Tooltip("Показывает вычитающие браши полупрозрачным красным объёмом. Так их можно выбрать, даже если они полностью вырезали геометрию.")]
+        [SerializeField, FormerlySerializedAs("defaultShowCuts")] bool showCuts = false;
+        internal bool defaultShowCuts { get => showCuts; set => showCuts = value; }
+
+        [Tooltip(BrushSettings.DimensionsTooltip)]
+        [SerializeField, FormerlySerializedAs("defaultShowDimensions")] bool showDimensions = true;
+        internal bool defaultShowDimensions { get => showDimensions; set => showDimensions = value; }
+
+        [Tooltip("Позволяет менять форму выделенного браша перетаскиванием его сторон.")]
+        [SerializeField, FormerlySerializedAs("defaultShapeHandles")] bool shapeHandles = true;
+        internal bool defaultShapeHandles { get => shapeHandles; set => shapeHandles = value; }
+
+        [Tooltip("Определяет, как правка формы затронет остальные выделенные браши.")]
+        [SerializeField, FormerlySerializedAs("defaultShapeEditSelection")] ShapeEditSelection shapeEditSelection = ShapeEditSelection.Single;
+        internal ShapeEditSelection defaultShapeEditSelection { get => shapeEditSelection; set => shapeEditSelection = value; }
+
+        [Tooltip("Привязывает положение, размеры и поворот брашей к мировой сетке после каждой правки, независимо от родительских объектов.")]
+        [SerializeField, FormerlySerializedAs("defaultSnapToGrid")] bool snapToGrid = true;
+        internal bool defaultSnapToGrid { get => snapToGrid; set => snapToGrid = value; }
+    }
+
     /// <summary>Project-wide grid and brush defaults. One Unity world unit is one metre.</summary>
     [FilePath("ProjectSettings/BrushSettings.asset", FilePathAttribute.Location.ProjectFolder)]
-    public sealed class BrushSettings : ScriptableSingleton<BrushSettings>
+    public sealed class BrushSettings : BrushToolDefaults
     {
         // Keep the old serialized names so existing settings can be converted in place.
         const int LegacyUnityPreset = 3;
@@ -38,7 +73,6 @@ namespace CsgBrush.Editor
             }
         }
         public float[] gridSizes = { 0.125f, 0.25f, 0.5f, 1f, 2f, 4f };
-        public int gridIndex = 2;
         public Vector3 defaultBoxSize = new Vector3(2f, 2f, 2f);
         public float rotationSnapDegrees = 15f;
         [Header("Новые браши")]
@@ -64,9 +98,6 @@ namespace CsgBrush.Editor
         [Tooltip("Ширина окна в метрах. Ноль соответствует 1,2 м.")] public float newWindowWidth = 0f;
         [Tooltip("Высота окна в метрах. Ноль соответствует 1,2 м.")] public float newWindowHeight = 0f;
         [Tooltip("Высота подоконника над полом в метрах. Ноль соответствует 0,9 м.")] public float newWindowSill = 0f;
-        [Header("Выдавливание")]
-        [Tooltip("Расстояние в метрах. Ноль соответствует шагу сетки.")] public float extrudeDistance = 0f;
-        public bool extrudeIndividual = false;
         [Tooltip("Флаги статичности новых брашей и планов стен. Сетки и коллайдеры браша наследуют его флаги.")]
         public StaticEditorFlags defaultModelStaticFlags = StaticEditorFlags.ContributeGI | StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic | StaticEditorFlags.BatchingStatic | StaticEditorFlags.ReflectionProbeStatic;
         [Tooltip("Создаёт UV для карт освещения после завершения правки мешей брашей. При отключении развёртку нужно создать вручную перед запеканием.")]
@@ -75,22 +106,83 @@ namespace CsgBrush.Editor
         public Material defaultMaterial;
         [Header("Редактор")]
         public bool showGenerated = false;
-        [Tooltip("Показывает вычитающие браши полупрозрачным красным объёмом. Так их можно выбрать, даже если они полностью вырезали геометрию.")]
-        public bool showCuts = false;
         internal const string DimensionsTooltip = "Размеры в метрах в окне сцены. Щёлкните по размеру выделенного браша, введите число и нажмите Enter. Esc отменяет ввод.";
-        [Tooltip(DimensionsTooltip)]
-        public bool showDimensions = true;
         internal const string RelativeDisplacementTooltip = "При перемещении показывает смещение по мировой оси в метрах. В плоскости видны две оси, с Shift — все три. При вращении показывает угол в градусах у кольца выбранной оси. Знак указывает направление, ноль соответствует началу перетаскивания.";
         [Tooltip(RelativeDisplacementTooltip)]
         public bool showRelativeDisplacement = true;
-        [Tooltip("Позволяет менять форму выделенного браша перетаскиванием его сторон.")]
-        public bool shapeHandles = true;
-        [Tooltip("Определяет, как правка формы затронет остальные выделенные браши.")]
-        public ShapeEditSelection shapeEditSelection = ShapeEditSelection.Single;
-        [Tooltip("Привязывает положение, размеры и поворот брашей к мировой сетке после каждой правки, независимо от родительских объектов.")]
-        public bool snapToGrid = true;
         [Tooltip("Максимальное отклонение прямых сегментов стены или сплайна от кривой в метрах. Меньше — плавнее контур и больше сегментов. Минимум 0,01 м.")]
         public float curveTolerance = 0.1f;
+
+        // The scene tools use session overrides. Unity restores them after assembly reload and clears them on exit.
+        internal const string SessionKey = "CsgBrush.Tools.";
+        public int gridIndex
+        {
+            get => SessionState.GetInt(SessionKey + nameof(gridIndex), defaultGridIndex);
+            set => SessionState.SetInt(SessionKey + nameof(gridIndex), value);
+        }
+
+        public bool snapToGrid
+        {
+            get => SessionState.GetBool(SessionKey + nameof(snapToGrid), defaultSnapToGrid);
+            set => SessionState.SetBool(SessionKey + nameof(snapToGrid), value);
+        }
+
+        public bool showCuts
+        {
+            get => SessionState.GetBool(SessionKey + nameof(showCuts), defaultShowCuts);
+            set => SessionState.SetBool(SessionKey + nameof(showCuts), value);
+        }
+
+        public bool showDimensions
+        {
+            get => SessionState.GetBool(SessionKey + nameof(showDimensions), defaultShowDimensions);
+            set => SessionState.SetBool(SessionKey + nameof(showDimensions), value);
+        }
+
+        public bool shapeHandles
+        {
+            get => SessionState.GetBool(SessionKey + nameof(shapeHandles), defaultShapeHandles);
+            set => SessionState.SetBool(SessionKey + nameof(shapeHandles), value);
+        }
+
+        public ShapeEditSelection shapeEditSelection
+        {
+            get => (ShapeEditSelection)SessionState.GetInt(SessionKey + nameof(shapeEditSelection), (int)defaultShapeEditSelection);
+            set => SessionState.SetInt(SessionKey + nameof(shapeEditSelection), (int)value);
+        }
+
+        public float extrudeDistance
+        {
+            get => SessionState.GetFloat(SessionKey + nameof(extrudeDistance), defaultExtrudeDistance);
+            set => SessionState.SetFloat(SessionKey + nameof(extrudeDistance), value);
+        }
+
+        public bool extrudeIndividual
+        {
+            get => SessionState.GetBool(SessionKey + nameof(extrudeIndividual), defaultExtrudeIndividual);
+            set => SessionState.SetBool(SessionKey + nameof(extrudeIndividual), value);
+        }
+
+        public string blenderPath = "";
+        public bool blenderPackTextures = false;
+
+        // Preserve the flat serialized project defaults, including values written by earlier releases.
+        [NonSerialized] NewBrushOptions workingOptions;
+        [NonSerialized] bool hasWorkingOptions;
+        internal NewBrushOptions CreationOptions => hasWorkingOptions ? workingOptions : new NewBrushOptions(this);
+
+        internal ref NewBrushOptions EditCreationOptions()
+        {
+            if (!hasWorkingOptions)
+            {
+                workingOptions = new NewBrushOptions(this);
+                workingOptions.newModules = new List<string>(workingOptions.newModules);
+                hasWorkingOptions = true;
+            }
+            return ref workingOptions;
+        }
+
+        internal void ResetCreationOptions() => hasWorkingOptions = false;
 
         public static event Action Changed;
 
@@ -110,16 +202,31 @@ namespace CsgBrush.Editor
         public const float DefaultOpeningDepthMeters = 0.5f;
 
         /// <summary>Width and height of the next door or window, in metres.</summary>
-        public Vector2 NewOpeningSize(BrushShape shape) => shape == BrushShape.Window
-            ? new Vector2(newWindowWidth > 0f ? newWindowWidth : DefaultWindowWidthMeters, newWindowHeight > 0f ? newWindowHeight : DefaultWindowHeightMeters)
-            : new Vector2(newDoorWidth > 0f ? newDoorWidth : DefaultDoorWidthMeters, newDoorHeight > 0f ? newDoorHeight : DefaultDoorHeightMeters);
+        public Vector2 NewOpeningSize(BrushShape shape)
+        {
+            var options = CreationOptions;
+            return shape == BrushShape.Window
+                ? new Vector2(options.newWindowWidth > 0f ? options.newWindowWidth : DefaultWindowWidthMeters,
+                    options.newWindowHeight > 0f ? options.newWindowHeight : DefaultWindowHeightMeters)
+                : new Vector2(options.newDoorWidth > 0f ? options.newDoorWidth : DefaultDoorWidthMeters,
+                    options.newDoorHeight > 0f ? options.newDoorHeight : DefaultDoorHeightMeters);
+        }
 
-        /// <summary>Height of the next door's or window's bottom above the floor, in metres.</summary>
-        public float NewOpeningSill(BrushShape shape) => shape == BrushShape.Window ? (newWindowSill > 0f ? newWindowSill : DefaultWindowSillMeters) : 0f;
+        /// <summary>Height of the next opening's bottom above the floor, in metres.</summary>
+        public float NewOpeningSill(BrushShape shape)
+        {
+            float sill = CreationOptions.newWindowSill;
+            return shape == BrushShape.Window ? (sill > 0f ? sill : DefaultWindowSillMeters) : 0f;
+        }
 
-
-        /// <summary>The step height of the next stairs, in metres.</summary>
-        public float NewStepHeightMeters => Mathf.Max(BrushPolyhedron.MinStepHeight, newStepHeight > 0f ? newStepHeight : DefaultStepHeightMeters);
+        public float NewStepHeightMeters
+        {
+            get
+            {
+                float height = CreationOptions.newStepHeight;
+                return Mathf.Max(BrushPolyhedron.MinStepHeight, height > 0f ? height : DefaultStepHeightMeters);
+            }
+        }
 
         public float GridMeters => gridSizes != null && gridSizes.Length > 0 ? gridSizes[Mathf.Clamp(gridIndex, 0, gridSizes.Length - 1)] : 1f;
 
@@ -180,7 +287,9 @@ namespace CsgBrush.Editor
                 newWindowWidth /= unitsPerMeter;
                 newWindowHeight /= unitsPerMeter;
                 newWindowSill /= unitsPerMeter;
-                extrudeDistance /= unitsPerMeter;
+                defaultExtrudeDistance /= unitsPerMeter;
+                SessionState.EraseFloat(SessionKey + nameof(extrudeDistance));
+                SessionState.EraseInt(SessionKey + nameof(gridIndex));
             }
 
             preset = LegacyUnityPreset;
@@ -192,8 +301,10 @@ namespace CsgBrush.Editor
         public void SetGridIndex(int index)
         {
             gridIndex = Mathf.Clamp(index, 0, Mathf.Max(0, (gridSizes?.Length ?? 0) - 1));
-            NotifyChanged();
+            NotifyToolChanged();
         }
+
+        internal static void NotifyToolChanged() => Changed?.Invoke();
 
         public void NotifyChanged()
         {
@@ -268,6 +379,85 @@ namespace CsgBrush.Editor
             return provider;
         }
 
+        static bool showCreationDefaults, showToolDefaults;
+        static readonly (string field, string label)[] CreationDefaults =
+        {
+            (nameof(BrushSettings.newGridSnap), "Привязка к сетке"),
+            (nameof(BrushSettings.newModules), "Модули"),
+            (nameof(BrushSettings.newHollow), "Полый браш"),
+            (nameof(BrushSettings.newWallThickness), "Толщина стены (м)"),
+            (nameof(BrushSettings.newSides), "Стороны"),
+            (nameof(BrushSettings.newTessellation), "Детализация"),
+            (nameof(BrushSettings.newArchAngle), "Угол арки (°)"),
+            (nameof(BrushSettings.newStepHeight), "Высота ступени (м)"),
+            (nameof(BrushSettings.newInnerRadius), "Внутренний радиус (м)"),
+            (nameof(BrushSettings.newStepThickness), "Толщина ступени (м)"),
+            (nameof(BrushSettings.newCurveAngle), "Угол лестницы (°)"),
+            (nameof(BrushSettings.newStepsPer360), "Ступеней на оборот"),
+            (nameof(BrushSettings.newCounterClockwise), "Против часовой"),
+            (nameof(BrushSettings.newSlopedFloor), "Наклонный пол"),
+            (nameof(BrushSettings.newSlopedCeiling), "Наклонный потолок"),
+            (nameof(BrushSettings.newSupportUnderSteps), "Опора под ступенями"),
+            (nameof(BrushSettings.newDoorWidth), "Ширина двери (м)"),
+            (nameof(BrushSettings.newDoorHeight), "Высота двери (м)"),
+            (nameof(BrushSettings.newWindowWidth), "Ширина окна (м)"),
+            (nameof(BrushSettings.newWindowHeight), "Высота окна (м)"),
+            (nameof(BrushSettings.newWindowSill), "Высота подоконника (м)"),
+        };
+
+        static void DrawCreationDefaults(BrushSettings settings)
+        {
+            showCreationDefaults = EditorGUILayout.Foldout(showCreationDefaults, Tr("Параметры новых форм по умолчанию"), true);
+            if (!showCreationDefaults) return;
+            using var indent = new EditorGUI.IndentLevelScope();
+            using var serialized = new SerializedObject(settings);
+            foreach (var (field, label) in CreationDefaults)
+            {
+                var property = serialized.FindProperty(field);
+                BrushEditor.DrawProperty(property, new GUIContent(Tr(label), Tr(property.tooltip)), true);
+            }
+            if (serialized.ApplyModifiedPropertiesWithoutUndo()) settings.ResetCreationOptions();
+        }
+
+        static void DrawToolDefaults(BrushSettings s)
+        {
+            showToolDefaults = EditorGUILayout.Foldout(showToolDefaults, Tr("Параметры инструментов по умолчанию"), true);
+            if (!showToolDefaults) return;
+            using var indent = new EditorGUI.IndentLevelScope();
+            bool cuts = EditorGUILayout.Toggle(Tr("Вычеты"), s.defaultShowCuts);
+            if (cuts != s.defaultShowCuts) s.defaultShowCuts = s.showCuts = cuts;
+            bool sizes = EditorGUILayout.Toggle(new GUIContent(Tr("Размеры"), Tr(BrushSettings.DimensionsTooltip)), s.defaultShowDimensions);
+            if (sizes != s.defaultShowDimensions) s.defaultShowDimensions = s.showDimensions = sizes;
+            bool handles = EditorGUILayout.Toggle(Tr("Правка формы"), s.defaultShapeHandles);
+            if (handles != s.defaultShapeHandles) s.defaultShapeHandles = s.shapeHandles = handles;
+            var selection = BrushEditor.EnumPopup(new GUIContent(Tr("Правка нескольких брашей")), s.defaultShapeEditSelection);
+            if (selection != s.defaultShapeEditSelection) s.defaultShapeEditSelection = s.shapeEditSelection = selection;
+            float distance = EditorGUILayout.FloatField(new GUIContent(Tr("Расстояние (м)"), Tr("Расстояние выдавливания в метрах. Отрицательное значение создаёт углубление, ноль соответствует шагу сетки.")), s.defaultExtrudeDistance);
+            if (distance != s.defaultExtrudeDistance) s.defaultExtrudeDistance = s.extrudeDistance = distance;
+            bool individual = EditorGUILayout.Toggle(Tr("Выдавливать грани по отдельности"), s.defaultExtrudeIndividual);
+            if (individual != s.defaultExtrudeIndividual) s.defaultExtrudeIndividual = s.extrudeIndividual = individual;
+        }
+
+        static void DrawBlenderSettings(BrushSettings s)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                var path = EditorGUILayout.TextField(new GUIContent("Blender", Tr("Путь к Blender 3.6 или новее. Пустое поле включает автоматический поиск.")), s.blenderPath);
+                if (GUILayout.Button(Tr("Обзор…"), GUILayout.ExpandWidth(false)))
+                {
+                    var picked = BlenderExport.ChooseExecutable();
+                    if (!string.IsNullOrEmpty(picked)) path = picked;
+                }
+                if (path != s.blenderPath)
+                {
+                    s.blenderPath = path;
+                    BlenderExport.Forget();
+                    GUI.changed = true;
+                }
+            }
+            s.blenderPackTextures = EditorGUILayout.Toggle(new GUIContent(Tr("Упаковывать текстуры"), Tr("Сохраняет изображения внутри файла .blend. Без упаковки Blender использует пути к исходным изображениям.")), s.blenderPackTextures);
+        }
+
         static void DrawFields()
         {
             BrushLanguage.DrawPreference();
@@ -280,8 +470,10 @@ namespace CsgBrush.Editor
             s.defaultBoxSize = EditorGUILayout.Vector3Field(new GUIContent(Tr("Размер коробки (м)"), Tr("Размер новой коробки в метрах по осям X, Y и Z.")), s.defaultBoxSize);
             s.rotationSnapDegrees = EditorGUILayout.FloatField(new GUIContent(Tr("Шаг поворота (°)"), Tr("Шаг привязки вращения в градусах. Чем он больше, тем крупнее угловой шаг. Ноль отключает привязку поворота.")), s.rotationSnapDegrees);
             var names = s.GridStepNames();
-            s.gridIndex = EditorGUILayout.Popup(new GUIContent(Tr("Шаг сетки"), Tr("Текущий шаг сетки в метрах. Меньший шаг даёт более точную привязку.")), Mathf.Clamp(s.gridIndex, 0, names.Length - 1), names);
-            s.snapToGrid = EditorGUILayout.Toggle(new GUIContent(Tr("Привязывать браши к сетке"), Tr("После каждой правки положение, размеры и поворот браша привязываются к мировой сетке, независимо от родительского объекта.")), s.snapToGrid);
+            int grid = EditorGUILayout.Popup(new GUIContent(Tr("Шаг сетки"), Tr("Текущий шаг сетки в метрах. Меньший шаг даёт более точную привязку.")), Mathf.Clamp(s.defaultGridIndex, 0, names.Length - 1), names);
+            if (grid != s.defaultGridIndex) s.defaultGridIndex = s.gridIndex = grid;
+            bool snap = EditorGUILayout.Toggle(new GUIContent(Tr("Привязывать браши к сетке"), Tr("После каждой правки положение, размеры и поворот браша привязываются к мировой сетке, независимо от родительского объекта.")), s.defaultSnapToGrid);
+            if (snap != s.defaultSnapToGrid) s.defaultSnapToGrid = s.snapToGrid = snap;
             s.curveTolerance = Mathf.Max(PointGraph.MinTolerance, EditorGUILayout.FloatField(new GUIContent(Tr("Допуск кривых (м)"), Tr("Максимальное отклонение стены или сплайна от кривой в метрах. Меньше — плавнее контур и больше сегментов. Минимум 0,01 м. Отдельный объект может переопределить этот допуск.")), s.curveTolerance));
             EditorGUILayout.BeginHorizontal();
             s.defaultMaterial = (Material)EditorGUILayout.ObjectField(new GUIContent(Tr("Основной материал"), Tr("Материал граней браша без собственного материала. Если поле пусто, при первом использовании в Assets/CSG Brush создаётся текстура с сеткой в метрах.")), s.defaultMaterial, typeof(Material), false);
@@ -290,6 +482,9 @@ namespace CsgBrush.Editor
             s.showGenerated = EditorGUILayout.Toggle(new GUIContent(Tr("Созданные объекты"), Tr("Показывает служебные объекты, созданные CSG Brush, в иерархии.")), s.showGenerated);
             s.defaultModelStaticFlags = DrawStaticFlags(s.defaultModelStaticFlags);
             s.autoLightmapUVs = EditorGUILayout.Toggle(new GUIContent(Tr("Автоматические UV карт освещения"), Tr("Создаёт UV для карт освещения после завершения правки мешей брашей. При отключении развёртку нужно создать вручную перед запеканием.")), s.autoLightmapUVs);
+            DrawToolDefaults(s);
+            DrawCreationDefaults(s);
+            DrawBlenderSettings(s);
             if (EditorGUI.EndChangeCheck())
                 s.NotifyChanged();
         }
