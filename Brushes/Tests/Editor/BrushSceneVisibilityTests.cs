@@ -155,7 +155,7 @@ namespace CsgBrush.Tests
         }
 
         [Test]
-        public void HidingACutterFillsTheSceneViewPocketAndLockingItOnlyRemovesThePocketFromPicking()
+        public void HidingACutterFillsThePocketAndLockingItSelectsTheWallOnItsCarvedFaces()
         {
             var wall = BrushApi.CreateBox(new Vector3(-2f, 0f, 0f), new Vector3(2f, 2f, 2f), name: "Стена");
             var cutter = BrushApi.CreateBox(new Vector3(-1f, 0.2f, -1f), new Vector3(1f, 1.5f, 1.25f),
@@ -188,10 +188,11 @@ namespace CsgBrush.Tests
                 AssertPocketRestored();
                 visibility.DisablePicking(cutter.gameObject, false);
                 AssertRayHits(meshObject, BrushSceneVisibility.MeshFor(meshObject, picking: false), 1.25f);
-                // A two-sided mesh ray can hit the inside of the back wall. A Scene click and the
-                // construction grid only use front-facing surfaces after the locked face is removed.
+                // Placement skips the locked cut. Object selection uses the visible pocket floor and sides.
                 AssertRayHits(meshObject, BrushSceneVisibility.MeshFor(meshObject, picking: true), 2f);
-                Assert.That(BrushHooks.BrushUnder(ThroughBothBrushes, meshObject.gameObject), Is.SameAs(back));
+                Assert.That(BrushHooks.BrushUnder(ThroughBothBrushes, meshObject.gameObject), Is.SameAs(wall));
+                var side = new Ray(new Vector3(0f, 0.7f, 0.4f), Vector3.right);
+                Assert.That(BrushHooks.BrushUnder(side, null), Is.SameAs(wall));
                 Assert.That(BrushHooks.PickConstructionSurface(ThroughBothBrushes, out var gridPoint, out _), Is.SameAs(back));
                 Assert.That(gridPoint.z, Is.EqualTo(4f).Within(0.0001f));
                 AssertPlacement(back, 4f);
@@ -218,6 +219,52 @@ namespace CsgBrush.Tests
                 Assert.That(placement.TryRaycast(ThroughBothBrushes, out var hit), Is.True);
                 Assert.That(hit.Part.Owner, Is.SameAs(expected));
                 Assert.That(hit.Position.z, Is.EqualTo(frontZ).Within(0.0001f));
+            }
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ClickThroughALockedOpeningSelectsOnlyGeometryBehindIt(bool withBackBrush)
+        {
+            var wall = BrushApi.CreateBox(new Vector3(-2f, 0f, 0f), new Vector3(2f, 2f, 2f));
+            var cutter = BrushApi.CreateBox(new Vector3(-1f, 0.2f, -1f), new Vector3(1f, 1.5f, 3f),
+                operation: BrushOperation.Subtract);
+            cutter.transform.SetParent(wall.transform, true);
+            var back = withBackBrush ? Box("Браш за проёмом", 4f) : null;
+            BrushApi.ForceUpdate();
+            var visibility = SceneVisibilityManager.instance;
+            try
+            {
+                visibility.DisablePicking(cutter.gameObject, false);
+                Assert.That(BrushHooks.BrushUnder(ThroughBothBrushes, null), Is.SameAs(back));
+            }
+            finally { visibility.EnablePicking(cutter.gameObject, false); }
+        }
+
+        [Test]
+        public void AnUnscopedLockedCutterSelectsTheWallAtTheClick()
+        {
+            var left = BrushApi.CreateBox(new Vector3(-3f, 0f, 0f), new Vector3(-1f, 2f, 2f));
+            var right = BrushApi.CreateBox(new Vector3(1f, 0f, 0f), new Vector3(3f, 2f, 2f));
+            var cutter = BrushApi.CreateBox(new Vector3(-2.5f, 0.2f, -1f), new Vector3(2.5f, 1.5f, 1.25f),
+                operation: BrushOperation.Subtract);
+            BrushApi.ForceUpdate();
+            var visibility = SceneVisibilityManager.instance;
+            try
+            {
+                visibility.DisablePicking(cutter.gameObject, false);
+                var leftRay = new Ray(new Vector3(-2f, 0.7f, -5f), Vector3.forward);
+                var rightRay = new Ray(new Vector3(2f, 0.7f, -5f), Vector3.forward);
+                Assert.That(BrushHooks.BrushUnder(leftRay, null), Is.SameAs(left));
+                Assert.That(BrushHooks.BrushUnder(rightRay, null), Is.SameAs(right));
+                Assert.That(BrushHooks.BrushUnder(ThroughBothBrushes, null), Is.Null);
+                visibility.DisablePicking(left.gameObject, false);
+                Assert.That(BrushHooks.BrushUnder(leftRay, null), Is.Null);
+            }
+            finally
+            {
+                visibility.EnablePicking(left.gameObject, false);
+                visibility.EnablePicking(cutter.gameObject, false);
             }
         }
 

@@ -296,7 +296,8 @@ namespace CsgBrush.Editor
             }
         }
 
-        Brush CutWall(Brush cutter, BrushGroup model, Matrix4x4 toWorld, Vector3 a, Vector3 b, Vector3 c)
+        internal Brush CutWall(Brush cutter, BrushGroup model, Matrix4x4 toWorld, Vector3 a, Vector3 b, Vector3 c,
+            Vector3? hitPosition = null)
         {
             if (!wallsByCut.TryGetValue(cutter, out var walls))
             {
@@ -309,7 +310,8 @@ namespace CsgBrush.Editor
                     {
                         if (!addressed && wall == cutter) break;
                         if (wall == null || wall.operation != BrushOperation.Add ||
-                            wall.gameObject.layer != cutter.gameObject.layer || addressed && !scope.Contains(wall)) continue;
+                            wall.gameObject.layer != cutter.gameObject.layer || addressed && !scope.Contains(wall) ||
+                            !BrushSceneVisibility.IsVisible(wall.transform)) continue;
                         var part = AuthoredPart(wall);
                         if (part != null) walls.Add(part);
                     }
@@ -323,13 +325,13 @@ namespace CsgBrush.Editor
             if (length == 0f) return null;
             var normal = cross / length;
             if (toWorld.determinant < 0f) normal = -normal;
-            var center = toWorld.MultiplyPoint3x4(a + ((b - a) + (c - a)) / 3f);
-            var inside = center - normal * Mathf.Max(2.5e-4f, center.magnitude * 2e-7f);
+            var point = hitPosition ?? toWorld.MultiplyPoint3x4(a + ((b - a) + (c - a)) / 3f);
+            var inside = point - normal * Mathf.Max(2.5e-4f, point.magnitude * 2e-7f);
             foreach (var part in walls)
                 if (ContainsVolume(part, inside)) return (Brush)part.Owner;
             // At coincident authored surfaces the inset can land outside a very thin wall.
             foreach (var part in walls)
-                if (part.Bounds.Contains(part.Owner.transform.InverseTransformPoint(center))) return (Brush)part.Owner;
+                if (part.Bounds.Contains(part.Owner.transform.InverseTransformPoint(point))) return (Brush)part.Owner;
             return null;
         }
 

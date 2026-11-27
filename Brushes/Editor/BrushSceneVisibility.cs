@@ -16,18 +16,29 @@ namespace CsgBrush.Editor
             internal readonly Mesh Mesh = new Mesh { name = "CSG Scene View", hideFlags = HideFlags.HideAndDontSave };
             internal Material[] Materials;
             internal Brush[] Sources;
-            Vector3[] vertices;
-            int[] indices;
+        }
 
-            // The native mesh hit is double-sided. Once locked triangles have been removed,
-            // its nearest hit can be the inside of the same wall rather than the visible object behind it.
-            internal int FrontTriangle(Ray ray, Matrix4x4 toLocal, out float distance)
+        sealed class PickGeometry
+        {
+            readonly Vector3[] vertices;
+            readonly int[] indices;
+            readonly Brush[] sources;
+
+            internal PickGeometry(Mesh mesh, Brush[] sources)
             {
-                vertices ??= Mesh.vertices;
-                indices ??= Mesh.triangles;
+                vertices = mesh.vertices;
+                indices = mesh.triangles;
+                this.sources = sources;
+            }
+
+            // Trace front faces of the rendered CSG result. A blind pocket has a wall surface
+            // to select even when the cutter is locked. A through opening has no such triangle.
+            internal bool Hit(Transform child, Ray ray, out Brush brush, out float distance)
+            {
+                var toLocal = child.worldToLocalMatrix;
                 var origin = toLocal.MultiplyPoint3x4(ray.origin);
                 var direction = toLocal.MultiplyVector(ray.direction);
-                int best = -1;
+                brush = null;
                 distance = float.PositiveInfinity;
                 for (int i = 0; i < indices.Length; i += 3)
                 {
@@ -44,20 +55,31 @@ namespace CsgBrush.Editor
                     if (u < 0f || v < 0f || u + v > det) continue;
                     float t = Vector3.Dot(ac, q) / det;
                     if (t < 0f || t >= distance) continue;
+                    var owner = i / 3 < sources.Length ? sources[i / 3] : null;
+                    if (locked.Contains(owner))
+                    {
+                        if (owner.operation != BrushOperation.Subtract) continue;
+                        var group = child.parent.GetComponent<BrushGroup>();
+                        owner = Construction.CutWall(owner, group, child.localToWorldMatrix,
+                            a, vertices[indices[i + 1]], vertices[indices[i + 2]], ray.GetPoint(t));
+                        if (owner == null || locked.Contains(owner) || hidden.Contains(owner)) continue;
+                    }
                     distance = t;
-                    best = i / 3;
+                    brush = owner;
                 }
-                return best;
+                return distance < float.PositiveInfinity;
             }
         }
 
         static readonly Dictionary<Transform, Preview> visible = new Dictionary<Transform, Preview>();
         static readonly Dictionary<Transform, Preview> selectable = new Dictionary<Transform, Preview>();
+        static readonly Dictionary<Transform, PickGeometry> pickGeometry = new Dictionary<Transform, PickGeometry>();
         static readonly Dictionary<BrushGroup, List<Brush>> groupBrushes = new Dictionary<BrushGroup, List<Brush>>();
         static readonly HashSet<Brush> hidden = new HashSet<Brush>();
         static readonly HashSet<Brush> locked = new HashSet<Brush>();
         static readonly HashSet<Brush> builtWithRestrictions = new HashSet<Brush>();
         static PlacementScene construction;
+        static PlacementScene Construction => construction ??= PlacementScene.ForConstruction(builtWithRestrictions);
         static bool dirty = true;
 
         static BrushSceneVisibility()
@@ -107,6 +129,7 @@ namespace CsgBrush.Editor
             foreach (var preview in selectable.Values) if (preview != null) Object.DestroyImmediate(preview.Mesh);
             visible.Clear();
             selectable.Clear();
+            pickGeometry.Clear();
             groupBrushes.Clear();
             hidden.Clear();
             locked.Clear();
@@ -164,8 +187,7 @@ namespace CsgBrush.Editor
             point = default;
             normal = Vector3.up;
             if (builtWithRestrictions.Count == 0) return null;
-            construction ??= PlacementScene.ForConstruction(builtWithRestrictions);
-            return construction.ConstructionSurface(ray, layers, out point, out normal);
+            return Construction.ConstructionSurface(ray, layers, out point, out normal);
         }
 
         internal static Mesh MeshFor(Transform child, bool picking)
@@ -195,22 +217,22 @@ namespace CsgBrush.Editor
         {
             brush = null;
             distance = float.PositiveInfinity;
-            var mesh = MeshFor(child, true, out var sources);
+            var mesh = MeshFor(child, false, out var sources);
             if (mesh == null || mesh.vertexCount == 0) return false;
             var toLocal = child.worldToLocalMatrix;
             if (!mesh.bounds.IntersectRay(new Ray(toLocal.MultiplyPoint3x4(ray.origin), toLocal.MultiplyVector(ray.direction)))) return false;
-            int triangle;
-            if (selectable.TryGetValue(child, out var filtered) && filtered != null)
+            if (locked.Count != 0 && sources != null)
             {
-                triangle = filtered.FrontTriangle(ray, toLocal, out distance);
-                if (triangle < 0) return false;
+                if (!pickGeometry.TryGetValue(child, out var geometry))
+                {
+                    geometry = System.Array.Exists(sources, locked.Contains) ? new PickGeometry(mesh, sources) : null;
+                    pickGeometry.Add(child, geometry);
+                }
+                if (geometry != null) return geometry.Hit(child, ray, out brush, out distance);
             }
-            else
-            {
-                if (!BrushHooks.IntersectRayMesh(ray, mesh, child.localToWorldMatrix, out var hit)) return false;
-                triangle = hit.triangleIndex;
-                distance = hit.distance;
-            }
+            if (!BrushHooks.IntersectRayMesh(ray, mesh, child.localToWorldMatrix, out var hit)) return false;
+            int triangle = hit.triangleIndex;
+            distance = hit.distance;
             if (sources != null && triangle >= 0 && triangle < sources.Length) brush = sources[triangle];
             return true;
         }
