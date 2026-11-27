@@ -85,9 +85,8 @@ namespace CsgBrush.Editor
             if (!Local) return false;
             if (HasHeld)
             {
-                if (!held.Plane.Raycast(ray, out float distance)) return false;
+                if (!BrushDraw.TryGridPoint(ray, held.Plane, out point)) return false;
                 frame = held;
-                point = ray.GetPoint(distance);
                 normal = frame.Normal;
                 return true;
             }

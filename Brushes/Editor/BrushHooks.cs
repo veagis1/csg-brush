@@ -326,8 +326,9 @@ namespace CsgBrush.Editor
             else
             {
                 float frontDistance = front != null ? Found(front, ray) : float.PositiveInfinity;
-                onLevel = LevelMeshUnder(ray, false, out brush, out distance, out _) && distance < frontDistance; // the level in front of what Unity found
-                if (!onLevel) { brush = null; distance = frontDistance; }
+                onLevel = LevelMeshUnder(ray, false, out brush, out var hit) && hit.distance < frontDistance;
+                distance = onLevel ? hit.distance : frontDistance;
+                if (!onLevel) brush = null;
             }
             if (onLevel)
             {
@@ -347,23 +348,20 @@ namespace CsgBrush.Editor
         /// picking skips them while they are hidden in the Hierarchy. <paramref name="brush"/> is the brush that made the
         /// triangle hit, null while the mesh's table isn't there yet (a scene just loaded). False when no mesh is hit.
         /// </summary>
-        static bool LevelMeshUnder(Ray ray, bool construction, out Brush brush, out float distance, out Vector3 normal)
+        static bool LevelMeshUnder(Ray ray, bool construction, out Brush brush, out RaycastHit hit)
         {
-            brush = null; distance = float.PositiveInfinity;
-            normal = Vector3.up;
-            bool hit = false;
+            brush = null;
+            hit = new RaycastHit { distance = float.PositiveInfinity };
             int layers = SceneLayers;
             foreach (var t in BrushSceneVisibility.MeshObjects)
             {
                 if (t == null || !t.gameObject.activeInHierarchy || (layers & (1 << t.gameObject.layer)) == 0 ||
                     !BrushSceneVisibility.CanPick(t) || !t.TryGetComponent<MeshRenderer>(out var renderer) || !renderer.enabled) continue;
-                if (!BrushSceneVisibility.PickMesh(t, ray, construction, out var owner, out var depth, out var faceNormal) || depth >= distance) continue;
-                hit = true;
-                distance = depth;
+                if (!BrushSceneVisibility.PickMesh(t, ray, construction, out var owner, out var candidate) || candidate.distance >= hit.distance) continue;
+                hit = candidate;
                 brush = owner;
-                normal = faceNormal;
             }
-            return hit;
+            return hit.distance < float.PositiveInfinity;
         }
 
         /// <summary>How far along the ray an object Unity found is; one it can't measure (a light's icon) is right in front.</summary>
@@ -464,10 +462,10 @@ namespace CsgBrush.Editor
         {
             BrushSceneVisibility.SyncForPicking();
             var shape = PickBrushSurface(ray, out point, out normal, false, true, unbuiltOnly: true);
-            if (!LevelMeshUnder(ray, true, out var visible, out var distance, out var faceNormal) ||
-                shape != null && (point - ray.origin).sqrMagnitude <= distance * distance) return shape;
-            point = ray.GetPoint(distance);
-            normal = faceNormal;
+            if (!LevelMeshUnder(ray, true, out var visible, out var hit) ||
+                shape != null && (point - ray.origin).sqrMagnitude <= hit.distance * hit.distance) return shape;
+            point = hit.point;
+            normal = hit.normal;
             return visible;
         }
 
@@ -505,8 +503,10 @@ namespace CsgBrush.Editor
                     if (denom >= -1e-6f) continue;
                     float tt = -(Vector3.Dot(n, lo) + plane.w) / denom;
                     if (tt < 0f) continue;
-                    if (!PointInFace(poly, f, lo + ld * tt)) continue;
-                    var worldPoint = e.toWorld.MultiplyPoint3x4(lo + ld * tt);
+                    var localHit = lo + ld * tt;
+                    if (!PointInFace(poly, f, localHit)) continue;
+                    if (construction) localHit = BrushDraw.OntoSurface(localHit, poly.vertices[poly.faces[f].indices[0]], n);
+                    var worldPoint = e.toWorld.MultiplyPoint3x4(localHit);
                     float world = (worldPoint - ray.origin).magnitude;
                     var worldNormal = construction ? e.toLocal.transpose.MultiplyVector(n).normalized : (e.rotation * n).normalized;
                     float size = (e.max - e.min).sqrMagnitude;

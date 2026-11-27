@@ -23,13 +23,15 @@ namespace CsgBrush.Tests
             Assert.That(BrushDraw.SnapInPlane(point, frame.Origin, frame.Rotation, 0.125f).y, Is.Zero);
         }
 
-        [Test]
-        public void AGridPlaneAboveTheWorldFloorKeepsItsHeight()
+        [TestCase(0.75f)]
+        [TestCase(0.000001f)]
+        [TestCase(-0.000001f)]
+        public void AnOffsetGridPlaneKeepsItsExactHeight(float height)
         {
-            var plane = new Plane(Vector3.up, new Vector3(0f, 0.75f, 0f));
-            var ray = new Ray(new Vector3(1f, 2f, 3f), Vector3.down);
+            var plane = new Plane(Vector3.up, new Vector3(0f, height, 0f));
+            var ray = new Ray(new Vector3(1f, 60.456f, 3f), new Vector3(0.17f, -1f, 0.11f));
             Assert.That(BrushDraw.TryGridPoint(ray, plane, out var point), Is.True);
-            Assert.That(point.y, Is.EqualTo(0.75f));
+            Assert.That(point.y, Is.EqualTo(height));
         }
 
         [Test]

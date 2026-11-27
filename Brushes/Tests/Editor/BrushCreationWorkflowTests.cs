@@ -92,6 +92,25 @@ namespace CsgBrush.Tests
             Assert.That(opening.transform.position.y, Is.Zero);
         }
 
+        [TestCase(0f)]
+        [TestCase(0.0000152587890625f)]
+        [TestCase(-0.0000152587890625f)]
+        public void AnObliqueConstructionRayKeepsTheFloorFaceHeight(float faceY)
+        {
+            var floor = BrushApi.Create(BrushShape.Box, new Vector3(33.6875f, faceY - 19.0625f, -60.6875f),
+                new Vector3(125.375f, 38.125f, 128.625f), Quaternion.identity, snap: false);
+            var ray = new Ray(new Vector3(-18.87f, 60.456f, -112.77f), new Vector3(0.17f, -1f, 0.11f));
+            CheckFace();
+            BrushApi.ForceUpdate();
+            CheckFace();
+
+            void CheckFace()
+            {
+                Assert.That(BrushHooks.PickConstructionSurface(ray, out var hit, out _), Is.SameAs(floor));
+                Assert.That(hit.y, Is.EqualTo(faceY));
+            }
+        }
+
         [Test]
         public void CreationCommandsAreRegisteredInBothMenus()
         {

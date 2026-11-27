@@ -40,6 +40,8 @@ namespace CsgBrush.Editor
         /// <summary>A snapped point put back onto the surface through <paramref name="onSurface"/>, along the surface normal.</summary>
         public static Vector3 OntoSurface(Vector3 snapped, Vector3 onSurface, Vector3 normal)
         {
+            if (normal.x == 0f && normal.z == 0f && normal.y != 0f)
+                return new Vector3(snapped.x, onSurface.y, snapped.z);
             normal = normal.normalized;
             return snapped - normal * Vector3.Dot(snapped - onSurface, normal);
         }
@@ -166,7 +168,8 @@ namespace CsgBrush.Editor
             if (!plane.Raycast(ray, out float distance) || distance <= 0f) return false;
             point = ray.GetPoint(distance);
             // A float ray intersection can leave a residual above or below the world floor.
-            if (plane.distance == 0f && Mathf.Abs(plane.normal.y) == 1f) point.y = 0f;
+            if (plane.normal.x == 0f && plane.normal.z == 0f && plane.normal.y != 0f)
+                point.y = -plane.distance / plane.normal.y;
             return true;
         }
     }
@@ -326,6 +329,8 @@ namespace CsgBrush.Editor
             hoverNormal = hoverGrid.Valid || AlignsToSurface || onSurface ? workingNormal : BrushDraw.Cardinal(workingNormal);
             if (!hoverGrid.Valid) hoverGrid = BrushSurfaceGrid.Frame.OnPlane(point, hoverNormal);
             hoverPoint = BrushDraw.SnapInPlane(point, hoverGrid.Origin, hoverGrid.Rotation, Grid);
+            // The owner's local grid frame can lose height in its world/local round trip.
+            if (workingNormal.x == 0f && workingNormal.z == 0f) hoverPoint.y = point.y;
         }
 
         /// <summary>Step sizes and wall thickness for new brushes: the settings, or grid-derived defaults when left at 0.</summary>

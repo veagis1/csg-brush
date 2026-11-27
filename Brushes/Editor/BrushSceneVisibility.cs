@@ -33,14 +33,13 @@ namespace CsgBrush.Editor
 
             // Trace front faces of the rendered CSG result. A blind pocket has a wall surface
             // to select even when the cutter is locked. A through opening has no such triangle.
-            internal bool Hit(Transform child, Ray ray, bool construction, out Brush brush, out float distance, out Vector3 normal)
+            internal bool Hit(Transform child, Ray ray, bool construction, out Brush brush, out RaycastHit hit)
             {
                 var toLocal = child.worldToLocalMatrix;
                 var origin = toLocal.MultiplyPoint3x4(ray.origin);
                 var direction = toLocal.MultiplyVector(ray.direction);
                 brush = null;
-                normal = Vector3.up;
-                distance = float.PositiveInfinity;
+                hit = new RaycastHit { distance = float.PositiveInfinity };
                 for (int i = 0; i < indices.Length; i += 3)
                 {
                     var a = vertices[indices[i]];
@@ -55,21 +54,25 @@ namespace CsgBrush.Editor
                     float v = Vector3.Dot(direction, q);
                     if (u < 0f || v < 0f || u + v > det) continue;
                     float t = Vector3.Dot(ac, q) / det;
-                    if (t < 0f || t >= distance) continue;
+                    if (t < 0f || t >= hit.distance) continue;
                     var owner = i / 3 < sources.Length ? sources[i / 3] : null;
+                    // Interpolate on the triangle. Reconstructing the hit from the ray distance
+                    // introduces a camera-dependent height even when all three vertices have Y = 0.
+                    var point = child.TransformPoint(a + ab * (u / det) + ac * (v / det));
                     if (owner != null && owner.operation == BrushOperation.Subtract && (construction || locked.Contains(owner)))
                     {
                         var group = child.parent.GetComponent<BrushGroup>();
                         owner = WallResolver.CutWall(owner, group, child.localToWorldMatrix,
-                            a, vertices[indices[i + 1]], vertices[indices[i + 2]], ray.GetPoint(t));
+                            a, vertices[indices[i + 1]], vertices[indices[i + 2]], point);
                     }
                     if (owner == null || locked.Contains(owner) || hidden.Contains(owner)) continue;
                     var faceNormal = toLocal.transpose.MultiplyVector(Vector3.Cross(ab, ac));
-                    normal = faceNormal / faceNormal.magnitude; // The determinant above excludes degenerate faces.
-                    distance = t;
+                    hit.normal = faceNormal / faceNormal.magnitude; // The determinant above excludes degenerate faces.
+                    hit.distance = t;
+                    hit.point = point;
                     brush = owner;
                 }
-                return distance < float.PositiveInfinity;
+                return brush != null;
             }
         }
 
@@ -203,11 +206,10 @@ namespace CsgBrush.Editor
             return mesh;
         }
 
-        internal static bool PickMesh(Transform child, Ray ray, bool construction, out Brush brush, out float distance, out Vector3 normal)
+        internal static bool PickMesh(Transform child, Ray ray, bool construction, out Brush brush, out RaycastHit hit)
         {
             brush = null;
-            normal = Vector3.up;
-            distance = float.PositiveInfinity;
+            hit = default;
             var mesh = MeshFor(child, out var sources);
             if (mesh == null || mesh.vertexCount == 0) return false;
             var toLocal = child.worldToLocalMatrix;
@@ -217,11 +219,10 @@ namespace CsgBrush.Editor
                 if (sources == null) return false;
                 if (!pickGeometry.TryGetValue(child, out var geometry))
                     pickGeometry.Add(child, geometry = new PickGeometry(mesh, sources));
-                return geometry.Hit(child, ray, construction, out brush, out distance, out normal);
+                return geometry.Hit(child, ray, construction, out brush, out hit);
             }
-            if (!BrushHooks.IntersectRayMesh(ray, mesh, child.localToWorldMatrix, out var hit)) return false;
+            if (!BrushHooks.IntersectRayMesh(ray, mesh, child.localToWorldMatrix, out hit)) return false;
             int triangle = hit.triangleIndex;
-            distance = hit.distance;
             if (sources != null && triangle >= 0 && triangle < sources.Length) brush = sources[triangle];
             return true;
         }

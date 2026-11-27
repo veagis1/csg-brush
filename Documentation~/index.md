@@ -8,6 +8,7 @@ This documentation covers the following features:
 
 | **Feature** | **Description** |
 | :--- | :--- |
+| [What's new in 0.6.2](https://github.com/veagis1/csg-brush/releases/tag/v0.6.2) | Place brushes on visible faces, hide or lock them in the Hierarchy, and move compound brushes faster. |
 | [What's new in 0.6.1](fork-0.6.1.md) | Draw on a surface grid, enter exact dimensions, set an origin and move objects to vertices and edges. |
 | [Floor plans](floor-plans.md) | Draw walls on the floor, joined automatically, with a floor and ceiling in every room. |
 | [Floor plan edit mode](floor-plan-edit-mode.md) | Select, move, rotate, scale, add, and delete the points, walls, and rooms of a floor plan. |

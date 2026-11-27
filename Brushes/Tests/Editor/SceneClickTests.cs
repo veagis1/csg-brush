@@ -310,6 +310,7 @@ namespace CsgBrush.Tests
                 var spheres = Brush.Active.Where(brush => brush.shape == BrushShape.Sphere).ToArray();
                 Assert.That(spheres, Has.Length.EqualTo(1));
                 var sphere = spheres[0];
+                Assert.That(sphere.transform.position.y, Is.Zero);
                 Assert.That(sphere.size.y, Is.EqualTo(sphere.size.x));
                 Assert.That(sphere.size.z, Is.EqualTo(sphere.size.x));
                 Assert.That(sphere.size.x, Is.GreaterThan(1f));
@@ -574,6 +575,7 @@ namespace CsgBrush.Tests
             Assert.AreEqual(before + 1, Brushes, "the box is made");
             Assert.AreNotEqual(m_Tower.gameObject, Selection.activeGameObject, "the brush behind the last click is not selected");
             Assert.AreNotEqual(m_Floor.gameObject, Selection.activeGameObject);
+            Assert.That(Selection.activeGameObject.transform.position.y, Is.Zero);
         }
 
         [Test]

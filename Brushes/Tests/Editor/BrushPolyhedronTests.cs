@@ -588,7 +588,9 @@ namespace CsgBrush.Tests
             Assert.AreEqual(16 * 6, arch.faces.Length, "six faces per segment block");
             var b = arch.Bounds();
             Assert.AreEqual(size.x, b.size.x, 1e-3f); Assert.AreEqual(size.y, b.size.y, 1e-3f); Assert.AreEqual(size.z, b.size.z, 1e-3f);
-            Assert.AreEqual(-1f, b.min.y, 1e-4f, "stands on the floor of its box, centred on the transform");
+            Assert.That(System.Array.FindAll(arch.vertices, p => p.y == -1f).Length, Is.EqualTo(8),
+                "All four vertices of each foot lie exactly on the floor.");
+            Assert.That(System.Array.Exists(arch.vertices, p => p.y < -1f), Is.False);
             // half an elliptical ring: outer 2 x 2, inner 1.5 x 1.5, times the depth; the polygonal ring is a little under it
             float exact = Mathf.PI * (2f * 2f - 1.5f * 1.5f) * 0.5f * size.z;
             Assert.Less(arch.Volume(), exact); Assert.Greater(arch.Volume(), exact * 0.97f);
@@ -601,6 +603,18 @@ namespace CsgBrush.Tests
             Assert.IsTrue(quarter.IsSound(out why), why);
             Assert.AreEqual(2f, quarter.Bounds().max.y + 1f, 1e-3f, "a partial arch keeps the top of the ellipse");
             Assert.Less(quarter.Bounds().size.x, size.x, "and does not reach the box's sides");
+            Assert.That(System.Array.TrueForAll(quarter.vertices, p => p.y > -1f), Is.True);
+        }
+
+        [Test]
+        public void FreehandStairsKeepTheirBasePlaneWhenVerticesAreWelded()
+        {
+            var size = new Vector3(2f, 3.249995f, 4f);
+            var stairs = BrushPolyhedron.Stairs(size, 0.25f);
+            float baseY = -size.y * 0.5f;
+            Assert.That(System.Array.Exists(stairs.vertices, p => p.y == baseY), Is.True);
+            Assert.That(System.Array.Exists(stairs.vertices, p => p.y < baseY), Is.False);
+            Assert.That(stairs.IsClosed(), Is.True);
         }
 
         [Test]

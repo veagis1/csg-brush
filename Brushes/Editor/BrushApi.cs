@@ -330,7 +330,7 @@ namespace CsgBrush.Editor
 
         internal static void SetDrawingPivot(Brush brush, Vector3 worldPoint)
         {
-            SetPivotAtLocalPoint(brush, brush.transform.InverseTransformPoint(worldPoint));
+            SetPivotAtLocalPoint(brush, brush.transform.InverseTransformPoint(worldPoint), worldPoint);
         }
 
         /// <summary>Place the pivot at the centre of the authored geometry's local bounds.</summary>
@@ -339,11 +339,11 @@ namespace CsgBrush.Editor
             if (CanPickPivot(brush)) SetPivotAtLocalPoint(brush, BrushGeometry.Polyhedron(brush).Bounds().center);
         }
 
-        static void SetPivotAtLocalPoint(Brush brush, Vector3 localPoint)
+        static void SetPivotAtLocalPoint(Brush brush, Vector3 localPoint, Vector3? worldPoint = null)
         {
             if (brush.UsesShapeOriginOffset)
             {
-                if (localPoint.sqrMagnitude >= 1e-12f) MovePivot(brush, brush.pivot, localPoint);
+                if (localPoint.sqrMagnitude >= 1e-12f) MovePivot(brush, brush.pivot, localPoint, worldPoint: worldPoint);
                 return;
             }
             if (!PivotBox(brush, out var size, out var current)) return;
@@ -351,7 +351,7 @@ namespace CsgBrush.Editor
             bool outside = brush.HasPivot && OutsideBox(distance, size);
             var pivot = brush.pivotMode == PivotMode.Absolute ? distance : Fractions(distance, size, outside);
             if (localPoint.sqrMagnitude < 1e-12f && outside == brush.pivotOutsideBounds) return;
-            MovePivot(brush, pivot, localPoint, outside);
+            MovePivot(brush, pivot, localPoint, outside, worldPoint);
         }
 
         /// <summary>
@@ -373,14 +373,15 @@ namespace CsgBrush.Editor
             MovePivot(brush, pivot, move);
         }
 
-        static void MovePivot(Brush brush, Vector3 pivot, Vector3 move, bool? outside = null)
+        static void MovePivot(Brush brush, Vector3 pivot, Vector3 move, bool? outside = null, Vector3? worldPoint = null)
         {
+            var world = worldPoint ?? brush.transform.TransformPoint(move);
             if (WallAnchors.CanEditWindowPivot(brush))
-                WallAnchors.WithoutMoveTracking(brush.GetComponent<WallAnchor>(), () => ApplyPivot(brush, pivot, move, outside));
-            else ApplyPivot(brush, pivot, move, outside);
+                WallAnchors.WithoutMoveTracking(brush.GetComponent<WallAnchor>(), () => ApplyPivot(brush, pivot, move, outside, world));
+            else ApplyPivot(brush, pivot, move, outside, world);
         }
 
-        static void ApplyPivot(Brush brush, Vector3 pivot, Vector3 move, bool? outside)
+        static void ApplyPivot(Brush brush, Vector3 pivot, Vector3 move, bool? outside, Vector3 world)
         {
             var t = brush.transform;
             Undo.RecordObject(brush, Tr("Задать начало WCS"));
@@ -388,7 +389,6 @@ namespace CsgBrush.Editor
             var children = new List<(Transform child, Vector3 position, Quaternion rotation)>();
             foreach (Transform c in t)
                 if (!Brush.IsGeneratedChildName(c.name)) { Undo.RecordObject(c, Tr("Задать начало WCS")); children.Add((c, c.position, c.rotation)); }
-            var world = t.TransformPoint(move);
             if (brush.HasPivot)
             {
                 brush.pivot = pivot;
