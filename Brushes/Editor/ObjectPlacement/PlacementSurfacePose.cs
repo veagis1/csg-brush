@@ -14,7 +14,7 @@ namespace CsgBrush.Editor
             var basis = SurfaceMatrix(new Pose(Vector3.zero, rotation));
 
             float lowest = float.PositiveInfinity;
-            foreach (var part in moving)
+            foreach (var part in surfaceSupport)
             {
                 if (part.Owner == null || !part.Owner.transform.IsChildOf(source)) continue;
                 var geometry = Read(part);

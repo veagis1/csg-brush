@@ -56,6 +56,41 @@ namespace CsgBrush.Tests
                 .Min(Height));
         }
 
+        [Test]
+        public void CarvedBlockRestsOnItsAuthoredBaseRegardlessOfCutterPicking([Values] bool lockCutter)
+        {
+            var block = BrushApi.CreateBox(new Vector3(-4f, 3f, -1f), new Vector3(-1f, 5f, 1f));
+            var cutter = BrushApi.CreateBox(new Vector3(-3.15f, 1f, -1.5f), new Vector3(-1.85f, 4f, 0.2f),
+                parent: block.transform, operation: BrushOperation.Subtract);
+            var floor = new GameObject("Пол").AddComponent<BoxCollider>();
+            floor.center = Vector3.down * 0.5f;
+            floor.size = new Vector3(20f, 1f, 20f);
+            BrushApi.ForceUpdate();
+            var model = BrushCsg.ModelOf(block);
+            float LowestMaterial() => BrushCsg.MeshObjects(model)
+                .SelectMany(t => t.GetComponent<MeshFilter>().sharedMesh.vertices.Select(t.TransformPoint)).Min(v => v.y);
+
+            float AuthoredBase() => BrushHooks.LocalShape(block, out _).vertices.Select(block.transform.TransformPoint).Min(v => v.y);
+            Assert.That(AuthoredBase(), Is.EqualTo(3f).Within(Tolerance));
+            Assert.That(LowestMaterial(), Is.EqualTo(3f).Within(Tolerance));
+            if (lockCutter) SceneVisibilityManager.instance.DisablePicking(cutter.gameObject, false);
+            try
+            {
+                var scene = new PlacementScene(block.transform);
+                Assert.That(scene.TryRaycast(new Ray(new Vector3(5f, 8f, 0f), Vector3.down), out var hit), Is.True);
+                Assert.That(hit.Part.Owner, Is.SameAs(floor));
+                var pose = scene.SurfacePose(hit.Position, hit.Normal, block.transform.rotation);
+                Assert.That(ObjectPlacement.CommitSurface(block.transform, pose), Is.True);
+                BrushApi.ForceUpdate();
+                Assert.That(AuthoredBase(), Is.EqualTo(0f).Within(Tolerance));
+                Assert.That(LowestMaterial(), Is.EqualTo(0f).Within(Tolerance));
+            }
+            finally
+            {
+                if (lockCutter) SceneVisibilityManager.instance.EnablePicking(cutter.gameObject, false);
+            }
+        }
+
         [TestCase(-1, -1)]
         [TestCase(0, -1)]
         [TestCase(1, -1)]

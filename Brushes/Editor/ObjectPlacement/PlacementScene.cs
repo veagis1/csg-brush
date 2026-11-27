@@ -51,6 +51,7 @@ namespace CsgBrush.Editor
         const float MagnetRadius = 14f; // Scene GUI points
         readonly List<Part> targets = new List<Part>();
         readonly List<Part> moving = new List<Part>();
+        readonly List<Part> surfaceSupport;
         readonly List<(Transform item, BrushSceneVisibility.Access access)> hierarchyAccess =
             new List<(Transform, BrushSceneVisibility.Access)>();
         readonly Dictionary<Brush, Part> targetBrushes = new Dictionary<Brush, Part>();
@@ -87,6 +88,9 @@ namespace CsgBrush.Editor
             foreach (var box in stage.FindComponentsOfType<BoxCollider>())
                 if (box.enabled) Add(box, new Bounds(box.center, box.size));
             hasMovingSolid = moving.Exists(part => part.Owner is Brush brush && brush.operation == BrushOperation.Add);
+            // A selected brush rests on its authored base, even when a child cuts through that base.
+            var rootBrush = moving.Find(part => part.Owner is Brush && part.Owner.transform == source);
+            surfaceSupport = rootBrush == null ? moving : new List<Part>(1) { rootBrush };
         }
 
         // Ray picking only needs the cut-to-wall lookup; no moving object or target catalogue.
