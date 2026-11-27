@@ -217,7 +217,7 @@ namespace CsgBrush.Editor
             if (link >= 0) { m_Kind = Hover.Link; m_HoverLink = link; m_Hover = onLink; return; }
             var ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
             int last = m_Last >= 0 ? spline.PointIndex(m_Last) : -1;
-            if (FreePoint(spline, ray, last >= 0 ? FloorPlanTools.World(spline, spline.points[last]) : (Vector3?)null, out var world))
+            if (FreePoint(spline, ray, last >= 0 ? FloorPlanTools.World(spline, spline.points[last]) : (Vector3?)null, out var world) && BrushDraw.WithinViewDepth(BrushDraw.DrawingCamera, world))
             {
                 m_Kind = Hover.Free;
                 m_Hover = spline.WorldToGraph(world);
@@ -360,7 +360,7 @@ namespace CsgBrush.Editor
             {
                 FindSpline(e.mousePosition);
                 if (m_Spline != null) { m_HoverValid = true; m_Hover = FloorPlanTools.World(m_Spline, m_Point >= 0 ? m_Spline.points[m_Point] : m_Local); }
-                else m_HoverValid = StartPoint(HandleUtility.GUIPointToWorldRay(e.mousePosition), out m_Hover, out m_Grid);
+                else m_HoverValid = StartPoint(HandleUtility.GUIPointToWorldRay(e.mousePosition), out m_Hover, out m_Grid) && BrushDraw.WithinViewDepth(((SceneView)window).camera, m_Hover);
                 if (e.type == EventType.MouseMove) SceneView.RepaintAll();
             }
             if (e.type == EventType.MouseDown && e.button == 0 && m_HoverValid && HandleUtility.nearestControl == id)

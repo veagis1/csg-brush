@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Export a Brush Group's finished geometry, UVs and materials to Blender from its Inspector.
+- Grid, visibility, shape editing and extrusion choices now last for the editor session. The creation panel keeps a working copy of the current shape's options. Project defaults and the fork's manual Add/Subtract controls remain available.
+- Hollow brushes retain their surface owners, materials and static flags through rebuilds and cached moves.
+- Large or distant edits use a bounded cell build. Drawing and dragging on a plane rejects points beyond the Scene view camera.
+- Brush, floor plan and spline editing populate Unity's right-click menu in the Scene view.
+
 ## 0.6.2
 
 ### Added

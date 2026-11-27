@@ -91,7 +91,7 @@ namespace CsgBrush.Editor
                 if (settings.shapeHandles != value)
                 {
                     settings.shapeHandles = value;
-                    settings.NotifyChanged();
+                    BrushSettings.NotifyToolChanged();
                 }
                 SceneView.RepaintAll();
             }

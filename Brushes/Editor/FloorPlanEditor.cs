@@ -48,8 +48,7 @@ namespace CsgBrush.Editor
         public static bool MouseOnFloor(PointGraph plan, Vector2 mouse, out Vector3 world)
         {
             var ray = HandleUtility.GUIPointToWorldRay(mouse);
-            if (Floor(plan).Raycast(ray, out float t) && t > 0f) { world = ray.GetPoint(t); return true; }
-            world = default; return false;
+            return BrushDraw.TryGridPoint(ray, Floor(plan), out world) && BrushDraw.WithinViewDepth(BrushDraw.DrawingCamera, world);
         }
 
         public static void DrawOutline(PointGraph plan)

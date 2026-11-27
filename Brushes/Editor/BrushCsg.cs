@@ -24,7 +24,7 @@ namespace CsgBrush.Editor
     /// </summary>
     public static class BrushCsg
     {
-        sealed class SolidEntry { public int key; public ManifoldSolid solid; public Bounds bounds, modelBounds; public Bounds[] blocks; public Vector3 colliderOrigin; public List<ConvexPolytope> partsAdd, partsRemove; public string partsProblem; }
+        sealed class SolidEntry { public int key; public ManifoldSolid solid; public (int outer, int inner)? hollowSourceIds; public Bounds bounds, modelBounds; public Bounds[] blocks; public Vector3 colliderOrigin; public List<ConvexPolytope> partsAdd, partsRemove; public string partsProblem; }
         sealed class PieceEntry
         {
             public string key;
@@ -199,6 +199,8 @@ namespace CsgBrush.Editor
 
         /// <summary>Changes when the same brushes make a different mesh (a fix in how it is made), so meshes saved by a build are made again.</summary>
         const int MeshFormat = 3; // rebuild meshes saved with overflowing pose keys or distant face winding
+        // Only groups with hollow operands need to replace their saved meshes and triangle sources.
+        internal const int HollowSourceMeshKeyBit = int.MinValue;
 
         /// <summary>A material's identity that survives editor sessions (its asset GUID), for the content keys.</summary>
         static int MaterialKey(Material material)
@@ -308,6 +310,7 @@ namespace CsgBrush.Editor
             public List<int> newSolidIndices = new List<int>();     // records whose solid must be built
             public List<PolyData> newSolidData = new List<PolyData>();
             public List<ManifoldSolid> newSolids = new List<ManifoldSolid>();
+            public (int outer, int inner)?[] hollowSourceIds;         // per record, set by the worker and retained in the solid cache
             public List<int> pieceRecord = new List<int>();          // per additive piece: record index
             public List<string> pieceKeys = new List<string>();
             public List<List<int>> pieceCutters = new List<List<int>>(); // record indices of the cutters
@@ -622,9 +625,11 @@ namespace CsgBrush.Editor
                 }
                 int meshKey = 17 * 31 + MeshFormat;
                 int ownerKey = 17;
+                bool hasHollowOperand = false;
                 for (int i = 0; i < job.pieceKeys.Count; i++)
                 {
                     var record = job.records[job.pieceRecord[i]];
+                    hasHollowOperand |= record.brush.IsHollow;
                     ownerKey = ownerKey * 31 + record.identity;
                     meshKey = meshKey * 31 + job.pieceKeys[i].GetHashCode();
                     meshKey = meshKey * 31 + KeyFor(record.brush.material);
@@ -633,12 +638,13 @@ namespace CsgBrush.Editor
                     foreach (int index in job.pieceCutters[i])
                     {
                         var cutter = job.records[index].brush;
+                        hasHollowOperand |= cutter.IsHollow;
                         ownerKey = ownerKey * 31 + job.records[index].identity;
                         meshKey = meshKey * 31 + KeyFor(cutter.material);
                         meshKey = meshKey * 31 + (int)cutter.cutFaces;
                     }
                 }
-                job.meshKey = meshKey;
+                job.meshKey = hasHollowOperand ? meshKey ^ HollowSourceMeshKeyBit : meshKey;
                 job.ownerKey = ownerKey; // Live identities can change even when coincident brushes make the same mesh.
             }
             bool anyMesh = false; foreach (var t in MeshObjects(model)) if (t.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null) { anyMesh = true; break; }
@@ -697,18 +703,32 @@ namespace CsgBrush.Editor
             using var translated = new TranslatedSolids();
             var sw = Stopwatch.StartNew();
             var solids = new ManifoldSolid[job.records.Count];
-            for (int i = 0; i < job.records.Count; i++) solids[i] = job.records[i].solid?.solid;
+            job.hollowSourceIds = new (int outer, int inner)?[job.records.Count];
+            for (int i = 0; i < job.records.Count; i++)
+            {
+                var cached = job.records[i].solid;
+                solids[i] = cached?.solid;
+                job.hollowSourceIds[i] = cached?.hollowSourceIds;
+            }
             for (int n = 0; n < job.newSolidIndices.Count; n++)
             {
+                int record = job.newSolidIndices[n];
                 var data = job.newSolidData[n];
                 var solid = ManifoldSolid.FromFaces(data.vertices, data.faces, out _);
                 if (solid != null && data.innerVertices != null)
                 {
                     using var inner = ManifoldSolid.FromFaces(data.innerVertices, data.innerFaces, out _);
-                    if (inner != null) { var hollow = ManifoldSolid.Boolean(solid, inner, ManifoldNative.OpType.Subtract); solid.Dispose(); solid = hollow; }
+                    if (inner != null)
+                    {
+                        // The result has no original ID. Its outer and inner triangles keep their operands' IDs.
+                        job.hollowSourceIds[record] = (solid.OriginalId, inner.OriginalId);
+                        var hollow = ManifoldSolid.Boolean(solid, inner, ManifoldNative.OpType.Subtract);
+                        solid.Dispose();
+                        solid = hollow;
+                    }
                 }
                 job.newSolids[n] = solid;
-                solids[job.newSolidIndices[n]] = solid;
+                solids[record] = solid;
             }
             job.builtSolids = job.newSolidIndices.Count; job.cachedSolids = job.records.Count - job.builtSolids;
             job.solidsMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
@@ -761,11 +781,7 @@ namespace CsgBrush.Editor
                         foreach (int p in members)
                             if (!job.records[job.pieceRecord[p]].origin.Equals(origin)) { sharedFrame = false; break; }
                         if (!sharedFrame) origin = Vector3.zero;
-                        if (members.Count >= CellMinPieces)
-                        {
-                            BuildCells(job, layer, members, solids, translated, origin, islands);
-                            continue;
-                        }
+                        if (members.Count >= CellMinPieces && BuildCells(job, layer, members, solids, translated, origin, islands)) continue;
                         keyBuilder.Clear().Append(layer).Append(sharedFrame ? 'L' : 'M');
                         foreach (int p in members)
                         {
@@ -781,8 +797,8 @@ namespace CsgBrush.Editor
                             {
                                 int r = job.pieceRecord[p];
                                 pieces.Add(translated.At(job.pieceEntries[p].piece, job.records[r].origin - origin));
-                                if (solids[r] != null) sources[solids[r].OriginalId] = job.records[r].brush;
-                                foreach (int c in job.pieceCutters[p]) if (solids[c] != null) sources[solids[c].OriginalId] = job.records[c].brush; // carved faces take the cutter's material
+                                AddSources(sources, job, solids, r);
+                                foreach (int c in job.pieceCutters[p]) AddSources(sources, job, solids, c);
                             }
                             using var union = pieces.Count == 1 ? null : ManifoldSolid.Batch(pieces, ManifoldNative.OpType.Add);
                             island = new Island { key = key, data = (union ?? pieces[0]).ToMesh(), sources = sources, origin = origin };
@@ -806,6 +822,7 @@ namespace CsgBrush.Editor
         public static int CellMinPieces = 12;
         /// <summary>Metres: the edge of a cell.</summary>
         public static float CellSize = 8f;
+        const int MaxCells = 4096;
         /// <summary>Where the cell walls are: off any grid a face snaps to, so no face lies on a wall.</summary>
         const float CellOffset = 0.0731f;
 
@@ -813,67 +830,62 @@ namespace CsgBrush.Editor
         /// A large island in cells of a fixed grid in the group's space: each cell is its pieces clipped to its box and united,
         /// read back without the box's own faces. An edit builds again only the cells its changed pieces reach; the others keep
         /// their meshes (keyed, like islands, by their pieces' keys), and no union ever spans the whole island. The cells'
-        /// surfaces meet along the walls, cut at the same places on both sides.
+        /// surfaces meet along the walls, cut at the same places on both sides. Beyond the cell budget the caller builds the
+        /// island whole, before any cell geometry is built.
         /// </summary>
-        static void BuildCells(Job job, int layer, List<int> members, ManifoldSolid[] solids, TranslatedSolids translated,
+        static bool BuildCells(Job job, int layer, List<int> members, ManifoldSolid[] solids, TranslatedSolids translated,
             Vector3 origin, List<Island> islands)
         {
-            var whole = job.bounds[job.pieceRecord[members[0]]];
-            foreach (int p in members) whole.Encapsulate(job.bounds[job.pieceRecord[p]]);
-            Vector3Int lo = CellOf(whole.min - origin), hi = CellOf(whole.max - origin);
+            if (!TryCollectCells(job, members, origin, out var cells)) return false;
             var keyBuilder = new System.Text.StringBuilder();
             var inCell = new List<int>();
-            for (int x = lo.x; x <= hi.x; x++)
-                for (int y = lo.y; y <= hi.y; y++)
-                    for (int z = lo.z; z <= hi.z; z++)
+            foreach (var cell in cells)
+            {
+                var localBox = CellBounds(cell);
+                var box = OffsetBounds(localBox, origin);
+                inCell.Clear();
+                foreach (int p in members) if (Overlaps(job, job.pieceRecord[p], box)) inCell.Add(p);
+                if (inCell.Count == 0) continue;
+                keyBuilder.Clear().Append(layer).Append('#').Append(cell.x).Append(',').Append(cell.y).Append(',').Append(cell.z);
+                // A cut elsewhere along a long piece leaves this cell as it was.
+                foreach (int p in inCell)
+                {
+                    AppendOperand(job.records[job.pieceRecord[p]]);
+                    foreach (int c in job.pieceCutters[p])
+                        if (Overlaps(job, c, box)) AppendOperand(job.records[c]);
+                }
+                string key = keyBuilder.ToString();
+                if (job.islandsBefore == null || !job.islandsBefore.TryGetValue(key, out var island))
+                {
+                    island = new Island { key = key, sources = new Dictionary<int, Brush>(), origin = origin };
+                    using (var boxSolid = BoxSolid(localBox))
                     {
-                        var min = new Vector3(x, y, z) * CellSize + Vector3.one * CellOffset;
-                        var localBox = new Bounds(min + Vector3.one * (CellSize * 0.5f), Vector3.one * CellSize);
-                        var box = OffsetBounds(localBox, origin);
-                        inCell.Clear();
-                        foreach (int p in members) if (Overlaps(job, job.pieceRecord[p], box)) inCell.Add(p);
-                        if (inCell.Count == 0) continue;
-                        keyBuilder.Clear().Append(layer).Append('#').Append(x).Append(',').Append(y).Append(',').Append(z);
-                        // what the cell holds depends only on its pieces and the cuts that reach into it: a cut elsewhere along
-                        // a long piece leaves this cell as it was
+                        var clipped = new List<ManifoldSolid>(inCell.Count); var owned = new List<ManifoldSolid>();
                         foreach (int p in inCell)
                         {
-                            var add = job.records[job.pieceRecord[p]];
-                            AppendOperand(add);
-                            foreach (int c in job.pieceCutters[p])
-                                if (Overlaps(job, c, box)) AppendOperand(job.records[c]);
+                            var piece = translated.At(job.pieceEntries[p].piece, job.records[job.pieceRecord[p]].origin - origin);
+                            var pb = job.bounds[job.pieceRecord[p]];
+                            if (box.Contains(pb.min) && box.Contains(pb.max)) clipped.Add(piece);
+                            else { var c = ManifoldSolid.Boolean(piece, boxSolid, ManifoldNative.OpType.Intersect); clipped.Add(c); owned.Add(c); }
+                            int r = job.pieceRecord[p];
+                            AddSources(island.sources, job, solids, r);
+                            foreach (int c in job.pieceCutters[p]) AddSources(island.sources, job, solids, c);
                         }
-                        string key = keyBuilder.ToString();
-                        if (job.islandsBefore == null || !job.islandsBefore.TryGetValue(key, out var island))
-                        {
-                            island = new Island { key = key, sources = new Dictionary<int, Brush>(), origin = origin };
-                            using (var boxSolid = BoxSolid(localBox))
-                            {
-                                var clipped = new List<ManifoldSolid>(inCell.Count); var owned = new List<ManifoldSolid>();
-                                foreach (int p in inCell)
-                                {
-                                    var piece = translated.At(job.pieceEntries[p].piece, job.records[job.pieceRecord[p]].origin - origin);
-                                    var pb = job.bounds[job.pieceRecord[p]];
-                                    if (box.Contains(pb.min) && box.Contains(pb.max)) clipped.Add(piece); // wholly inside: as it is
-                                    else { var c = ManifoldSolid.Boolean(piece, boxSolid, ManifoldNative.OpType.Intersect); clipped.Add(c); owned.Add(c); }
-                                    int r = job.pieceRecord[p];
-                                    if (solids[r] != null) island.sources[solids[r].OriginalId] = job.records[r].brush;
-                                    foreach (int c in job.pieceCutters[p]) if (solids[c] != null) island.sources[solids[c].OriginalId] = job.records[c].brush;
-                                }
-                                using (var union = clipped.Count == 1 ? null : ManifoldSolid.Batch(clipped, ManifoldNative.OpType.Add))
-                                    island.data = Without((union ?? clipped[0]).ToMesh(), boxSolid.OriginalId);
-                                foreach (var c in owned) c.Dispose();
-                            }
-                            job.builtIslands++;
-                        }
-                        else
-                        {
-                            island = island.AtOrigin(origin);
-                            job.cachedIslands++;
-                        }
-                        job.islandsAfter[key] = island;
-                        islands.Add(island);
+                        using (var union = clipped.Count == 1 ? null : ManifoldSolid.Batch(clipped, ManifoldNative.OpType.Add))
+                            island.data = Without((union ?? clipped[0]).ToMesh(), boxSolid.OriginalId);
+                        foreach (var c in owned) c.Dispose();
                     }
+                    job.builtIslands++;
+                }
+                else
+                {
+                    island = island.AtOrigin(origin);
+                    job.cachedIslands++;
+                }
+                job.islandsAfter[key] = island;
+                islands.Add(island);
+            }
+            return true;
 
             void AppendOperand(Record record)
             {
@@ -882,6 +894,50 @@ namespace CsgBrush.Editor
                     .Append(':').Append(BrushPolyhedron.MicronKey(offset.x))
                     .Append(':').Append(BrushPolyhedron.MicronKey(offset.y))
                     .Append(':').Append(BrushPolyhedron.MicronKey(offset.z));
+            }
+        }
+
+        static bool TryCollectCells(Job job, List<int> members, Vector3 origin, out List<Vector3Int> cells)
+        {
+            cells = null;
+            if (!(CellSize > 0f) || float.IsInfinity(CellSize)) return false;
+            var reached = new HashSet<Vector3Int>();
+            foreach (int p in members)
+            {
+                int record = job.pieceRecord[p];
+                var blocks = job.blocks[record];
+                if (blocks == null)
+                {
+                    if (!TryAddRange(job.bounds[record])) return false;
+                }
+                else
+                {
+                    foreach (var bounds in blocks)
+                        if (!TryAddRange(bounds)) return false;
+                }
+            }
+            cells = new List<Vector3Int>(reached);
+            cells.Sort((a, b) => a.x != b.x ? a.x.CompareTo(b.x) : a.y != b.y ? a.y.CompareTo(b.y) : a.z.CompareTo(b.z));
+            return true;
+
+            bool TryAddRange(Bounds bounds)
+            {
+                if (!TryCellOf(bounds.min - origin, out var lo) || !TryCellOf(bounds.max - origin, out var hi)) return false;
+                // Bound the product before multiplying and use offsets so a range ending at int.MaxValue cannot wrap.
+                long nx = (long)hi.x - lo.x + 1, ny = (long)hi.y - lo.y + 1, nz = (long)hi.z - lo.z + 1;
+                if (nx > MaxCells || ny > MaxCells || nz > MaxCells || nx * ny * nz > MaxCells) return false;
+                for (int x = 0; x < nx; x++)
+                    for (int y = 0; y < ny; y++)
+                        for (int z = 0; z < nz; z++)
+                        {
+                            var cell = new Vector3Int(lo.x + x, lo.y + y, lo.z + z);
+                            if (!reached.Add(cell)) continue;
+                            if (reached.Count > MaxCells) return false;
+                            var box = CellBounds(cell);
+                            var min = box.min; var max = box.max;
+                            if (!(min.x < max.x && min.y < max.y && min.z < max.z)) return false;
+                        }
+                return true;
             }
         }
 
@@ -927,7 +983,35 @@ namespace CsgBrush.Editor
             return false;
         }
 
-        static Vector3Int CellOf(Vector3 p) => Vector3Int.FloorToInt((p - Vector3.one * CellOffset) / CellSize);
+        static void AddSources(Dictionary<int, Brush> sources, Job job, ManifoldSolid[] solids, int record)
+        {
+            var solid = solids[record];
+            if (solid == null) return;
+            var brush = job.records[record].brush;
+            if (job.hollowSourceIds[record] is { } ids)
+            {
+                sources[ids.outer] = brush;
+                sources[ids.inner] = brush;
+            }
+            else sources[solid.OriginalId] = brush;
+        }
+
+        static bool TryCellOf(Vector3 position, out Vector3Int cell)
+        {
+            double x = System.Math.Floor(((double)position.x - CellOffset) / CellSize);
+            double y = System.Math.Floor(((double)position.y - CellOffset) / CellSize);
+            double z = System.Math.Floor(((double)position.z - CellOffset) / CellSize);
+            cell = default;
+            if (!(x >= int.MinValue && x <= int.MaxValue && y >= int.MinValue && y <= int.MaxValue && z >= int.MinValue && z <= int.MaxValue)) return false;
+            cell = new Vector3Int((int)x, (int)y, (int)z);
+            return true;
+        }
+
+        static Bounds CellBounds(Vector3Int cell)
+        {
+            var min = new Vector3(cell.x, cell.y, cell.z) * CellSize + Vector3.one * CellOffset;
+            return new Bounds(min + Vector3.one * (CellSize * 0.5f), Vector3.one * CellSize);
+        }
 
         static ManifoldSolid BoxSolid(Bounds b)
         {
@@ -966,14 +1050,16 @@ namespace CsgBrush.Editor
             // solids into the cache
             for (int n = 0; n < job.newSolidIndices.Count; n++)
             {
-                var r = job.records[job.newSolidIndices[n]];
+                int record = job.newSolidIndices[n];
+                var r = job.records[record];
                 if (r.brush == null) { job.newSolids[n]?.Dispose(); continue; }
                 if (s_Solids.TryGetValue(r.brush, out var old)) old.solid?.Dispose();
                 var data = job.newSolidData[n];
-                var entry = new SolidEntry { key = r.localKey, solid = job.newSolids[n], bounds = data.bounds, blocks = data.blocks };
+                var entry = new SolidEntry { key = r.localKey, solid = job.newSolids[n], hollowSourceIds = job.hollowSourceIds[record],
+                    bounds = data.bounds, blocks = data.blocks };
                 if (entry.solid == null) r.brush.problem = Tr("Не удалось построить форму.");
                 s_Solids[r.brush] = entry;
-                r.solid = entry; job.records[job.newSolidIndices[n]] = r;
+                r.solid = entry; job.records[record] = r;
             }
             // pieces into the cache
             for (int p = 0; p < job.pieceRecord.Count; p++)

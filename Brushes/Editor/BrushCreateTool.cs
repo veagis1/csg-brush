@@ -162,6 +162,16 @@ namespace CsgBrush.Editor
             return diameter + (grid > 0f ? BrushSnap.Round(heightDelta, grid) : heightDelta);
         }
 
+        // A point on an oblique ray can be visible beyond a ray length of farClipPlane.
+        internal static bool WithinViewDepth(Camera camera, Vector3 point)
+        {
+            if (camera == null) return true;
+            float depth = Vector3.Dot(point - camera.transform.position, camera.transform.forward);
+            return depth >= camera.nearClipPlane && depth <= camera.farClipPlane;
+        }
+
+        internal static Camera DrawingCamera => SceneView.currentDrawingSceneView?.camera;
+
         internal static bool TryGridPoint(Ray ray, Plane plane, out Vector3 point)
         {
             point = Vector3.zero;
@@ -182,11 +192,11 @@ namespace CsgBrush.Editor
     /// </summary>
     public abstract class BrushCreateTool : EditorTool
     {
-        /// <summary>Operation of the brushes drawn next (Project Settings > Brushes).</summary>
+        /// <summary>Setting the operation pins the manual choice for this editor session.</summary>
         public static BrushOperation Operation
         {
-            get => BrushSettings.instance.newOperation;
-            set { BrushSettings.instance.newOperation = value; ManualOperation = value; }
+            get => ManualOperation ?? BrushSettings.instance.newOperation;
+            set => ManualOperation = value;
         }
 
         internal static BrushOperation? ManualOperation
@@ -227,7 +237,13 @@ namespace CsgBrush.Editor
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get(Shape.ToString()), Title);
 
         public override void OnActivated() { BrushMenu.PrepareCreation(); ResetGesture(); Active = this; }
-        public override void OnWillBeDeactivated() { ResetGesture(); if (Active == this) Active = null; }
+        public override void OnWillBeDeactivated()
+        {
+            ResetGesture();
+            if (Active != this) return;
+            Active = null;
+            BrushSettings.instance.ResetCreationOptions();
+        }
 
         internal bool Drawing => state != State.Idle;
         BrushOperation DrawOperation => ResolveOperation(drawManual, hadDrawTarget,
@@ -318,6 +334,7 @@ namespace CsgBrush.Editor
             var workingNormal = faceNormal;
             hoverValid = BrushSurfaceGrid.TryDrawingFrame(ray, surface, ref point, ref workingNormal, out hoverGrid) ||
                 (!BrushSurfaceGrid.HasHeld && (surface != null || FindGridPlane(view, ray, out point, out workingNormal)));
+            hoverValid &= BrushDraw.WithinViewDepth(view.camera, point);
             bool onSurface = surface != null && Mathf.Abs(Vector3.Dot(point - hit, faceNormal)) < 0.001f &&
                 Mathf.Abs(Vector3.Dot(workingNormal, faceNormal)) > 0.999f;
             var selected = ManualOperation == BrushOperation.Subtract && selectedTarget.CanPick &&
@@ -337,8 +354,9 @@ namespace CsgBrush.Editor
         public static void NewBrushParameters(out float stepHeight, out float wallThickness)
         {
             var s = BrushSettings.instance;
+            var options = s.CreationOptions;
             stepHeight = s.NewStepHeightMeters;
-            wallThickness = s.newWallThickness > 0f ? s.newWallThickness : s.GridMeters;
+            wallThickness = options.newWallThickness > 0f ? options.newWallThickness : s.GridMeters;
         }
 
         /// <summary>Curved and spiral stairs are placed by their axis: press on the axis, drag the outer radius, then the height.</summary>
@@ -376,14 +394,15 @@ namespace CsgBrush.Editor
             var s = BrushSettings.instance;
             NewBrushParameters(out float stepHeight, out _);
             float grid = s.GridMeters;
-            var p = BrushGeometry.ShapeParams.Default(size, s.newSides);
-            p.tessellation = s.newTessellation; p.stepHeight = stepHeight;
+            var options = s.CreationOptions;
+            var p = BrushGeometry.ShapeParams.Default(size, options.newSides);
+            p.tessellation = options.newTessellation; p.stepHeight = stepHeight;
             var st = p.stairs;
-            st.innerRadius = s.newInnerRadius > 0f ? s.newInnerRadius : grid;
-            st.stepThickness = s.newStepThickness > 0f ? s.newStepThickness : BrushSettings.DefaultStepThicknessMeters;
-            st.curveAngle = Mathf.Max(1f, s.newCurveAngle); st.stepsPer360 = Mathf.Max(1, s.newStepsPer360);
-            st.counterClockwise = s.newCounterClockwise; st.slopedFloor = s.newSlopedFloor; st.slopedCeiling = s.newSlopedCeiling;
-            st.open = (shape == BrushShape.Stairs || shape == BrushShape.CurvedStairs) && !s.newSupportUnderSteps;
+            st.innerRadius = options.newInnerRadius > 0f ? options.newInnerRadius : grid;
+            st.stepThickness = options.newStepThickness > 0f ? options.newStepThickness : BrushSettings.DefaultStepThicknessMeters;
+            st.curveAngle = Mathf.Max(1f, options.newCurveAngle); st.stepsPer360 = Mathf.Max(1, options.newStepsPer360);
+            st.counterClockwise = options.newCounterClockwise; st.slopedFloor = options.newSlopedFloor; st.slopedCeiling = options.newSlopedCeiling;
+            st.open = (shape == BrushShape.Stairs || shape == BrushShape.CurvedStairs) && !options.newSupportUnderSteps;
             if (shape == BrushShape.CurvedStairs || shape == BrushShape.SpiralStairs)
             {
                 // steps from the drawn height; step width so the footprint's x extent matches the drawn one
@@ -395,7 +414,7 @@ namespace CsgBrush.Editor
                 float targetRo = trialX > 1e-4f ? ro * size.x / trialX : ro;
                 st.stepWidth = Mathf.Max(grid > 0f ? grid : 0.01f, BrushSnap.Round(targetRo - st.innerRadius, grid));
             }
-            if (shape == BrushShape.Arch) { st.curveAngle = Mathf.Clamp(s.newArchAngle, 1f, 180f); NewBrushParameters(out _, out p.wallThickness); }
+            if (shape == BrushShape.Arch) { st.curveAngle = Mathf.Clamp(options.newArchAngle, 1f, 180f); NewBrushParameters(out _, out p.wallThickness); }
             p.stairs = st;
             return p;
         }
@@ -406,7 +425,7 @@ namespace CsgBrush.Editor
         /// A new brush is drawn square to the surface it starts on, slopes included, unless it goes onto the grid: with
         /// snapping on, it stays square to the world, as the grid would turn it back anyway.
         /// </summary>
-        static bool AlignsToSurface => !BrushSettings.instance.snapToGrid || BrushSettings.instance.newGridSnap == GridSnap.Off;
+        static bool AlignsToSurface => !BrushSettings.instance.snapToGrid || BrushSettings.instance.CreationOptions.newGridSnap == GridSnap.Off;
 
         public override void OnToolGUI(EditorWindow window)
         {
@@ -469,7 +488,7 @@ namespace CsgBrush.Editor
                     {
                         var ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
                         var plane = new Plane(normal, origin);
-                        if (plane.Raycast(ray, out float t))
+                        if (plane.Raycast(ray, out float t) && BrushDraw.WithinViewDepth(view.camera, ray.GetPoint(t)))
                             opposite = BrushDraw.SnapInPlane(ray.GetPoint(t), drawGrid.Valid ? drawGrid.Origin : origin, planeRotation, Grid);
                         e.Use(); SceneView.RepaintAll();
                     }
@@ -500,7 +519,7 @@ namespace CsgBrush.Editor
                     {
                         var ray = HandleUtility.GUIPointToWorldRay(e.mousePosition);
                         var plane = new Plane(normal, origin);
-                        if (plane.Raycast(ray, out float t))
+                        if (plane.Raycast(ray, out float t) && BrushDraw.WithinViewDepth(view.camera, ray.GetPoint(t)))
                         {
                             BrushDraw.DirectedPose(origin, opposite, 0f, false, 0f, planeRotation, Grid, BrushSettings.instance.rotationSnapDegrees, out _, out _, out var r);
                             float offset = Vector3.Dot(ray.GetPoint(t) - origin, r * Vector3.right);
@@ -574,10 +593,11 @@ namespace CsgBrush.Editor
         {
             var ray = HandleUtility.GUIPointToWorldRay(mouse);
             var surface = BrushHooks.PickConstructionSurface(ray, out point, out normal);
-            if (BrushSurfaceGrid.TryDrawingFrame(ray, surface, ref point, ref normal, out _)) return true;
+            var view = SceneView.currentDrawingSceneView ?? SceneView.lastActiveSceneView;
+            if (BrushSurfaceGrid.TryDrawingFrame(ray, surface, ref point, ref normal, out _)) return BrushDraw.WithinViewDepth(view?.camera, point);
             if (BrushSurfaceGrid.HasHeld) return false;
-            if (surface != null) return true;
-            return FindGridPlane(SceneView.currentDrawingSceneView ?? SceneView.lastActiveSceneView, ray, out point, out normal);
+            if (surface != null) return BrushDraw.WithinViewDepth(view?.camera, point);
+            return FindGridPlane(view, ray, out point, out normal);
         }
 
         static bool FindGridPlane(SceneView view, Ray ray, out Vector3 point, out Vector3 normal)
@@ -585,7 +605,7 @@ namespace CsgBrush.Editor
             if (view == null) { point = Vector3.zero; normal = Vector3.up; return false; }
             var plane = GridPlane(view);
             normal = plane.normal;
-            return BrushDraw.TryGridPoint(ray, plane, out point);
+            return BrushDraw.TryGridPoint(ray, plane, out point) && BrushDraw.WithinViewDepth(view.camera, point);
         }
 
         /// <summary>
@@ -676,7 +696,7 @@ namespace CsgBrush.Editor
                 {
                     BrushPolyhedron inner = null;
                     var settings = BrushSettings.instance;
-                    if (settings.newHollow && (Shape == BrushShape.Box || Shape == BrushShape.Cylinder))
+                    if (settings.CreationOptions.newHollow && (Shape == BrushShape.Box || Shape == BrushShape.Cylinder))
                     {
                         NewBrushParameters(out _, out float wall);
                         if (Shape == BrushShape.Box) inner = BrushPolyhedron.Box(Vector3.Max(size - Vector3.one * (2f * wall), Vector3.one * 0.001f));
@@ -727,8 +747,9 @@ namespace CsgBrush.Editor
             brush.curveAngle = p.stairs.curveAngle; brush.numSteps = p.stairs.numSteps; brush.stepsPer360 = p.stairs.stepsPer360;
             brush.counterClockwise = p.stairs.counterClockwise; brush.slopedFloor = p.stairs.slopedFloor; brush.slopedCeiling = p.stairs.slopedCeiling;
             brush.supportUnderSteps = !p.stairs.open;
-            if (brush.SupportsHollow && s.newHollow) { brush.hollow = true; brush.wallThickness = wall; }
-            brush.gridSnap = s.newGridSnap;
+            var options = s.CreationOptions;
+            if (brush.SupportsHollow && options.newHollow) { brush.hollow = true; brush.wallThickness = wall; }
+            brush.gridSnap = options.newGridSnap;
             brush.exactSizeMeters = size;
             BrushApi.SetDrawingPivot(brush, start);
             BrushSnap.Accept(brush);

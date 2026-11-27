@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace CsgBrush.Editor
 {
@@ -28,6 +29,8 @@ namespace CsgBrush.Editor
         public static void Enter() { if (!IsActive) ToolManager.SetActiveContext<BrushEditContext>(); }
         public static void Exit() { if (IsActive) ToolManager.SetActiveContext<GameObjectToolContext>(); }
         public static void Toggle() { if (IsActive) Exit(); else Enter(); }
+
+        public override void PopulateMenu(DropdownMenu menu) => BrushEditState.FillMenu(menu);
 
         protected override Type GetEditorToolType(Tool tool)
         {
@@ -224,6 +227,19 @@ namespace CsgBrush.Editor
 
         // ------------------------------------------------------------------ picking
 
+        internal static void FillMenu(DropdownMenu menu)
+        {
+            menu.AppendAction(Tr("Выбрать всё"), _ => SelectAll());
+            menu.AppendAction(Tr("Инвертировать выбор"), _ => Invert());
+            menu.AppendAction(Tr("Снять выделение"), _ => ClearSelection());
+            menu.AppendSeparator();
+            menu.AppendAction(Tr("Вершины  1"), _ => { Mode = BrushEditMode.Vertex; SceneView.RepaintAll(); }, Mode == BrushEditMode.Vertex ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+            menu.AppendAction(Tr("Рёбра  2"), _ => { Mode = BrushEditMode.Edge; SceneView.RepaintAll(); }, Mode == BrushEditMode.Edge ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+            menu.AppendAction(Tr("Грани  3"), _ => { Mode = BrushEditMode.Face; SceneView.RepaintAll(); }, Mode == BrushEditMode.Face ? DropdownMenuAction.Status.Checked : DropdownMenuAction.Status.Normal);
+            menu.AppendSeparator();
+            menu.AppendAction(Tr("Завершить правку"), _ => BrushEditContext.Exit());
+        }
+
         static void HandlePicking(Brush brush, BrushPolyhedron poly, Selection sel, Event e, int passive)
         {
             if (dragging || e.alt) return;
@@ -232,21 +248,6 @@ namespace CsgBrush.Editor
             {
                 marquee = true; marqueeStart = e.mousePosition;
                 EditModeMouse.Take(passive); e.Use();
-            }
-            else if (e.type == EventType.ContextClick && GUIUtility.hotControl == 0) // a right click, not the end of a fly-through (right drag)
-            {
-                var menu = new GenericMenu();
-                menu.AddItem(new GUIContent(Tr("Выбрать всё")), false, SelectAll);
-                menu.AddItem(new GUIContent(Tr("Инвертировать выбор")), false, Invert);
-                menu.AddItem(new GUIContent(Tr("Снять выделение")), false, ClearSelection);
-                menu.AddSeparator("");
-                menu.AddItem(new GUIContent(Tr("Вершины  1")), Mode == BrushEditMode.Vertex, () => { Mode = BrushEditMode.Vertex; SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent(Tr("Рёбра  2")), Mode == BrushEditMode.Edge, () => { Mode = BrushEditMode.Edge; SceneView.RepaintAll(); });
-                menu.AddItem(new GUIContent(Tr("Грани  3")), Mode == BrushEditMode.Face, () => { Mode = BrushEditMode.Face; SceneView.RepaintAll(); });
-                menu.AddSeparator("");
-                menu.AddItem(new GUIContent(Tr("Завершить правку")), false, BrushEditContext.Exit);
-                menu.ShowAsContext();
-                e.Use();
             }
             else if (e.type == EventType.MouseDrag && marquee && GUIUtility.hotControl == passive) { e.Use(); SceneView.RepaintAll(); }
             else if (e.type == EventType.MouseUp && marquee && GUIUtility.hotControl == passive)
