@@ -219,8 +219,13 @@ namespace CsgBrush
             var verts = new List<Vector3>(); var lookup = new Dictionary<Vector3, int>();
             int V(float x, float y, float z)
             {
-                var v = new Vector3(Mathf.Round(x * 1e5f) / 1e5f, Mathf.Round(y * 1e5f) / 1e5f, Mathf.Round(z * 1e5f) / 1e5f);
-                if (!lookup.TryGetValue(v, out int i)) { i = verts.Count; verts.Add(v); lookup[v] = i; }
+                var key = new Vector3(Mathf.Round(x * 1e5f) / 1e5f, Mathf.Round(y * 1e5f) / 1e5f, Mathf.Round(z * 1e5f) / 1e5f);
+                if (!lookup.TryGetValue(key, out int i))
+                {
+                    i = verts.Count;
+                    verts.Add(new Vector3(x, y, z));
+                    lookup.Add(key, i);
+                }
                 return i;
             }
             var faces = new List<Face>();
@@ -361,19 +366,31 @@ namespace CsgBrush
             float angle = Mathf.Clamp(angleDegrees, 1f, 180f) * Mathf.Deg2Rad;
             float t0 = Mathf.PI * 0.5f + angle * 0.5f, step = -angle / n; // from the left end over the top to the right
             float y0 = -size.y * 0.5f;
+            var outer = new Vector2(a, b);
+            var inner = new Vector2(a - t, b - t);
+            Vector2 Direction(int sample)
+            {
+                // The ends of a semicircle lie exactly on its diameter.
+                if (angleDegrees >= 180f && sample == 0) return Vector2.left;
+                if (angleDegrees >= 180f && sample == n) return Vector2.right;
+                float radians = t0 + sample * step;
+                return new Vector2(Mathf.Cos(radians), Mathf.Sin(radians));
+            }
             var verts = new List<Vector3>(); var faces = new List<Face>();
+            var start = Direction(0);
             for (int k = 0; k < n; k++)
             {
-                float u0 = t0 + k * step, u1 = t0 + (k + 1) * step;
+                var end = Direction(k + 1);
                 int v = verts.Count;
-                Vector2 o0 = new Vector2(a * Mathf.Cos(u0), b * Mathf.Sin(u0)), o1 = new Vector2(a * Mathf.Cos(u1), b * Mathf.Sin(u1));
-                Vector2 i0 = new Vector2((a - t) * Mathf.Cos(u0), (b - t) * Mathf.Sin(u0)), i1 = new Vector2((a - t) * Mathf.Cos(u1), (b - t) * Mathf.Sin(u1));
+                Vector2 o0 = Vector2.Scale(outer, start), o1 = Vector2.Scale(outer, end);
+                Vector2 i0 = Vector2.Scale(inner, start), i1 = Vector2.Scale(inner, end);
                 foreach (var z in new[] { -d * 0.5f, d * 0.5f })
                 {
                     verts.Add(new Vector3(i0.x, y0 + i0.y, z)); verts.Add(new Vector3(o0.x, y0 + o0.y, z));
                     verts.Add(new Vector3(o1.x, y0 + o1.y, z)); verts.Add(new Vector3(i1.x, y0 + i1.y, z));
                 }
                 AddBlock(verts, faces, k, new[] { v, v + 1, v + 2, v + 3 }, new[] { v + 4, v + 5, v + 6, v + 7 });
+                start = end;
             }
             return new BrushPolyhedron { vertices = verts.ToArray(), faces = faces.ToArray() };
         }

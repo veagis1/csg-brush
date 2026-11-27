@@ -161,7 +161,7 @@ namespace CsgBrush.Editor
         public override void OnToolGUI(EditorWindow window)
         {
             var spline = target as Spline;
-            if (spline == null || !(window is SceneView)) return;
+            if (!(window is SceneView) || spline == null || !BrushSceneVisibility.CanPick(spline.transform)) return;
             var e = Event.current;
             int id = GUIUtility.GetControlID(FocusType.Passive);
             if (e.type == EventType.Layout) HandleUtility.AddDefaultControl(id);
@@ -232,7 +232,7 @@ namespace CsgBrush.Editor
         public static bool FreePoint(Spline spline, Ray ray, Vector3? last, out Vector3 world)
         {
             float g = BrushSettings.instance.snapToGrid ? BrushSettings.instance.GridMeters : 0f;
-            var hit = BrushHooks.PickBrushSurface(ray, out var point, out var normal);
+            var hit = BrushHooks.PickConstructionSurface(ray, out var point, out var normal);
             if (hit != null && hit.generatedBy != spline) // never on its own pieces
             {
                 float rest = spline.profile == Spline.Profile.Circle ? spline.size.x * 0.5f : spline.size.y * 0.5f;
@@ -241,8 +241,8 @@ namespace CsgBrush.Editor
             }
             float height = last.HasValue ? last.Value.y : spline.GraphToWorld(Vector3.zero).y;
             var level = new Plane(Vector3.up, new Vector3(0f, height, 0f));
-            if (!level.Raycast(ray, out float t) || t <= 0f) { world = default; return false; }
-            world = SnapAcross(ray.GetPoint(t), Vector3.up, g);
+            if (!BrushDraw.TryGridPoint(ray, level, out point)) { world = default; return false; }
+            world = SnapAcross(point, Vector3.up, g);
             return true;
         }
 
@@ -337,7 +337,7 @@ namespace CsgBrush.Editor
             for (int i = -1; i < m_Splines.Count; i++)
             {
                 var s = i < 0 ? selected : m_Splines[i]; // the selected spline first
-                if (s == null || (i >= 0 && s == selected)) continue;
+                if (s == null || (i >= 0 && s == selected) || !BrushSceneVisibility.CanPick(s.transform)) continue;
                 s.EnsureGraph();
                 int point = FloorPlanTools.PointUnderMouse(s, mouse);
                 if (point >= 0) { m_Spline = s; m_Point = point; return; }
@@ -383,7 +383,7 @@ namespace CsgBrush.Editor
                 m_HoverValid = false;
                 e.Use();
             }
-            if (e.type == EventType.Repaint && m_HoverValid)
+            if (e.type == EventType.Repaint && m_HoverValid && (m_Spline == null || BrushSceneVisibility.CanPick(m_Spline.transform)))
             {
                 bool joining = m_Spline != null; // white and larger on a spline's point or link, as when drawing
                 if (!joining) BrushSurfaceGrid.Draw(m_Grid, m_Hover);
@@ -400,15 +400,14 @@ namespace CsgBrush.Editor
         {
             float g = BrushSettings.instance.snapToGrid ? BrushSettings.instance.GridMeters : 0f;
             float rest = Spline.DefaultSize.x * 0.5f; // a new spline's circle
-            var surface = BrushHooks.PickBrushSurface(ray, out var point, out var normal);
+            var surface = BrushHooks.PickConstructionSurface(ray, out var point, out var normal);
             if (surface == null)
             {
                 normal = Vector3.up;
-                if (!new Plane(normal, Vector3.zero).Raycast(ray, out float t) || t <= 0f)
+                if (!BrushDraw.TryGridPoint(ray, new Plane(normal, Vector3.zero), out point))
                 {
                     grid = default; world = default; return false;
                 }
-                point = ray.GetPoint(t);
             }
             grid = surface != null && BrushSurfaceGrid.Local ? BrushSurfaceGrid.ForSurface(surface, point, normal)
                 : BrushSurfaceGrid.Frame.OnPlane(point, normal);

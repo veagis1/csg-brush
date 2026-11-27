@@ -93,7 +93,8 @@ namespace CsgBrush.Editor
             for (int i = 0; i < group.Count; i++)
             {
                 var brush = group[i];
-                if (brush == ignore || brush.operation != BrushOperation.Add || brush.gameObject.layer != target.Layer || !target.Contains(brush)) continue;
+                if (brush == ignore || brush.operation != BrushOperation.Add || brush.gameObject.layer != target.Layer ||
+                    !target.Contains(brush) || !BrushSceneVisibility.IsVisible(brush.transform)) continue;
                 var source = FromBrush(brush);
                 if (source == null) continue;
                 if (!bounds.Intersects(source.bounds)) { otherParts = true; continue; }
@@ -102,8 +103,9 @@ namespace CsgBrush.Editor
                 for (int j = 0; j < group.Count; j++)
                 {
                     var cut = group[j];
-                    if (cut == ignore || cut.operation != BrushOperation.Subtract || cut.gameObject.layer != target.Layer) continue;
-                    if (cut.addressedCut ? !BrushCutTarget.Scope(cut).Contains(brush) : j <= i) continue;
+                    if (cut == ignore || cut.operation != BrushOperation.Subtract || cut.gameObject.layer != target.Layer ||
+                        !BrushSceneVisibility.IsVisible(cut.transform)) continue;
+                    if (BrushCutTarget.TryScope(cut, out var scope) ? !scope.Contains(brush) : j <= i) continue;
                     if (!knownCutters.TryGetValue(cut, out var operand))
                         knownCutters.Add(cut, operand = FromBrush(cut));
                     if (operand != null && operand.bounds.Intersects(source.bounds)) part.cuts.Add(operand);

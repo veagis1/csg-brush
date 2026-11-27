@@ -5,202 +5,84 @@ using UnityEngine;
 
 namespace CsgBrush.Editor
 {
-    [EditorTool("Move to")]
+    [EditorTool("Move onto object")]
     public sealed class ObjectPlacementTool : EditorTool
     {
-        internal const string Label = "Переместить к";
-        const string Menu = "CSG Brush/" + Label;
-        const string Tip = "Переместить выбранный объект началом его рабочей системы координат к вершине или середине ребра другого объекта. Второй щелчок фиксирует положение. Ctrl — шаг сетки в метрах, Esc — отмена.";
-        const string WindowTip = "Переместить окно вдоль стены плана, сохранив высоту над полом. Первый щелчок выбирает вершину или середину ребра стены, второй фиксирует положение. Ctrl — шаг сетки в метрах, Esc — отмена.";
-        static readonly Color PreviewColor = new Color(0.2f, 0.91f, 0.97f, 0.9f);
-        Transform source;
-        PlacementScene scene;
-        PlacementScene.Feature anchor, hover;
-        PlacementGuide guide;
-        SceneView owner;
-        Vector2 mouse;
-        bool control, confirmOnRelease;
-        int held;
+        internal const string Label = "Переместить на объект";
+        internal const string Tip = "Совместить начало WCS с точкой на другом объекте. Перетаскивание с Shift показывает положение примитива. Ctrl — шаг сетки в метрах, Esc — отмена.";
+        const string PerpendicularTip = "Перпендикулярно грани. Направляет локальную ось +Y по нормали и ставит основание на видимую грань. У окна на стене ориентацию задаёт стена.";
+        const string MagnetTip = "Магнит. Притягивает к видимым вершинам, серединам рёбер и центрам граней даже при выключенном показе точек. Выключите магнит для свободного размещения. Ctrl применяет шаг сетки в обоих случаях.";
+        const string PointsTip = "Опорные точки. Показывает видимые вершины, середины рёбер и центры граней объекта под курсором. Наведите на точку, чтобы увидеть её тип.";
+        const string MenuPath = "CSG Brush/" + Label;
 
-        internal static bool Active => ToolManager.activeToolType == typeof(ObjectPlacementTool);
-        static string Tooltip => Tr(ObjectPlacement.IsWallWindow(Selection.activeTransform) ? WindowTip : Tip);
-        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), Tooltip);
+        internal static bool Active => SurfacePlacementMode.Active;
+        public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), Tr(Tip));
         public override bool IsAvailable() => Available();
 
-        [MenuItem(Menu, true)]
-        static bool Available() => Selection.gameObjects.Length == 1 && ObjectPlacement.CanMove(Selection.activeTransform);
-
-        [MenuItem(Menu, false, 32)]
-        internal static void Begin()
+        // Picking the global EditorTool from Unity's toolbar opens the same native Move gesture as the overlay.
+        public override void OnActivated() => EditorApplication.delayCall += OpenFromToolbar;
+        public override void OnWillBeDeactivated() => EditorApplication.delayCall -= OpenFromToolbar;
+        static void OpenFromToolbar()
         {
-            if (!Available()) return;
-            if (Active) ToolManager.RestorePreviousPersistentTool();
-            ToolManager.SetActiveTool<ObjectPlacementTool>();
-            SceneView.lastActiveSceneView?.Focus();
+            if (ToolManager.activeToolType == typeof(ObjectPlacementTool) && !Active) Begin();
         }
+
+        [MenuItem(MenuPath, true)]
+        static bool Available() => !EditorApplication.isPlayingOrWillChangePlaymode;
+
+        [MenuItem(MenuPath, false, 32)]
+        internal static void Begin() => SurfacePlacementMode.Begin();
 
         internal static void DrawButton()
         {
+            using var row = new EditorGUILayout.HorizontalScope();
             using var disabled = new EditorGUI.DisabledScope(!Available());
-            if (GUILayout.Button(new GUIContent(Tr(Label), Tooltip), EditorStyles.miniButton, GUILayout.ExpandWidth(false)))
-                Begin();
+            if (GUILayout.Toggle(Active, new GUIContent(Tr(Label), Tr(Tip)), EditorStyles.miniButton,
+                GUILayout.ExpandWidth(false)) != Active) Begin();
+            SurfacePlacementMode.Perpendicular = DrawOption(Option.Perpendicular, SurfacePlacementMode.Perpendicular, PerpendicularTip);
+            SurfacePlacementMode.Magnet = DrawOption(Option.Magnet, SurfacePlacementMode.Magnet, MagnetTip);
+            SurfacePlacementMode.ShowPoints = DrawOption(Option.Points, SurfacePlacementMode.ShowPoints, PointsTip);
         }
 
-        public override void OnActivated()
-        {
-            BrushShapeHandles.CancelGesture();
-            BrushSurfaceGrid.CancelPicking();
-            WallAnchorEditor.CancelPicking();
-            if (ToolManager.activeContextType != typeof(GameObjectToolContext))
-                ToolManager.SetActiveContext<GameObjectToolContext>();
-            source = Selection.activeTransform;
-            Selection.selectionChanged += SelectionChanged;
-            Undo.undoRedoPerformed += Stop;
-            EditorApplication.hierarchyChanged += Refresh;
-            EditorApplication.projectChanged += Refresh;
-            ObjectChangeEvents.changesPublished += GeometryChanged;
-            EditorApplication.playModeStateChanged += OnPlayMode;
-            Refresh();
-        }
+        enum Option { Perpendicular, Magnet, Points }
 
-        public override void OnWillBeDeactivated()
+        static bool DrawOption(Option option, bool enabled, string tip)
         {
-            Selection.selectionChanged -= SelectionChanged;
-            Undo.undoRedoPerformed -= Stop;
-            EditorApplication.hierarchyChanged -= Refresh;
-            EditorApplication.projectChanged -= Refresh;
-            ObjectChangeEvents.changesPublished -= GeometryChanged;
-            EditorApplication.playModeStateChanged -= OnPlayMode;
-            Release();
-            scene = null;
-            guide = null;
-            anchor = hover = default;
-            source = null;
-            owner = null;
-            SceneView.RepaintAll();
-        }
-
-        void Refresh()
-        {
-            scene = null;
-            SceneView.RepaintAll();
-        }
-
-        void GeometryChanged(ref ObjectChangeEventStream changes)
-        {
-            for (int i = 0; i < changes.length; i++)
+            var rect = GUILayoutUtility.GetRect(22f, 22f, GUILayout.Width(22f), GUILayout.Height(22f));
+            bool value = GUI.Toggle(rect, enabled, new GUIContent("", Tr(tip)), EditorStyles.miniButton);
+            if (Event.current.type != EventType.Repaint) return value;
+            var color = GUI.contentColor * (EditorGUIUtility.isProSkin ? Color.white : new Color(0.18f, 0.18f, 0.18f));
+            if (!GUI.enabled) color.a *= 0.45f;
+            void Stroke(float x, float y, float width, float height) =>
+                EditorGUI.DrawRect(new Rect(rect.center.x + x, rect.center.y + y, width, height), color);
+            switch (option)
             {
-                Object changed;
-                switch (changes.GetEventType(i))
-                {
-                    case ObjectChangeKind.ChangeGameObjectOrComponentProperties:
-                        changes.GetChangeGameObjectOrComponentPropertiesEvent(i, out var component);
-                        changed = EditorUtility.EntityIdToObject(component.entityId);
-                        break;
-                    case ObjectChangeKind.ChangeAssetObjectProperties:
-                        changes.GetChangeAssetObjectPropertiesEvent(i, out var asset);
-                        changed = EditorUtility.EntityIdToObject(asset.entityId);
-                        break;
-                    default: continue;
-                }
-                if (!(changed is Mesh || changed is Brush || changed is FloorPlan || changed is MeshFilter ||
-                    changed is Renderer || changed is Collider)) continue;
-                if (guide != null && (changed == anchor.Part.Owner || changed == anchor.Part.Mesh ||
-                    anchor.Part.Owner is Brush wall && wall.generatedBy == changed))
-                {
-                    Release();
-                    guide = null;
-                    anchor = default;
-                    owner = null;
-                }
-                Refresh();
+                case Option.Perpendicular:
+                    Stroke(-1, -7, 2, 12);
+                    Stroke(-7, 4, 14, 2);
+                    break;
+                case Option.Magnet:
+                    Stroke(-6, -6, 3, 3);
+                    Stroke(3, -6, 3, 3);
+                    Stroke(-6, -2, 3, 6);
+                    Stroke(3, -2, 3, 6);
+                    Stroke(-5, 3, 3, 2);
+                    Stroke(2, 3, 3, 2);
+                    Stroke(-3, 4, 6, 2);
+                    break;
+                default:
+                    Stroke(-5, -5, 10, 1);
+                    Stroke(-5, 4, 10, 1);
+                    Stroke(-5, -5, 1, 10);
+                    Stroke(4, -5, 1, 10);
+                    Stroke(-7, -7, 4, 4);
+                    Stroke(3, -7, 4, 4);
+                    Stroke(-7, 3, 4, 4);
+                    Stroke(3, 3, 4, 4);
+                    Stroke(-1, -1, 2, 2);
+                    break;
             }
-        }
-
-        void SelectionChanged() { if (source != Selection.activeTransform || !Available()) Stop(); }
-        void OnPlayMode(PlayModeStateChange change) { if (change == PlayModeStateChange.ExitingEditMode) Stop(); }
-        void Stop() { if (Active) ToolManager.RestorePreviousPersistentTool(); }
-        void Release()
-        {
-            if (held != 0 && GUIUtility.hotControl == held) GUIUtility.hotControl = 0;
-            held = 0;
-            confirmOnRelease = false;
-        }
-
-        public override void OnToolGUI(EditorWindow window)
-        {
-            if (!(window is SceneView view) || view.camera == null) return;
-            if (source == null || !ObjectPlacement.CanMove(source)) { Stop(); return; }
-            var e = Event.current;
-            if (held != 0 && (GUIUtility.hotControl != held || e.alt || Tools.viewToolActive ||
-                (owner != null && owner != view && e.rawType == EventType.MouseUp))) Release();
-            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape) { e.Use(); Stop(); return; }
-            if (owner != null && owner != view || e.alt || Tools.viewToolActive) return;
-            int id = GUIUtility.GetControlID(FocusType.Passive);
-            if (e.type == EventType.Layout) { HandleUtility.AddDefaultControl(id); return; }
-            if (e.isMouse || e.type == EventType.MouseMove) mouse = e.mousePosition;
-            if (e.isMouse || e.isKey) control = e.control;
-            if (e.type != EventType.Repaint && !e.isMouse && !e.isKey) return;
-            if (scene == null) scene = new PlacementScene(source);
-            if (guide != null && !scene.Available(view.camera, anchor.Part))
-            {
-                Release();
-                anchor = default;
-                guide = null;
-                owner = null;
-            }
-            if (guide == null) hover = scene.Pick(view.camera, mouse);
-            else guide.Update(view.camera, mouse, control ? BrushSettings.instance.GridMeters : 0f);
-
-            if (e.type == EventType.MouseDown && e.button == 0 && HandleUtility.nearestControl == id)
-            {
-                EditModeMouse.Take(id);
-                held = id;
-                confirmOnRelease = guide != null;
-                if (guide == null && hover.Part != null)
-                {
-                    anchor = hover;
-                    owner = view;
-                    guide = new PlacementGuide(anchor, view.camera, mouse);
-                }
-                e.Use();
-            }
-            else if (e.type == EventType.MouseUp && e.button == 0 && held == id)
-            {
-                bool finish = confirmOnRelease && guide != null;
-                Release();
-                e.Use();
-                if (finish) { ObjectPlacement.Commit(source, guide.Position, anchor.Part.Owner); Stop(); return; }
-            }
-            if (e.type == EventType.Repaint) Draw(view);
-            else view.Repaint();
-        }
-
-        void Draw(SceneView view)
-        {
-            var feature = guide != null ? anchor : hover;
-            var hint = guide == null
-                ? Tr(ObjectPlacement.IsWallWindow(source) ? "Укажите вершину или середину ребра стены плана" : "Укажите вершину или середину ребра")
-                : Tr("Укажите положение на ребре   •   Ctrl — шаг сетки");
-            Handles.BeginGUI();
-            GUI.Label(new Rect(8f, view.position.height - 65f, view.position.width - 16f, 22f),
-                hint + Tr("   •   Esc — отмена"), EditorStyles.helpBox);
-            Handles.EndGUI();
-            if (feature.Part == null) return;
-            var origin = feature.Position;
-            var destination = guide?.Position ?? origin;
-            bool preview = scene.DrawPreview(feature.Part.Owner, destination, PreviewColor, out var workingOrigin);
-            guide?.DrawEdges();
-            using (new Handles.DrawingScope(Color.yellow))
-            {
-                float size = HandleUtility.GetHandleSize(origin) * 0.065f;
-                if (feature.Midpoint) Handles.RectangleHandleCap(0, origin, view.camera.transform.rotation, size, EventType.Repaint);
-                else Handles.DotHandleCap(0, origin, Quaternion.identity, size, EventType.Repaint);
-            }
-            if (guide == null || !preview) return;
-            using (new Handles.DrawingScope(PreviewColor))
-                Handles.DotHandleCap(0, workingOrigin, Quaternion.identity, HandleUtility.GetHandleSize(workingOrigin) * 0.055f, EventType.Repaint);
-            Handles.Label(destination, "   " + BrushSettings.FormatMeters(Vector3.Distance(origin, destination)), EditorStyles.whiteBoldLabel);
+            return value;
         }
     }
 }

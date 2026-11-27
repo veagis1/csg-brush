@@ -381,6 +381,10 @@ namespace CsgBrush
 
         void OnDrawGizmosSelected()
         {
+#if UNITY_EDITOR
+            for (var current = transform; current != null; current = current.parent)
+                if (UnityEditor.SceneVisibilityManager.instance.IsHidden(current.gameObject)) return;
+#endif
             // The wire box follows the hand during a drag, including the Scale tool: the transform scale is what
             // the size will become once the drag is released and the scale is applied to the size.
             var scale = transform.lossyScale;

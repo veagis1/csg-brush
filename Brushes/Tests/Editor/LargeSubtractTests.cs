@@ -129,6 +129,35 @@ namespace CsgBrush.Tests
             Debug.Log("LARGE boxes created after the cutter: render uncut " + uncut.Count + " of " + boxes.Count);
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void RootCutterRespectsFolderOrderAndTheBoundaryOfAnIndependentBrushGroup(bool independentGroup)
+        {
+            const int count = 20;
+            const int columns = 5;
+            const float spacing = 3f;
+            var folder = new GameObject("Группа блоков");
+            if (independentGroup) folder.AddComponent<BrushGroup>();
+            var boxes = Grid(count, columns, spacing);
+            foreach (var box in boxes) box.transform.SetParent(folder.transform, true);
+            var cutter = Cutter(count, columns, spacing, Vector3.zero);
+            cutter.transform.SetAsFirstSibling();
+            BrushApi.ForceUpdate();
+            Assert.That(Uncut(boxes, RenderVertices()), Has.Count.EqualTo(count));
+            Assert.That(Uncut(boxes, ColliderVertices()), Has.Count.EqualTo(count));
+
+            cutter.transform.SetAsLastSibling();
+            BrushApi.ForceUpdate();
+            int expected = independentGroup ? count : 0;
+            Assert.That(Uncut(boxes, RenderVertices()), Has.Count.EqualTo(expected));
+            Assert.That(Uncut(boxes, ColliderVertices()), Has.Count.EqualTo(expected));
+
+            cutter.transform.SetAsFirstSibling();
+            BrushApi.ForceUpdate();
+            Assert.That(Uncut(boxes, RenderVertices()), Has.Count.EqualTo(count));
+            Assert.That(Uncut(boxes, ColliderVertices()), Has.Count.EqualTo(count));
+        }
+
         static List<int> Remaining(List<Brush> boxes, List<Vector3> verts)
         {
             // boxes entirely inside the cutter must vanish: any vertex left in the footprint means it survived

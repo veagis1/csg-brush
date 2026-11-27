@@ -34,7 +34,13 @@ namespace CsgBrush.Editor
             SceneView.beforeSceneGui += view =>
             {
                 placedLabels.Clear();
-                if (owner == view && !BrushSettings.instance.showDimensions) Close();
+                if (owner != view || (BrushSettings.instance.showDimensions && BrushSceneVisibility.CanPick(Selection.activeTransform))) return;
+                if (GUI.GetNameOfFocusedControl() == activeKey)
+                {
+                    GUI.FocusControl(null);
+                    EditorGUIUtility.editingTextField = false;
+                }
+                Close();
             };
         }
 

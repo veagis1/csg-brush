@@ -31,7 +31,7 @@ namespace CsgBrush.Editor
             // another object in front of the brushes (a prop, a ProBuilder mesh) takes the material Unity's way
             if (material == null || !OverBrushes(dropUpon)) { s_Target = null; return DragAndDropVisualMode.None; }
             var hit = BrushHooks.PickBrushSurface(Event.current != null ? Event.current.mousePosition : viewportPosition, out _, out _);
-            if (hit == null)
+            if (!CanDropOn(hit))
             {
                 s_Target = null;
                 // over a generated mesh but no brush (a hair off an edge): still keep Unity's preview off it
@@ -52,12 +52,16 @@ namespace CsgBrush.Editor
         {
             var e = Event.current;
             if (e.type == EventType.DragExited) { s_Target = null; view.Repaint(); return; }
-            if (e.type != EventType.Repaint || s_Target == null || DraggedMaterial() == null) return;
-            foreach (var b in Receivers(s_Target)) DrawOutline(b); // Unity's drag label already names the material
+            if (e.type != EventType.Repaint || !CanDropOn(s_Target) || DraggedMaterial() == null) return;
+            foreach (var b in Receivers(s_Target))
+                if (BrushSceneVisibility.IsVisible(b.transform)) DrawOutline(b); // Unity's drag label already names the material
         }
 
         /// <summary>Whether what Unity picked under the mouse leaves the drop to the brushes: nothing, or a mesh generated from them.</summary>
         public static bool OverBrushes(Object dropUpon) => !(dropUpon is GameObject go) || BrushSync.IsGenerated(go.transform);
+
+        static bool CanDropOn(Brush brush) => brush != null && BrushSceneVisibility.CanPick(brush.transform) &&
+            (!(brush.generatedBy is FloorPlan plan) || BrushSceneVisibility.CanPick(plan.transform));
 
         static Material DraggedMaterial()
         {

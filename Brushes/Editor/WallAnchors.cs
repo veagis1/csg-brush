@@ -26,6 +26,7 @@ namespace CsgBrush.Editor
             public Vector3 position; public Quaternion rotation; public Vector3 size;
             internal BrushSurfaceGrid.Frame grid;
             internal Vector3? drawingPoint;
+            internal Transform surface;
             internal Vector3 localScale;
             /// <summary>The plan whose wall it is on, or null.</summary>
             public FloorPlan plan;
@@ -46,7 +47,8 @@ namespace CsgBrush.Editor
             var s = BrushSettings.instance;
             var opening = s.NewOpeningSize(shape); float sill = s.NewOpeningSill(shape);
             p = default;
-            var hit = BrushHooks.PickBrushSurface(ray, out var point, out var normal);
+            var hit = BrushHooks.PickConstructionSurface(ray, out var point, out var normal);
+            p.surface = hit != null ? hit.transform : null;
             p.grid = hit != null
                 ? BrushSurfaceGrid.Frame.OnPlane(point, normal)
                 : BrushSurfaceGrid.Frame.OnPlane(Vector3.zero, Vector3.up);
@@ -84,8 +86,7 @@ namespace CsgBrush.Editor
             if (hit == null)
             {
                 var ground = new Plane(Vector3.up, Vector3.zero);
-                if (!ground.Raycast(ray, out float t) || t <= 0f) return false;
-                point = ray.GetPoint(t);
+                if (!BrushDraw.TryGridPoint(ray, ground, out point)) return false;
             }
             var f = -ray.direction; f.y = 0f;
             var facing = Mathf.Abs(f.x) > Mathf.Abs(f.z) ? new Vector3(Mathf.Sign(f.x), 0f, 0f) : new Vector3(0f, 0f, Mathf.Sign(f.z == 0f ? 1f : f.z));

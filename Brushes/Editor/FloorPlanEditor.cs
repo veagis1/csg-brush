@@ -54,6 +54,7 @@ namespace CsgBrush.Editor
 
         public static void DrawOutline(PointGraph plan)
         {
+            if (plan == null || !BrushSceneVisibility.IsVisible(plan.transform)) return;
             plan.EnsureGraph();
             Handles.color = Line;
             Handles.zTest = UnityEngine.Rendering.CompareFunction.Always;
@@ -323,7 +324,7 @@ namespace CsgBrush.Editor
         public override void OnToolGUI(EditorWindow window)
         {
             var plan = target as PointGraph;
-            if (plan == null || !(window is SceneView)) return;
+            if (!(window is SceneView) || plan == null || !BrushSceneVisibility.CanPick(plan.transform)) return;
             var e = Event.current;
             int id = GUIUtility.GetControlID(FocusType.Passive);
             if (e.type == EventType.Layout) HandleUtility.AddDefaultControl(id);
@@ -482,7 +483,7 @@ namespace CsgBrush.Editor
             for (int i = -1; i < m_Plans.Count; i++)
             {
                 var plan = i < 0 ? selected : m_Plans[i]; // the selected plan first
-                if (plan == null || (i >= 0 && plan == selected)) continue;
+                if (plan == null || (i >= 0 && plan == selected) || !BrushSceneVisibility.CanPick(plan.transform)) continue;
                 plan.EnsureGraph();
                 int point = FloorPlanTools.PointUnderMouse(plan, mouse);
                 if (point >= 0) { m_Plan = plan; m_PlanPoint = point; return; }
@@ -495,7 +496,7 @@ namespace CsgBrush.Editor
                 else { m_PlanWall = wall; m_PlanLocal = local; }
                 return;
             }
-            if (selected != null && onFloor && Mathf.Abs(FloorPlanTools.Floor(selected).GetDistanceToPoint(floor)) < 0.01f)
+            if (selected != null && BrushSceneVisibility.CanPick(selected.transform) && onFloor && Mathf.Abs(FloorPlanTools.Floor(selected).GetDistanceToPoint(floor)) < 0.01f)
             {
                 m_Plan = selected; m_PlanLocal = FloorPlanTools.SnapLocal(selected, floor);
             }
@@ -547,7 +548,7 @@ namespace CsgBrush.Editor
                 m_HoverValid = false;
                 e.Use();
             }
-            if (e.type == EventType.Repaint && m_HoverValid)
+            if (e.type == EventType.Repaint && m_HoverValid && (m_Plan == null || BrushSceneVisibility.CanPick(m_Plan.transform)))
             {
                 bool joining = m_Plan != null && (m_PlanPoint >= 0 || m_PlanWall >= 0); // white and larger on a plan's point or wall, as when drawing
                 BrushSurfaceGrid.Draw(m_Plan != null ? new BrushSurfaceGrid.Frame(m_Plan.transform, Vector3.zero, Quaternion.identity)

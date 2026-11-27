@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.6.2
+
+### Added
+
+- **Move onto object** previews placement while you Shift-drag. Keep the current rotation to place the WCS origin, or enable perpendicular alignment to rest the brush on its base. The magnet can pick visible vertices, edge midpoints and face centres. Enter an exact offset along an edge or from a face centre.
+- Brushes follow Unity's Hierarchy visibility and picking controls in the Scene view. Hide a cutter to see the wall without its cut. Lock the cutter to keep the recess visible and pick the wall through its exposed faces.
+
+### Fixed
+
+- Drawing on a horizontal brush face at world Y = 0 now gives the new brush an exact zero Y coordinate, including with grid snapping off. Raised floors keep their own height.
+- Both feet of a 180-degree arch meet its base plane exactly. Solid straight stairs also keep their base on the floor when drawn at a freehand height.
+- Drawing and placement use the visible sides and bottoms of recesses. Perpendicular placement uses the selected brush's original base even when a child cutter removes part of it.
+- A nested cutter without an explicit target follows its parent brush. An independent brush placed inside the recess keeps its mesh and collider.
+- A sphere stays round when you confirm it at the point where you released the radius drag.
+
+### Optimized
+
+- Moving a brush together with its child additions and cuts reuses the compound geometry and collider pieces. In a test with 96 cuts and six additions, median translation time fell from 49.7 ms to 2.77 ms across 11 moves after warm-up.
+
 ## 0.6.1
 
 - Rebuilding a 0.6.0 prefab repairs a missing script reference on its generated trigger collider. Existing scene

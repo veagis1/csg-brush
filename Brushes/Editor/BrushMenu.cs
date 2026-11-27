@@ -76,6 +76,7 @@ namespace CsgBrush.Editor
 
         static void CancelSceneGestures()
         {
+            SurfacePlacementMode.Stop();
             BrushShapeHandles.CancelGesture();
             BrushDimensionFields.Cancel();
             BrushSurfaceGrid.CancelPicking();

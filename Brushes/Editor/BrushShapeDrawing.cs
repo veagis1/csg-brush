@@ -47,7 +47,7 @@ namespace CsgBrush.Editor
                 Bounds? combined = null;
                 foreach (var go in selected)
                 {
-                    if (!stage.Contains(go) || SceneVisibilityManager.instance.IsHidden(go)) continue;
+                    if (!stage.Contains(go) || !BrushSceneVisibility.IsVisible(go.transform)) continue;
                     var brush = go.GetComponent<Brush>();
                     var shape = BrushHooks.LocalShape(brush, out _);
                     if (shape == null) continue;
@@ -66,11 +66,11 @@ namespace CsgBrush.Editor
                 !BrushEditContext.IsActive && !PointGraphEditContext.IsActive && BrushShapeHandles.WorksWith(Tools.current);
             foreach (var go in selected)
             {
-                if (!go.scene.IsValid() || !stage.Contains(go) || SceneVisibilityManager.instance.IsHidden(go)) continue;
+                if (!go.scene.IsValid() || !stage.Contains(go) || !BrushSceneVisibility.IsVisible(go.transform)) continue;
                 if (go.TryGetComponent<Brush>(out var brush))
                 {
                     if (BrushHooks.LocalShape(brush, out var bounds) != null)
-                        DrawDimensions(bounds, BrushGeometry.LocalToWorld(brush), true, interactive ? brush : null);
+                        DrawDimensions(bounds, BrushGeometry.LocalToWorld(brush), true, interactive && BrushSceneVisibility.CanPick(brush.transform) ? brush : null);
                     continue;
                 }
                 if (go.TryGetComponent<FloorPlan>(out var plan))
@@ -113,8 +113,15 @@ namespace CsgBrush.Editor
             go.GetComponentsInChildren(false, renderers);
             foreach (var renderer in renderers)
             {
-                if (!renderer.enabled || !(renderer is MeshRenderer || renderer is SkinnedMeshRenderer)) continue;
+                if (!renderer.enabled || !(renderer is MeshRenderer || renderer is SkinnedMeshRenderer) ||
+                    !BrushSceneVisibility.IsVisible(renderer.transform)) continue;
                 var bounds = renderer.localBounds;
+                if (BrushGroup.IsMeshChildName(renderer.name))
+                {
+                    var mesh = BrushSceneVisibility.MeshFor(renderer.transform);
+                    if (mesh == null || mesh.vertexCount == 0) continue;
+                    bounds = mesh.bounds;
+                }
                 var matrix = toLocal * renderer.localToWorldMatrix;
                 var min = bounds.min;
                 var max = bounds.max;
@@ -130,7 +137,7 @@ namespace CsgBrush.Editor
                 go.GetComponentsInChildren(false, brushes);
                 foreach (var part in brushes)
                 {
-                    if (!part.enabled || part.operation != BrushOperation.Add) continue;
+                    if (!part.enabled || part.operation != BrushOperation.Add || !BrushSceneVisibility.IsVisible(part.transform)) continue;
                     var poly = BrushHooks.LocalShape(part, out _);
                     if (poly == null) continue;
                     var matrix = toLocal * BrushGeometry.LocalToWorld(part);
@@ -158,15 +165,13 @@ namespace CsgBrush.Editor
         public static void DrawCuts()
         {
             var selected = new HashSet<GameObject>(Selection.gameObjects);
-            var stage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
-            var stageScene = stage != null ? stage.scene : default;
+            var stage = StageUtility.GetCurrentStageHandle();
             var active = Brush.Active;
             for (int b = 0; b < active.Count; b++)
             {
                 var brush = active[b];
                 if (brush == null || brush.operation != BrushOperation.Subtract) continue;
-                var scene = brush.gameObject.scene;
-                if (stage != null ? scene != stageScene : UnityEditor.SceneManagement.EditorSceneManager.IsPreviewScene(scene)) continue; // only what the Scene view shows
+                if (!stage.Contains(brush.gameObject) || !BrushSceneVisibility.IsVisible(brush.transform)) continue;
                 var poly = BrushGeometry.Polyhedron(brush);
                 if (poly == null || !poly.IsValid) continue;
                 bool isSelected = selected.Contains(brush.gameObject);
@@ -189,7 +194,7 @@ namespace CsgBrush.Editor
 
         public static void Draw(Brush brush, bool drawEdges)
         {
-            if (brush == null || brush.shape != BrushShape.Custom) return;
+            if (brush == null || brush.shape != BrushShape.Custom || !BrushSceneVisibility.IsVisible(brush.transform)) return;
             var poly = brush.polyhedron;
             if (poly == null || !poly.IsValid) return;
             var m = Matrix4x4.TRS(brush.transform.position, brush.transform.rotation, Vector3.one);

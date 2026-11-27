@@ -106,15 +106,26 @@ namespace CsgBrush.Editor
         /// <summary>Everything that changes the brush's solid (not its operation or surface), including its pose in the model.</summary>
         public static int SolidKey(Brush b, Matrix4x4 toModel) => SolidKey(b, Polyhedron(b), toModel);
 
-        internal static int SolidKey(Brush b, BrushPolyhedron local, Matrix4x4 toModel)
+        internal static int SolidKey(Brush b, BrushPolyhedron local, Matrix4x4 toModel) =>
+            PoseKey(ShapeKey(b, local), toModel);
+
+        internal static int ShapeKey(Brush b, BrushPolyhedron local)
         {
             unchecked
             {
                 int h = local.ContentHash();
                 h = h * 31 + (int)b.shape;
                 if (b.IsHollow) { h = h * 31 + 1; h = h * 31 + BrushPolyhedron.MicronKey(b.wallThickness); }
-                for (int i = 0; i < 16; i++) h = h * 31 + BrushPolyhedron.MicronKey(toModel[i]);
                 return h;
+            }
+        }
+
+        internal static int PoseKey(int shapeKey, Matrix4x4 matrix)
+        {
+            unchecked
+            {
+                for (int i = 0; i < 16; i++) shapeKey = shapeKey * 31 + BrushPolyhedron.MicronKey(matrix[i]);
+                return shapeKey;
             }
         }
 

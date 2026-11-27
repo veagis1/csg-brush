@@ -1,59 +1,107 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using static CsgBrush.Editor.BrushLanguage;
 
 namespace CsgBrush.Editor
 {
-    // A midpoint has one guide. At a vertex, mouse direction chooses among its incident segments.
+    // Each rail starts at the chosen feature. A face centre has one rail per boundary edge.
     internal sealed class PlacementGuide
     {
         readonly PlacementScene.Feature anchor;
-        readonly List<Vector2Int> edges = new List<Vector2Int>();
+        readonly List<Vector3> ends = new List<Vector3>();
         readonly Vector2 clickOffset;
+        int selected;
+        float distance;
+        bool enteredDistance;
         internal Vector3 Origin => anchor.Position;
-        internal Vector3 Position { get; private set; }
-        internal Vector2Int Edge { get; private set; } = new Vector2Int(-1, -1);
+        Vector3 End(int index) => anchor.Part.Owner.transform.TransformPoint(ends[index]);
+        internal Vector3 Position => ends.Count == 0 ? Origin : Vector3.MoveTowards(Origin, End(selected), distance);
 
         internal PlacementGuide(PlacementScene.Feature anchor, Camera camera, Vector2 click)
         {
             this.anchor = anchor;
-            Position = Origin;
             clickOffset = click - (Vector2)HandleUtility.WorldToGUIPointWithDepth(camera, Origin);
-            if (anchor.Midpoint) edges.Add(new Vector2Int(anchor.A, anchor.B));
-            else foreach (var edge in anchor.Part.Geometry.Edges)
-                if (edge.x == anchor.A || edge.y == anchor.A) edges.Add(edge);
+            var geometry = anchor.Part.Geometry;
+            if (anchor.FaceCenter)
+            {
+                foreach (var edge in anchor.Face.Edges)
+                    ends.Add(anchor.Face.GuideEnd(geometry.Vertices, edge));
+            }
+            else if (anchor.Midpoint)
+            {
+                ends.Add(geometry.Vertices[anchor.A]);
+                ends.Add(geometry.Vertices[anchor.B]);
+            }
+            else
+            {
+                foreach (var edge in anchor.Face?.Edges ?? geometry.Edges)
+                {
+                    if (edge.x == anchor.A) ends.Add(geometry.Vertices[edge.y]);
+                    if (edge.y == anchor.A) ends.Add(geometry.Vertices[edge.x]);
+                }
+            }
         }
 
         internal void Update(Camera camera, Vector2 mouse, float step)
         {
-            var projected = (Vector2)HandleUtility.WorldToGUIPointWithDepth(camera, Origin);
-            bool atOrigin = (mouse - projected).sqrMagnitude <= 4f ||
-                (mouse - projected - clickOffset).sqrMagnitude <= 4f;
-            Position = Origin;
+            if (enteredDistance) return;
+            var origin = Origin;
+            var projected = (Vector2)HandleUtility.WorldToGUIPointWithDepth(camera, origin);
+            distance = 0f;
+            if ((mouse - projected).sqrMagnitude <= 4f || (mouse - projected - clickOffset).sqrMagnitude <= 4f) return;
             float nearest = float.PositiveInfinity;
-            var previous = Edge;
-            Edge = new Vector2Int(-1, -1);
-            foreach (var edge in edges)
+            int previous = selected;
+            for (int i = 0; i < ends.Count; i++)
             {
-                var a = anchor.Part.World(edge.x);
-                var b = anchor.Part.World(edge.y);
-                if (!Project(camera, mouse, a, b, out float u, out float error)) continue;
-                if (error > nearest || (error == nearest && previous != edge)) continue;
+                var end = End(i);
+                if (!Project(camera, mouse, origin, end, out float u, out float error)) continue;
+                if (error > nearest || (error == nearest && previous != i)) continue;
                 nearest = error;
-                Edge = edge;
-                float start = anchor.Midpoint ? 0.5f : edge.x == anchor.A ? 0f : 1f;
-                Position = atOrigin ? Origin : ObjectPlacement.PointOnEdge(a, b, start, u, step);
+                selected = i;
+                var point = ObjectPlacement.PointOnEdge(origin, end, 0f, u, step);
+                distance = Vector3.Distance(origin, point);
             }
         }
 
         internal void DrawEdges()
         {
-            using (new Handles.DrawingScope(new Color(1f, 0.82f, 0.28f, 0.55f)))
-                foreach (var edge in edges)
-                    if (edge != Edge) Handles.DrawLine(anchor.Part.World(edge.x), anchor.Part.World(edge.y), 2f);
-            if (Edge.x >= 0)
-                using (new Handles.DrawingScope(Color.yellow))
-                    Handles.DrawAAPolyLine(3f, anchor.Part.World(Edge.x), anchor.Part.World(Edge.y));
+            for (int i = 0; i < ends.Count; i++)
+                using (new Handles.DrawingScope(i == selected ? Color.yellow : new Color(1f, 0.82f, 0.28f, 0.55f)))
+                    Handles.DrawLine(Origin, End(i), i == selected ? 3f : 2f);
+        }
+
+        // Process the panel before scene input so editing a distance cannot confirm a scene click.
+        internal bool Slider(SceneView view, out bool apply)
+        {
+            var rect = new Rect(8f, view.position.height - 100f, Mathf.Min(470f, view.position.width - 16f), 30f);
+            bool over = rect.Contains(Event.current.mousePosition);
+            Handles.BeginGUI();
+            GUI.Box(rect, GUIContent.none, EditorStyles.helpBox);
+            var label = new GUIContent(Tr("Отступ (м)"), Tr("Расстояние от выбранной точки по подсвеченной направляющей. Ноль совмещает точки. Предел — конец направляющей."));
+            var field = new Rect(rect.x + 6f, rect.y + 5f, rect.width - 129f, 18f);
+            float maximum = ends.Count == 0 ? 0f : Vector3.Distance(Origin, End(selected));
+            float labelWidth = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = 76f;
+            EditorGUI.BeginChangeCheck();
+            float value = EditorGUI.Slider(field, label, distance, 0f, maximum);
+            if (EditorGUI.EndChangeCheck())
+            {
+                distance = Mathf.Clamp(value, 0f, maximum);
+                enteredDistance = true;
+            }
+            EditorGUIUtility.labelWidth = labelWidth;
+            var next = new Rect(field.xMax + 4f, field.y, 28f, 18f);
+            using (new EditorGUI.DisabledScope(ends.Count < 2))
+                if (GUI.Button(next, new GUIContent("↻", Tr("Выбрать следующую направляющую для точного отступа.")), EditorStyles.miniButton))
+                {
+                    selected = (selected + 1) % ends.Count;
+                    distance = Mathf.Min(distance, Vector3.Distance(Origin, End(selected)));
+                    enteredDistance = true;
+                }
+            apply = GUI.Button(new Rect(next.xMax + 3f, field.y, 82f, 18f), Tr("Применить"), EditorStyles.miniButton);
+            Handles.EndGUI();
+            return over;
         }
 
         // The closest point in GUI space must be converted through perspective before measuring metres.

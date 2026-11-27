@@ -37,6 +37,7 @@ namespace CsgBrush.Manifold
         [DllImport(Lib)] public static extern IntPtr manifold_as_original(IntPtr mem, IntPtr m);
         [DllImport(Lib)] public static extern IntPtr manifold_empty(IntPtr mem);
         [DllImport(Lib)] public static extern IntPtr manifold_copy(IntPtr mem, IntPtr m);
+        [DllImport(Lib)] public static extern IntPtr manifold_translate(IntPtr mem, IntPtr m, double x, double y, double z);
 
         // vectors and booleans
         [DllImport(Lib)] public static extern IntPtr manifold_manifold_empty_vec(IntPtr mem);

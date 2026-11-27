@@ -30,6 +30,7 @@ namespace CsgBrush.Editor
         internal bool Valid => Brush != null ? Brush.isActiveAndEnabled && Brush.operation == BrushOperation.Add :
             Plan != null && Plan.isActiveAndEnabled && Start != End;
         internal int Layer => Parent.gameObject.layer;
+        internal bool CanPick => Valid && BrushSceneVisibility.CanPick(Parent);
 
         static Brush RootOf(Brush brush)
         {
@@ -73,6 +74,30 @@ namespace CsgBrush.Editor
             return false;
         }
 
+        /// <summary>A restricted cut may have no valid target. Only an unscoped cut uses hierarchy order.</summary>
+        internal static bool TryScope(Brush cutter, out BrushCutTarget scope)
+        {
+            if (cutter.addressedCut)
+            {
+                scope = Scope(cutter);
+                return true;
+            }
+
+            if (!cutter.TryGetComponent<BrushGroup>(out _))
+                for (var parent = cutter.transform.parent; parent != null; parent = parent.parent)
+                {
+                    if (parent.TryGetComponent<Brush>(out var brush) && brush.operation == BrushOperation.Add)
+                    {
+                        scope = FromBrush(brush);
+                        return true;
+                    }
+                    if (parent.TryGetComponent<BrushGroup>(out _)) break;
+                }
+
+            scope = default;
+            return false;
+        }
+
         internal static BrushCutTarget Scope(Brush cutter)
         {
             var plan = cutter.cutPlan;
@@ -103,10 +128,10 @@ namespace CsgBrush.Editor
 
         internal void Draw()
         {
-            if (!Valid) return;
+            if (!CanPick) return;
             foreach (var brush in CsgBrush.Brush.Active)
             {
-                if (brush.operation != BrushOperation.Add || !Contains(brush)) continue;
+                if (brush.operation != BrushOperation.Add || !Contains(brush) || !BrushSceneVisibility.IsVisible(brush.transform)) continue;
                 var shape = BrushHooks.LocalShape(brush, out _);
                 if (shape == null) continue;
                 using (new Handles.DrawingScope(new Color(1f, 0.76f, 0.25f, 0.95f), BrushGeometry.LocalToWorld(brush)))

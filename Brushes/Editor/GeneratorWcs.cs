@@ -13,6 +13,7 @@ namespace CsgBrush.Editor
         {
             internal readonly List<Vector3> vertices = new List<Vector3>();
             internal readonly List<Vector3> midpoints = new List<Vector3>();
+            internal readonly List<Vector3> centers = new List<Vector3>();
             internal Bounds bounds;
             internal int key, pointCount;
         }
@@ -29,6 +30,7 @@ namespace CsgBrush.Editor
             result = new Features { key = graph.generatedKey, pointCount = graph.points.Count };
             var vertices = new HashSet<Vector3>();
             var midpoints = new HashSet<Vector3>();
+            var centers = new HashSet<Vector3>();
             void Vertex(Vector3 point)
             {
                 if (!vertices.Add(point)) return;
@@ -52,8 +54,12 @@ namespace CsgBrush.Editor
             {
                 var poly = brush != null ? brush.polyhedron : null;
                 if (poly == null || !poly.IsValid) continue;
-                foreach (var point in poly.vertices) Vertex(point);
-                foreach (var (a, b) in poly.Edges()) Midpoint((poly.vertices[a] + poly.vertices[b]) * 0.5f);
+                var geometry = PlacementGeometry.FromPolyhedron(poly);
+                foreach (var point in geometry.Vertices) Vertex(point);
+                foreach (var edge in geometry.Edges)
+                    Midpoint((geometry.Vertices[edge.x] + geometry.Vertices[edge.y]) * 0.5f);
+                foreach (var face in geometry.Faces)
+                    if (centers.Add(face.Center)) result.centers.Add(face.Center);
             }
             s_Features.Remove(graph);
             s_Features.Add(graph, result);

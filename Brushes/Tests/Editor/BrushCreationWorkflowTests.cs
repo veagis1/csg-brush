@@ -80,6 +80,37 @@ namespace CsgBrush.Tests
             Assert.That(frame.Plane.GetDistanceToPoint(snapped), Is.EqualTo(0f).Within(0.0001f));
         }
 
+        [TestCase(BrushShape.Door)]
+        [TestCase(BrushShape.Window)]
+        public void AFreeOpeningStartsExactlyOnTheWorldFloor(BrushShape shape)
+        {
+            var ray = new Ray(new Vector3(0.2f, 60.456f, -0.3f), new Vector3(17f, -1f, 11f));
+            Assert.That(WallAnchors.Find(ray, shape, out var placement), Is.True);
+            Assert.That(placement.drawingPoint.HasValue, Is.True);
+            Assert.That(placement.drawingPoint.Value.y, Is.Zero);
+            var opening = WallAnchors.Create(shape, placement);
+            Assert.That(opening.transform.position.y, Is.Zero);
+        }
+
+        [TestCase(0f)]
+        [TestCase(0.0000152587890625f)]
+        [TestCase(-0.0000152587890625f)]
+        public void AnObliqueConstructionRayKeepsTheFloorFaceHeight(float faceY)
+        {
+            var floor = BrushApi.Create(BrushShape.Box, new Vector3(33.6875f, faceY - 19.0625f, -60.6875f),
+                new Vector3(125.375f, 38.125f, 128.625f), Quaternion.identity, snap: false);
+            var ray = new Ray(new Vector3(-18.87f, 60.456f, -112.77f), new Vector3(0.17f, -1f, 0.11f));
+            CheckFace();
+            BrushApi.ForceUpdate();
+            CheckFace();
+
+            void CheckFace()
+            {
+                Assert.That(BrushHooks.PickConstructionSurface(ray, out var hit, out _), Is.SameAs(floor));
+                Assert.That(hit.y, Is.EqualTo(faceY));
+            }
+        }
+
         [Test]
         public void CreationCommandsAreRegisteredInBothMenus()
         {
@@ -233,6 +264,77 @@ namespace CsgBrush.Tests
             Assert.That(Solid(Vector3.zero), Is.False);
             Assert.That(Solid(new Vector3(0f, 0f, 3f)), Is.True);
             Assert.That(Solid(new Vector3(0.8f, 0f, 0f)), Is.True);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void MovingAnIndependentBrushIntoANestedCutPreservesItsGeometry(bool addressed)
+        {
+            BrushSettings.instance.snapToGrid = false;
+            var target = BrushApi.Create(BrushShape.Box, Vector3.zero, new Vector3(8f, 4f, 8f),
+                Quaternion.identity, snap: false);
+            var independent = BrushApi.Create(BrushShape.Box, Vector3.right * 6f, Vector3.one * 2f,
+                Quaternion.identity, snap: false);
+            independent.transform.SetAsFirstSibling();
+            var cutter = BrushApi.Create(BrushShape.Box, new Vector3(2.5f, 1.5f, 0f),
+                new Vector3(5f, 3f, 4f), Quaternion.identity, target.transform, snap: false);
+            if (addressed) BrushCutTarget.FromBrush(target).Assign(cutter);
+            else BrushApi.SetOperation(cutter, BrushOperation.Subtract);
+            BrushApi.ForceUpdate();
+
+            BrushApi.Move(independent, new Vector3(0.5f, 1.5f, 0f));
+            BrushApi.ForceUpdate();
+            Physics.SyncTransforms();
+
+            var meshObject = BrushCsg.MeshObject(BrushCsg.ModelOf(target), false);
+            var mesh = meshObject.GetComponent<MeshFilter>().sharedMesh;
+            var sources = BrushCsg.TriangleBrushes(meshObject);
+            Assert.That(BrushHooks.IntersectRayMesh(new Ray(new Vector3(1f, 4f, 0f), Vector3.down),
+                mesh, meshObject.localToWorldMatrix, out var hit), Is.True);
+            Assert.That(hit.point.y, Is.EqualTo(2.5f).Within(0.0001f));
+            Assert.That(sources[hit.triangleIndex], Is.SameAs(independent));
+            Assert.That(BrushHooks.IntersectRayMesh(new Ray(new Vector3(3f, 4f, 0f), Vector3.down),
+                mesh, meshObject.localToWorldMatrix, out hit), Is.True);
+            Assert.That(hit.point.y, Is.EqualTo(0f).Within(0.0001f));
+            Assert.That(sources[hit.triangleIndex], Is.SameAs(cutter));
+            Assert.That(Solid(new Vector3(1f, 1.5f, 0f)), Is.True);
+            Assert.That(Solid(new Vector3(3f, 1.5f, 0f)), Is.False);
+            Assert.That(Solid(new Vector3(-1.5f, 1.5f, 0f)), Is.True);
+        }
+
+        [Test]
+        public void AnImplicitCutFollowsItsAncestorAndCutsInOrderAtTheRoot()
+        {
+            BrushSettings.instance.snapToGrid = false;
+            var first = BrushApi.Create(BrushShape.Box, Vector3.zero, Vector3.one * 2f,
+                Quaternion.identity, snap: false);
+            var secondPosition = Vector3.forward * 3f;
+            var second = BrushApi.Create(BrushShape.Box, secondPosition, Vector3.one * 2f,
+                Quaternion.identity, snap: false);
+            var folder = new GameObject("Вырезы").transform;
+            folder.SetParent(first.transform, false);
+            var between = secondPosition * 0.5f;
+            var cutter = BrushApi.Create(BrushShape.Box, between, new Vector3(1f, 1f, 5f),
+                Quaternion.identity, folder, snap: false);
+            BrushApi.SetOperation(cutter, BrushOperation.Subtract);
+            var model = BrushCsg.ModelOf(first);
+
+            void CheckGeometry(bool firstSolid, bool secondSolid)
+            {
+                BrushApi.ForceUpdate();
+                Physics.SyncTransforms();
+                Assert.That(Visible(model, new Ray(between, Vector3.back)), Is.EqualTo(firstSolid));
+                Assert.That(Visible(model, new Ray(between, Vector3.forward)), Is.EqualTo(secondSolid));
+                Assert.That(Solid(Vector3.zero), Is.EqualTo(firstSolid));
+                Assert.That(Solid(secondPosition), Is.EqualTo(secondSolid));
+            }
+
+            CheckGeometry(false, true);
+            folder.SetParent(second.transform, true);
+            CheckGeometry(true, false);
+            cutter.transform.SetParent(null, true);
+            cutter.transform.SetAsLastSibling();
+            CheckGeometry(false, false);
         }
 
         [Test]

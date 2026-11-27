@@ -192,7 +192,7 @@ namespace CsgBrush.Editor
 
             EditorGUI.BeginChangeCheck();
             ShapeField();
-            DrawProperty(operationProp, new GUIContent(Tr("Операция"), Tr("«Добавить» заполняет объём. «Вычесть» вырезает его из брашей выше в иерархии.")));
+            DrawProperty(operationProp, new GUIContent(Tr("Операция"), Tr("«Добавить» заполняет объём. Вычет действует на заданную цель или родительский браш. Свободный вычет в корне действует на предыдущие браши своей группы.")));
             if (targets.Length == 1 && target is Brush owner)
             {
                 string builtBy = BrushCsg.BuiltBy(owner, out var reference);

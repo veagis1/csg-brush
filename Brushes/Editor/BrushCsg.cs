@@ -15,24 +15,32 @@ namespace CsgBrush.Editor
     /// Builds the render mesh of every <see cref="BrushGroup"/> with the Manifold library, then hands the brushes'
     /// convex parts to the collider builder.
     ///
-    /// Ordered CSG, as in Quake and Unreal editors: a subtract brush cuts every brush above it in the hierarchy.
-    /// Because union distributes over subtraction, that equals "every additive brush minus every later cutter
-    /// that overlaps it, all unioned", which is what is computed: each brush's solid and each brush's cut piece
-    /// are cached by content, so an edit only recomputes the pieces it touches, plus the final union.
+    /// Unscoped subtract brushes cut earlier brushes in hierarchy order. Addressed and nested cutters affect
+    /// only their target parts. Each additive brush is cut separately before the pieces are unioned. Its solid
+    /// and cut piece are cached by content, so an edit only recomputes the pieces it touches, plus the final union.
     ///
     /// Every build re-derives the brush list from the scene and compares every key, so nothing stale can survive
     /// an undo, a delete or a reorder; the caches only skip work.
     /// </summary>
     public static class BrushCsg
     {
-        sealed class SolidEntry { public int key; public ManifoldSolid solid; public Bounds bounds; public Bounds[] blocks; public Vector3 colliderOrigin; public List<ConvexPolytope> partsAdd, partsRemove; public string partsProblem; }
-        sealed class PieceEntry { public string key; public ManifoldSolid piece; public bool ownsPiece; }
+        sealed class SolidEntry { public int key; public ManifoldSolid solid; public Bounds bounds, modelBounds; public Bounds[] blocks; public Vector3 colliderOrigin; public List<ConvexPolytope> partsAdd, partsRemove; public string partsProblem; }
+        sealed class PieceEntry
+        {
+            public string key;
+            public ManifoldSolid piece;
+            public bool ownsPiece;
+            // In-memory island membership. Replacing any operand's piece invalidates the cached union.
+            static long nextVersion;
+            public readonly long version = ++nextVersion;
+        }
 
         static readonly Dictionary<Brush, SolidEntry> s_Solids = new Dictionary<Brush, SolidEntry>();
         static readonly Dictionary<Brush, PieceEntry> s_Pieces = new Dictionary<Brush, PieceEntry>();
         static readonly HashSet<BrushGroup> s_Dirty = new HashSet<BrushGroup>();
         static bool s_AllDirty;
-        static readonly Dictionary<BrushGroup, int> s_LastMeshKey = new Dictionary<BrushGroup, int>();
+        static readonly Dictionary<BrushGroup, (int geometry, int owners)> s_LastMeshKey =
+            new Dictionary<BrushGroup, (int, int)>();
         static readonly Dictionary<Transform, Brush[]> s_TriangleBrush = new Dictionary<Transform, Brush[]>();
 
         /// <summary>For every triangle of the model's mesh (in submesh order), the brush whose face it lies on.</summary>
@@ -264,7 +272,7 @@ namespace CsgBrush.Editor
         public static List<Brush> UncutBelow(Brush cutter)
         {
             var result = new List<Brush>();
-            if (cutter == null || cutter.operation != BrushOperation.Subtract || cutter.addressedCut) return result;
+            if (cutter == null || cutter.operation != BrushOperation.Subtract || BrushCutTarget.TryScope(cutter, out _)) return result;
             var byModel = BrushesByModel();
             var cutterModel = ModelOf(cutter);
             if (cutterModel == null || !byModel.TryGetValue(cutterModel, out var list)) return result;
@@ -303,11 +311,11 @@ namespace CsgBrush.Editor
             public List<int> pieceRecord = new List<int>();          // per additive piece: record index
             public List<string> pieceKeys = new List<string>();
             public List<List<int>> pieceCutters = new List<List<int>>(); // record indices of the cutters
-            public Dictionary<Brush, HashSet<object>> addressedRecipients = new Dictionary<Brush, HashSet<object>>();
+            public Dictionary<Brush, HashSet<object>> scopedRecipients = new Dictionary<Brush, HashSet<object>>();
             public List<PieceEntry> pieceEntries = new List<PieceEntry>(); // cached or built
             public List<bool> pieceBuilt = new List<bool>();
             public bool needMesh;
-            public int meshKey;
+            public int meshKey, ownerKey;
             public Bounds[] bounds;                                    // per record, in the group's space
             public Bounds[][] blocks;                                  // per record: its convex blocks' boxes (a long sweep's bands), or null
             public Dictionary<string, Island> islandsBefore;           // this group's islands from the last build (read only)
@@ -321,7 +329,15 @@ namespace CsgBrush.Editor
 
         struct PolyData { public Vector3[] vertices; public List<int[]> faces; public Vector3[] innerVertices; public List<int[]> innerFaces; public Bounds bounds; public Bounds[] blocks; }
 
-        struct Record { public Brush brush; public SolidEntry solid; public Matrix4x4 toModel; public int key; public bool subtract; public int layer; }
+        struct Record
+        {
+            public Brush brush;
+            public SolidEntry solid;
+            public Matrix4x4 toFrame;
+            public Vector3 origin; // translation from this compound's calculation frame to the model
+            public int key, localKey, identity, layer;
+            public bool subtract;
+        }
 
         static System.Threading.Tasks.Task s_Task;
         static Job s_Running;
@@ -405,9 +421,75 @@ namespace CsgBrush.Editor
         }
 
         // ---- step 1: main thread
+        // A nested brush and its topmost participating brush share an origin. Folders are transparent;
+        // the model's brush list already excludes nested BrushGroups and disabled operands.
+        readonly struct CompoundFrame
+        {
+            readonly Transform root;
+            readonly Matrix4x4 axes;
+            readonly bool preview;
+            public readonly Vector3 origin;
+
+            public CompoundFrame(Brush brush, BrushGroup model)
+            {
+                root = brush.transform;
+                var pose = BrushGeometry.ToModel(brush, model);
+                origin = pose.GetColumn(3);
+                pose.SetColumn(3, new Vector4(0f, 0f, 0f, 1f));
+                axes = pose;
+                preview = BrushSnap.TryGetPreview(brush, out _, out _);
+            }
+
+            public Matrix4x4 Pose(Brush brush, Matrix4x4 modelPose)
+            {
+                if (brush.transform == root) return axes;
+                if (preview || BrushSnap.TryGetPreview(brush, out _, out _))
+                {
+                    // The live snap preview can move an operand independently of its Transform.
+                    modelPose.m03 -= origin.x;
+                    modelPose.m13 -= origin.y;
+                    modelPose.m23 -= origin.z;
+                    return modelPose;
+                }
+                // Accumulate local offsets before adding any large model coordinates.
+                var local = Matrix4x4.identity;
+                for (var t = brush.transform; t != root; t = t.parent)
+                    local = Matrix4x4.TRS(t.localPosition, t.localRotation, t.localScale) * local;
+                return axes * local;
+            }
+        }
+
+        static Dictionary<Brush, CompoundFrame> CompoundFrames(BrushGroup model, List<Brush> brushes)
+        {
+            var at = new Dictionary<Transform, Brush>();
+            foreach (var brush in brushes) at[brush.transform] = brush;
+            var frames = new Dictionary<Brush, CompoundFrame>();
+            foreach (var brush in brushes)
+            {
+                Brush root = brush;
+                for (var t = brush.transform; t != null; t = t.parent)
+                {
+                    if (at.TryGetValue(t, out var ancestor)) root = ancestor;
+                    if (t == model.transform) break;
+                }
+                if (root == brush) continue;
+                if (!frames.TryGetValue(root, out var frame))
+                    frames.Add(root, frame = new CompoundFrame(root, model));
+                frames[brush] = frame;
+            }
+            return frames;
+        }
+
+        static Bounds OffsetBounds(Bounds bounds, Vector3 offset)
+        {
+            bounds.center += offset;
+            return bounds;
+        }
+
         static Job Prepare(BrushGroup model, List<Brush> brushes)
         {
             var job = new Job { model = model, brushes = brushes };
+            var frames = CompoundFrames(model, brushes);
             foreach (var b in brushes)
             {
                 // pose and key from the last build unless the brush changed since (BrushCache.Forget)
@@ -417,22 +499,33 @@ namespace CsgBrush.Editor
                 {
                     local = BrushGeometry.Polyhedron(b);
                     cache.toModel = BrushGeometry.ToModel(b, model);
-                    cache.key = BrushGeometry.SolidKey(b, local, cache.toModel);
+                    cache.shapeKey = BrushGeometry.ShapeKey(b, local);
+                    cache.key = BrushGeometry.PoseKey(cache.shapeKey, cache.toModel);
                     cache.keyModel = model;
                 }
-                var toModel = cache.toModel; int key = cache.key;
+                var toFrame = cache.toModel;
+                int localKey = cache.key;
+                Vector3 origin = Vector3.zero;
+                if (frames.TryGetValue(b, out var frame))
+                {
+                    origin = frame.origin;
+                    toFrame = frame.Pose(b, cache.toModel);
+                    localKey = BrushGeometry.PoseKey(cache.shapeKey, toFrame);
+                }
                 s_Solids.TryGetValue(b, out var entry);
-                var r = new Record { brush = b, toModel = toModel, key = key, subtract = b.operation == BrushOperation.Subtract, layer = Info(b).layer, solid = entry != null && entry.key == key ? entry : null };
+                var r = new Record { brush = b, identity = b.GetHashCode(), toFrame = toFrame, origin = origin,
+                    key = cache.key, localKey = localKey, subtract = b.operation == BrushOperation.Subtract,
+                    layer = Info(b).layer, solid = entry != null && entry.key == localKey ? entry : null };
                 job.records.Add(r);
                 if (r.solid == null)
                 {
-                    var poly = (local ?? BrushGeometry.Polyhedron(b)).Transformed(toModel);
+                    var poly = (local ?? BrushGeometry.Polyhedron(b)).Transformed(toFrame);
                     var data = new PolyData { vertices = poly.vertices, faces = new List<int[]>(poly.faces.Length), bounds = poly.Bounds(), blocks = Blocks(poly) };
                     foreach (var f in poly.faces) data.faces.Add(f.indices);
                     var inner = BrushGeometry.HollowInner(b);
                     if (inner != null)
                     {
-                        var ip = inner.Transformed(toModel);
+                        var ip = inner.Transformed(toFrame);
                         data.innerVertices = ip.vertices; data.innerFaces = new List<int[]>(ip.faces.Length);
                         foreach (var f in ip.faces) data.innerFaces.Add(f.indices);
                     }
@@ -449,6 +542,14 @@ namespace CsgBrush.Editor
             job.blocks = new Bounds[job.records.Count][];
             for (int i = 0; i < job.records.Count; i++) job.blocks[i] = job.records[i].solid?.blocks;
             for (int n = 0; n < job.newSolidIndices.Count; n++) job.blocks[job.newSolidIndices[n]] = job.newSolidData[n].blocks;
+            for (int i = 0; i < bounds.Length; i++)
+            {
+                var origin = job.records[i].origin;
+                if (origin.Equals(Vector3.zero)) continue;
+                bounds[i] = OffsetBounds(bounds[i], origin);
+                if (job.blocks[i] is Bounds[] blocks)
+                    job.blocks[i] = System.Array.ConvertAll(blocks, box => OffsetBounds(box, origin));
+            }
             s_Islands.TryGetValue(model, out job.islandsBefore);
             // pieces: which cutters apply, and which pieces are already cached
             var subtracts = new List<int>();
@@ -457,8 +558,7 @@ namespace CsgBrush.Editor
             foreach (int j in subtracts)
             {
                 var cutter = job.records[j].brush;
-                if (!cutter.addressedCut) continue;
-                var scope = BrushCutTarget.Scope(cutter);
+                if (!BrushCutTarget.TryScope(cutter, out var scope)) continue;
                 var scopeKey = (scope.Brush, scope.Plan, scope.Start, scope.End);
                 if (!scopes.TryGetValue(scopeKey, out var recipients))
                 {
@@ -468,29 +568,39 @@ namespace CsgBrush.Editor
                             recipients.Add(record.brush);
                     scopes.Add(scopeKey, recipients);
                 }
-                job.addressedRecipients.Add(cutter, recipients);
+                job.scopedRecipients.Add(cutter, recipients);
             }
             var keyBuilder = new System.Text.StringBuilder();
+            var relativeKey = new System.Text.StringBuilder();
             for (int i = 0; i < job.records.Count; i++)
             {
                 var r = job.records[i];
                 if (r.subtract) continue;
                 keyBuilder.Clear(); keyBuilder.Append(r.key);
+                relativeKey.Clear().Append(r.localKey);
+                bool operandsCached = r.solid != null;
                 var cutters = new List<int>();
                 foreach (int j in subtracts)
                 {
                     var c = job.records[j];
-                    bool addressed = job.addressedRecipients.TryGetValue(c.brush, out var recipients);
-                    if (addressed ? !recipients.Contains(r.brush) : j <= i) continue;
+                    bool scoped = job.scopedRecipients.TryGetValue(c.brush, out var recipients);
+                    if (scoped ? !recipients.Contains(r.brush) : j <= i) continue;
                     if (c.layer != r.layer || !Overlap(job, i, j)) continue; // each layer is combined on its own
                     cutters.Add(j); keyBuilder.Append('-').Append(c.key);
-                    if (addressed) keyBuilder.Append('@').Append(j);
+                    if (scoped) keyBuilder.Append('@').Append(j);
+                    var offset = c.origin - r.origin;
+                    relativeKey.Append('/').Append(c.identity).Append(':').Append(c.localKey)
+                        .Append(':').Append(BrushPolyhedron.MicronKey(offset.x))
+                        .Append(':').Append(BrushPolyhedron.MicronKey(offset.y))
+                        .Append(':').Append(BrushPolyhedron.MicronKey(offset.z));
+                    operandsCached &= c.solid != null;
                 }
                 string pieceKey = keyBuilder.ToString();
                 s_Pieces.TryGetValue(r.brush, out var pe);
-                bool cached = pe != null && pe.key == pieceKey;
+                string localPieceKey = relativeKey.ToString();
+                bool cached = operandsCached && pe != null && pe.key == localPieceKey;
                 job.pieceRecord.Add(i); job.pieceKeys.Add(pieceKey); job.pieceCutters.Add(cutters);
-                job.pieceEntries.Add(cached ? pe : new PieceEntry { key = pieceKey }); job.pieceBuilt.Add(!cached);
+                job.pieceEntries.Add(cached ? pe : new PieceEntry { key = localPieceKey }); job.pieceBuilt.Add(!cached);
             }
             unchecked
             {
@@ -511,9 +621,11 @@ namespace CsgBrush.Editor
                     return key;
                 }
                 int meshKey = 17 * 31 + MeshFormat;
+                int ownerKey = 17;
                 for (int i = 0; i < job.pieceKeys.Count; i++)
                 {
                     var record = job.records[job.pieceRecord[i]];
+                    ownerKey = ownerKey * 31 + record.identity;
                     meshKey = meshKey * 31 + job.pieceKeys[i].GetHashCode();
                     meshKey = meshKey * 31 + KeyFor(record.brush.material);
                     meshKey = meshKey * 31 + record.layer;
@@ -521,14 +633,17 @@ namespace CsgBrush.Editor
                     foreach (int index in job.pieceCutters[i])
                     {
                         var cutter = job.records[index].brush;
+                        ownerKey = ownerKey * 31 + job.records[index].identity;
                         meshKey = meshKey * 31 + KeyFor(cutter.material);
                         meshKey = meshKey * 31 + (int)cutter.cutFaces;
                     }
                 }
                 job.meshKey = meshKey;
+                job.ownerKey = ownerKey; // Live identities can change even when coincident brushes make the same mesh.
             }
             bool anyMesh = false; foreach (var t in MeshObjects(model)) if (t.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null) { anyMesh = true; break; }
-            if (s_LastMeshKey.TryGetValue(model, out var last)) job.needMesh = !(anyMesh && last == job.meshKey);
+            if (s_LastMeshKey.TryGetValue(model, out var last))
+                job.needMesh = !(anyMesh && last.geometry == job.meshKey && last.owners == job.ownerKey);
             else if (s_KeepSaved && !s_Rebuilt.Contains(model)) job.needMesh = !(anyMesh && model.builtKey == job.meshKey && SavedMeshesComplete(model)); // the first build since the scene was loaded: its saved meshes are kept when the brushes still make them (their lightmap UVs with them)
             else job.needMesh = true;
             return job;
@@ -563,8 +678,23 @@ namespace CsgBrush.Editor
         }
 
         // ---- step 2: any thread (Manifold and arrays only)
+        // Translate only when operands meet across frames. The cached native solids are immutable.
+        sealed class TranslatedSolids : System.IDisposable
+        {
+            readonly Dictionary<(ManifoldSolid, Vector3), ManifoldSolid> copies = new Dictionary<(ManifoldSolid, Vector3), ManifoldSolid>();
+            public ManifoldSolid At(ManifoldSolid solid, Vector3 offset)
+            {
+                if (offset.Equals(Vector3.zero)) return solid;
+                if (!copies.TryGetValue((solid, offset), out var copy))
+                    copies.Add((solid, offset), copy = solid.Translated(offset));
+                return copy;
+            }
+            public void Dispose() { foreach (var copy in copies.Values) copy.Dispose(); }
+        }
+
         static void Compute(Job job)
         {
+            using var translated = new TranslatedSolids();
             var sw = Stopwatch.StartNew();
             var solids = new ManifoldSolid[job.records.Count];
             for (int i = 0; i < job.records.Count; i++) solids[i] = job.records[i].solid?.solid;
@@ -594,7 +724,9 @@ namespace CsgBrush.Editor
                     else
                     {
                         var cutters = new List<ManifoldSolid>();
-                        foreach (var j in job.pieceCutters[p]) if (solids[j] != null) cutters.Add(solids[j]);
+                        var origin = job.records[job.pieceRecord[p]].origin;
+                        foreach (var j in job.pieceCutters[p])
+                            if (solids[j] != null) cutters.Add(translated.At(solids[j], job.records[j].origin - origin));
                         if (cutters.Count == 0) { pe.piece = own; pe.ownsPiece = false; }
                         else
                         {
@@ -624,9 +756,22 @@ namespace CsgBrush.Editor
                     var islands = new List<Island>();
                     foreach (var members in Connected(piecesByLayer[layer], p => job.bounds[job.pieceRecord[p]]))
                     {
-                        if (members.Count >= CellMinPieces) { BuildCells(job, layer, members, solids, islands); continue; }
-                        keyBuilder.Clear().Append(layer);
-                        foreach (int p in members) keyBuilder.Append('/').Append(job.pieceKeys[p]);
+                        var origin = job.records[job.pieceRecord[members[0]]].origin;
+                        bool sharedFrame = true;
+                        foreach (int p in members)
+                            if (!job.records[job.pieceRecord[p]].origin.Equals(origin)) { sharedFrame = false; break; }
+                        if (!sharedFrame) origin = Vector3.zero;
+                        if (members.Count >= CellMinPieces)
+                        {
+                            BuildCells(job, layer, members, solids, translated, origin, islands);
+                            continue;
+                        }
+                        keyBuilder.Clear().Append(layer).Append(sharedFrame ? 'L' : 'M');
+                        foreach (int p in members)
+                        {
+                            keyBuilder.Append('/').Append(job.pieceEntries[p].version);
+                            if (!sharedFrame) keyBuilder.Append(':').Append(job.records[job.pieceRecord[p]].key);
+                        }
                         string key = keyBuilder.ToString();
                         if (job.islandsBefore == null || !job.islandsBefore.TryGetValue(key, out var island))
                         {
@@ -634,16 +779,20 @@ namespace CsgBrush.Editor
                             var sources = new Dictionary<int, Brush>();
                             foreach (int p in members)
                             {
-                                pieces.Add(job.pieceEntries[p].piece);
                                 int r = job.pieceRecord[p];
+                                pieces.Add(translated.At(job.pieceEntries[p].piece, job.records[r].origin - origin));
                                 if (solids[r] != null) sources[solids[r].OriginalId] = job.records[r].brush;
                                 foreach (int c in job.pieceCutters[p]) if (solids[c] != null) sources[solids[c].OriginalId] = job.records[c].brush; // carved faces take the cutter's material
                             }
                             using var union = pieces.Count == 1 ? null : ManifoldSolid.Batch(pieces, ManifoldNative.OpType.Add);
-                            island = new Island { key = key, data = (union ?? pieces[0]).ToMesh(), sources = sources };
+                            island = new Island { key = key, data = (union ?? pieces[0]).ToMesh(), sources = sources, origin = origin };
                             job.builtIslands++;
                         }
-                        else job.cachedIslands++;
+                        else
+                        {
+                            job.cachedIslands++;
+                            island = island.AtOrigin(origin);
+                        }
                         job.islandsAfter[key] = island;
                         islands.Add(island);
                     }
@@ -666,11 +815,12 @@ namespace CsgBrush.Editor
         /// their meshes (keyed, like islands, by their pieces' keys), and no union ever spans the whole island. The cells'
         /// surfaces meet along the walls, cut at the same places on both sides.
         /// </summary>
-        static void BuildCells(Job job, int layer, List<int> members, ManifoldSolid[] solids, List<Island> islands)
+        static void BuildCells(Job job, int layer, List<int> members, ManifoldSolid[] solids, TranslatedSolids translated,
+            Vector3 origin, List<Island> islands)
         {
             var whole = job.bounds[job.pieceRecord[members[0]]];
             foreach (int p in members) whole.Encapsulate(job.bounds[job.pieceRecord[p]]);
-            Vector3Int lo = CellOf(whole.min), hi = CellOf(whole.max);
+            Vector3Int lo = CellOf(whole.min - origin), hi = CellOf(whole.max - origin);
             var keyBuilder = new System.Text.StringBuilder();
             var inCell = new List<int>();
             for (int x = lo.x; x <= hi.x; x++)
@@ -678,7 +828,8 @@ namespace CsgBrush.Editor
                     for (int z = lo.z; z <= hi.z; z++)
                     {
                         var min = new Vector3(x, y, z) * CellSize + Vector3.one * CellOffset;
-                        var box = new Bounds(min + Vector3.one * (CellSize * 0.5f), Vector3.one * CellSize);
+                        var localBox = new Bounds(min + Vector3.one * (CellSize * 0.5f), Vector3.one * CellSize);
+                        var box = OffsetBounds(localBox, origin);
                         inCell.Clear();
                         foreach (int p in members) if (Overlaps(job, job.pieceRecord[p], box)) inCell.Add(p);
                         if (inCell.Count == 0) continue;
@@ -687,19 +838,21 @@ namespace CsgBrush.Editor
                         // a long piece leaves this cell as it was
                         foreach (int p in inCell)
                         {
-                            keyBuilder.Append('/').Append(job.records[job.pieceRecord[p]].key);
-                            foreach (int c in job.pieceCutters[p]) if (Overlaps(job, c, box)) keyBuilder.Append('-').Append(job.records[c].key);
+                            var add = job.records[job.pieceRecord[p]];
+                            AppendOperand(add);
+                            foreach (int c in job.pieceCutters[p])
+                                if (Overlaps(job, c, box)) AppendOperand(job.records[c]);
                         }
                         string key = keyBuilder.ToString();
                         if (job.islandsBefore == null || !job.islandsBefore.TryGetValue(key, out var island))
                         {
-                            island = new Island { key = key, sources = new Dictionary<int, Brush>() };
-                            using (var boxSolid = BoxSolid(box))
+                            island = new Island { key = key, sources = new Dictionary<int, Brush>(), origin = origin };
+                            using (var boxSolid = BoxSolid(localBox))
                             {
                                 var clipped = new List<ManifoldSolid>(inCell.Count); var owned = new List<ManifoldSolid>();
                                 foreach (int p in inCell)
                                 {
-                                    var piece = job.pieceEntries[p].piece;
+                                    var piece = translated.At(job.pieceEntries[p].piece, job.records[job.pieceRecord[p]].origin - origin);
                                     var pb = job.bounds[job.pieceRecord[p]];
                                     if (box.Contains(pb.min) && box.Contains(pb.max)) clipped.Add(piece); // wholly inside: as it is
                                     else { var c = ManifoldSolid.Boolean(piece, boxSolid, ManifoldNative.OpType.Intersect); clipped.Add(c); owned.Add(c); }
@@ -713,10 +866,23 @@ namespace CsgBrush.Editor
                             }
                             job.builtIslands++;
                         }
-                        else job.cachedIslands++;
+                        else
+                        {
+                            island = island.AtOrigin(origin);
+                            job.cachedIslands++;
+                        }
                         job.islandsAfter[key] = island;
                         islands.Add(island);
                     }
+
+            void AppendOperand(Record record)
+            {
+                var offset = record.origin - origin;
+                keyBuilder.Append(record.subtract ? '-' : '/').Append(record.identity).Append(':').Append(record.localKey)
+                    .Append(':').Append(BrushPolyhedron.MicronKey(offset.x))
+                    .Append(':').Append(BrushPolyhedron.MicronKey(offset.y))
+                    .Append(':').Append(BrushPolyhedron.MicronKey(offset.z));
+            }
         }
 
         /// <summary>
@@ -804,7 +970,7 @@ namespace CsgBrush.Editor
                 if (r.brush == null) { job.newSolids[n]?.Dispose(); continue; }
                 if (s_Solids.TryGetValue(r.brush, out var old)) old.solid?.Dispose();
                 var data = job.newSolidData[n];
-                var entry = new SolidEntry { key = r.key, solid = job.newSolids[n], bounds = data.bounds, blocks = data.blocks };
+                var entry = new SolidEntry { key = r.localKey, solid = job.newSolids[n], bounds = data.bounds, blocks = data.blocks };
                 if (entry.solid == null) r.brush.problem = Tr("Не удалось построить форму.");
                 s_Solids[r.brush] = entry;
                 r.solid = entry; job.records[job.newSolidIndices[n]] = r;
@@ -820,6 +986,8 @@ namespace CsgBrush.Editor
                 s_Pieces[r.brush] = pe;
             }
             if (model == null) return;
+            for (int i = 0; i < job.records.Count; i++)
+                if (job.records[i].solid != null) job.records[i].solid.modelBounds = job.bounds[i];
             if (job.needMesh)
             {
                 LastTriangles = 0;
@@ -832,11 +1000,10 @@ namespace CsgBrush.Editor
                 s_Islands[model] = job.islandsAfter; // islands no longer in the group are dropped
                 LastCachedIslands = job.cachedIslands; LastBuiltIslands = job.builtIslands;
                 foreach (var t in MeshObjects(model)) if (!kept.Contains(t)) { s_TriangleBrush.Remove(t); Object.DestroyImmediate(t.gameObject); } // a layer nothing is on any more
-                s_LastMeshKey[model] = job.meshKey;
                 if (model.builtKey != job.meshKey) model.builtKey = job.meshKey;
                 MeshesWritten?.Invoke(model);
             }
-            else s_LastMeshKey[model] = job.meshKey; // kept as saved
+            s_LastMeshKey[model] = (job.meshKey, job.ownerKey);
             LastMeshMs = sw.Elapsed.TotalMilliseconds; sw.Restart();
 
             // colliders from the convex parts (deferred by the builder during drags)
@@ -848,14 +1015,14 @@ namespace CsgBrush.Editor
                 {
                     r.solid.partsAdd = new List<ConvexPolytope>(); r.solid.partsRemove = new List<ConvexPolytope>();
                     string problem = null;
-                    r.solid.colliderOrigin = BrushGeometry.ConvexPartsInLocalFrame(r.brush, r.toModel,
+                    r.solid.colliderOrigin = BrushGeometry.ConvexPartsInLocalFrame(r.brush, r.toFrame,
                         r.solid.partsAdd, r.solid.partsRemove, ref problem, r.solid.bounds.center);
                     r.solid.partsProblem = problem;
                 }
                 if (r.solid.partsProblem != null && r.brush.problem == null) r.brush.problem = r.solid.partsProblem;
                 var info = Info(r.brush);
-                job.addressedRecipients.TryGetValue(r.brush, out var recipients);
-                inputs.Add(new ConvexColliderBuilder.Input { name = info.name, subtract = r.subtract, kind = info.kind, fingerprint = info.fingerprint, layer = r.layer, origin = r.solid.colliderOrigin, add = r.solid.partsAdd, remove = r.solid.partsRemove, onPiece = info.onPiece, owner = r.brush, key = r.key, addressedRecipients = recipients });
+                job.scopedRecipients.TryGetValue(r.brush, out var recipients);
+                inputs.Add(new ConvexColliderBuilder.Input { name = info.name, subtract = r.subtract, kind = info.kind, fingerprint = info.fingerprint, layer = r.layer, origin = r.origin + r.solid.colliderOrigin, add = r.solid.partsAdd, remove = r.solid.partsRemove, onPiece = info.onPiece, owner = r.brush, key = r.localKey, addressedRecipients = recipients });
             }
             var settings = model.GetComponent<ConvexColliderSettings>();
             if (settings == null) settings = model.gameObject.AddComponent<ConvexColliderSettings>();
@@ -1029,6 +1196,9 @@ namespace CsgBrush.Editor
         /// </summary>
         sealed class Island
         {
+            public Vector3 origin;                     // mesh data is relative to this point in the model
+            public Island AtOrigin(Vector3 position) => origin.Equals(position) ? this :
+                new Island { key = key, data = data, sources = sources, origin = position };
             public string key;                         // its pieces' keys, in CSG order
             public ManifoldSolid.MeshData data;        // their union, read back
             public Dictionary<int, Brush> sources;     // solid id (triangleSource) to brush, cutters included: whose material a triangle takes
@@ -1099,7 +1269,7 @@ namespace CsgBrush.Editor
             {
                 if (b == null || b.operation != BrushOperation.Add) continue;
                 if (!s_Solids.TryGetValue(b, out var solid)) continue;
-                var box = solid.bounds;
+                var box = solid.modelBounds;
                 box.Expand(1e-3f);
                 carved.Add((b, box));
             }
@@ -1135,7 +1305,7 @@ namespace CsgBrush.Editor
                 Brush cutFrom = null;
                 if (brush != null && brush.operation == BrushOperation.Subtract)
                 {
-                    var inside = a + ((b - a) + (c - a)) / 3f - n * 2e-3f; // the solid a cut face bounds lies behind it
+                    var inside = island.origin + (a + ((b - a) + (c - a)) / 3f) - n * 2e-3f; // the solid a cut face bounds lies behind it
                     foreach (var (addBrush, box) in carved) if (box.Contains(inside)) { flags = StaticFlags(addBrush); cutFrom = addBrush; break; }
                 }
                 if (!partOf.TryGetValue(flags, out var part)) { part = new Part { flags = flags }; partOf[flags] = part; island.parts.Add(part); }
@@ -1150,7 +1320,7 @@ namespace CsgBrush.Editor
                 int fkey = byFace ? faceOf[tri] : -1 - tri; // a triangle with its own normal has its own vertices
                 for (int corner = 0; corner < 3; corner++)
                 {
-                    var p = data.vertices[data.triangles[tri * 3 + corner]];
+                    var p = island.origin + data.vertices[data.triangles[tri * 3 + corner]];
                     var key = (p, fkey, mi);
                     if (!part.lookup.TryGetValue(key, out int vi))
                     {
@@ -1219,6 +1389,15 @@ namespace CsgBrush.Editor
             var mesh = mf.sharedMesh;
             // a mesh saved in an asset (a built prefab's) is never rewritten from here: the scene gets its own
             if (mesh == null || EditorUtility.IsPersistent(mesh)) { mesh = new Mesh { name = "brush mesh" }; mf.sharedMesh = mesh; }
+            FillMesh(mesh, parts, out var materials, out var sources);
+            mr.sharedMaterials = materials;
+            s_TriangleBrush[t] = sources;
+            SaveSources(t, sources);
+            return t;
+        }
+
+        static void FillMesh(Mesh mesh, List<Part> parts, out Material[] sharedMaterials, out Brush[] sources)
+        {
             mesh.Clear(false); // the vertex layout too: lightmap UVs made for the old mesh must not stay behind as zeros
             s_Vertices.Clear(); s_Normals.Clear(); s_Uvs.Clear();
             var materials = new List<Material>(); var materialIndex = new Dictionary<Material, int>();
@@ -1236,17 +1415,58 @@ namespace CsgBrush.Editor
                     submeshBrush[mi].AddRange(part.triangleBrush[m]);
                 }
             }
-            if (s_Vertices.Count == 0) { mr.sharedMaterials = new Material[0]; s_TriangleBrush[t] = new Brush[0]; SaveSources(t, s_TriangleBrush[t]); return t; }
+            sharedMaterials = materials.ToArray();
+            var triangleBrush = new List<Brush>(); foreach (var list in submeshBrush) triangleBrush.AddRange(list);
+            sources = triangleBrush.ToArray();
+            if (s_Vertices.Count == 0) return;
             mesh.indexFormat = s_Vertices.Count > 65000 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
             mesh.SetVertices(s_Vertices); mesh.SetNormals(s_Normals); mesh.SetUVs(0, s_Uvs);
             mesh.subMeshCount = submeshTris.Count;
             for (int i = 0; i < submeshTris.Count; i++) mesh.SetTriangles(submeshTris[i], i);
             mesh.RecalculateBounds();
-            mr.sharedMaterials = materials.ToArray();
-            var triangleBrush = new List<Brush>(); foreach (var list in submeshBrush) triangleBrush.AddRange(list);
-            s_TriangleBrush[t] = triangleBrush.ToArray();
-            SaveSources(t, s_TriangleBrush[t]);
-            return t;
+        }
+
+        // Evaluate the same booleans without hidden operands. Only the temporary Scene view meshes
+        // receive the result. Apply would also change saved meshes, colliders and the model's build key.
+        internal static void BuildScenePreview(BrushGroup model, List<Brush> visible, HashSet<int> hiddenLayers,
+            Dictionary<Transform, BrushSceneVisibility.Preview> output)
+        {
+            WaitForJob();
+            var job = Prepare(model, visible);
+            job.needMesh = true;
+            var children = MeshObjects(model);
+            children.RemoveAll(t => !hiddenLayers.Contains(t.gameObject.layer));
+            var partsByChild = new Dictionary<Transform, List<Part>>();
+            foreach (var child in children) partsByChild.Add(child, new List<Part>());
+            try
+            {
+                Compute(job);
+                var fallback = DefaultMaterial();
+                int defaultFlags = (int)BrushSettings.instance.defaultModelStaticFlags;
+                foreach (var (layer, islands) in job.layers)
+                {
+                    foreach (var island in islands)
+                    {
+                        if (!StillConverted(island, fallback, defaultFlags)) Convert(island, fallback, defaultFlags);
+                        foreach (var part in island.parts)
+                        {
+                            var child = model.transform.Find(MeshChildName(layer, (StaticEditorFlags)part.flags));
+                            // A previously carved-away brush can introduce a new set of flags on this layer.
+                            if (child == null) child = children.Find(t => t.gameObject.layer == layer);
+                            if (child != null) partsByChild[child].Add(part);
+                        }
+                    }
+                }
+                foreach (var (child, parts) in partsByChild)
+                {
+                    var preview = new BrushSceneVisibility.Preview();
+                    output.Add(child, preview);
+                    FillMesh(preview.Mesh, parts, out preview.Materials, out preview.Sources);
+                    if (child.TryGetComponent<MeshFilter>(out var filter))
+                        BrushSceneLightmapUVs.Transfer(filter.sharedMesh, preview.Mesh);
+                }
+            }
+            finally { DisposeJob(job); }
         }
     }
 }

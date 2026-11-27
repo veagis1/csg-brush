@@ -5,19 +5,20 @@ using UnityEngine;
 
 namespace CsgBrush.Editor
 {
-    [EditorTool("Snap WCS to Vertex")]
+    [EditorTool("Snap WCS")]
     public sealed class BrushPivotTool : EditorTool
     {
         const float PickRadius = 12f; // GUI points
-        internal const string PickLabel = "Привязать WCS к вершине";
+        internal const string PickLabel = "Привязать WCS";
         internal static GUIContent PickCommand => new GUIContent(Tr(PickLabel),
-            Tr("Укажите вершину или середину ребра в сцене. Туда переместится начало рабочей системы координат объекта. При привязке по форме сетка переключится на начало WCS. Esc отменяет выбор."));
+            Tr("Укажите вершину, середину ребра или центр грани в сцене. Туда переместится начало рабочей системы координат объекта. При привязке по форме сетка переключится на начало WCS. Esc отменяет выбор."));
         internal static GUIContent ResetCommand => new GUIContent(Tr("Сбросить WCS"),
             Tr("Вернуть начало рабочей системы координат объекта в центр его габарита. Геометрия останется на месте."));
         internal static bool Active => ToolManager.activeToolType == typeof(BrushPivotTool);
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), PickCommand.tooltip);
         Component source;
-        public override bool IsAvailable() => CanEdit(Selected());
+        PlacementGeometry brushGeometry;
+        public override bool IsAvailable() => CanPick(Selected());
 
         static Component Selected()
         {
@@ -30,13 +31,23 @@ namespace CsgBrush.Editor
             !EditorApplication.isPlayingOrWillChangePlaymode && !EditorUtility.IsPersistent(item) &&
             (item is PointGraph graph && graph.points.Count > 0 || item is Brush brush && BrushApi.CanPickPivot(brush));
 
+        static bool CanPick(Component item) => CanEdit(item) && BrushSceneVisibility.CanPick(item.transform);
+
         public override void OnActivated()
         {
             source = Selected();
             Selection.selectionChanged += OnSelectionChanged;
+            ObjectChangeEvents.changesPublished += InvalidateGeometry;
         }
 
-        public override void OnWillBeDeactivated() => Selection.selectionChanged -= OnSelectionChanged;
+        void InvalidateGeometry(ref ObjectChangeEventStream changes) => brushGeometry = null;
+
+        public override void OnWillBeDeactivated()
+        {
+            Selection.selectionChanged -= OnSelectionChanged;
+            ObjectChangeEvents.changesPublished -= InvalidateGeometry;
+            brushGeometry = null;
+        }
 
         void OnSelectionChanged()
         {
@@ -48,7 +59,8 @@ namespace CsgBrush.Editor
             using (new EditorGUI.DisabledScope(!CanEdit(item)))
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button(PickCommand)) Schedule(item, reset: false);
+                using (new EditorGUI.DisabledScope(!CanPick(item)))
+                    if (GUILayout.Button(PickCommand)) Schedule(item, reset: false);
                 if (GUILayout.Button(ResetCommand)) Schedule(item, reset: true);
             }
         }
@@ -61,7 +73,8 @@ namespace CsgBrush.Editor
             var menu = new GenericMenu();
             if (CanEdit(item))
             {
-                menu.AddItem(PickCommand, false, () => Schedule(item, reset: false));
+                if (CanPick(item)) menu.AddItem(PickCommand, false, () => Schedule(item, reset: false));
+                else menu.AddDisabledItem(PickCommand);
                 menu.AddItem(ResetCommand, false, () => Schedule(item, reset: true));
             }
             else
@@ -85,7 +98,7 @@ namespace CsgBrush.Editor
                     else BrushApi.ResetPivot((Brush)item);
                     MoveFromPivot();
                 }
-                else Begin();
+                else if (CanPick(item)) Begin();
             };
         }
 
@@ -110,7 +123,12 @@ namespace CsgBrush.Editor
 
         public override void OnToolGUI(EditorWindow window)
         {
-            if (!(window is SceneView view) || !CanEdit(source)) return;
+            if (!(window is SceneView view)) return;
+            if (!CanPick(source))
+            {
+                ToolManager.RestorePreviousPersistentTool();
+                return;
+            }
             var e = Event.current;
             if (e.alt || Tools.viewToolActive) return;
             if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
@@ -126,9 +144,10 @@ namespace CsgBrush.Editor
             if (e.type != EventType.Repaint && !(e.type == EventType.MouseDown && e.button == 0)) return;
 
             float closest = PickRadius * PickRadius, depth = float.PositiveInfinity;
-            bool picked = false, pickedEdge = false;
+            bool picked = false;
+            PlacementMarkerKind pickedKind = default;
             Vector3 pickedWorld = default, pickedLocal = default;
-            void Consider(Vector3 local, Vector3 world, bool edge)
+            void Consider(Vector3 local, Vector3 world, PlacementMarkerKind kind)
             {
                 var screen = HandleUtility.WorldToGUIPointWithDepth(world);
                 if (screen.z < view.camera.nearClipPlane || screen.z > view.camera.farClipPlane) return;
@@ -136,48 +155,39 @@ namespace CsgBrush.Editor
                 if (d < closest || (Mathf.Approximately(d, closest) && screen.z < depth))
                 {
                     picked = true;
-                    pickedEdge = edge;
+                    pickedKind = kind;
                     pickedLocal = local;
                     pickedWorld = world;
                     closest = d;
                     depth = screen.z;
                 }
                 if (e.type != EventType.Repaint) return;
-                float size = HandleUtility.GetHandleSize(world);
-                if (!edge) Handles.DotHandleCap(0, world, Quaternion.identity, size * 0.035f, EventType.Repaint);
-                else Handles.RectangleHandleCap(0, world, view.camera.transform.rotation, size * 0.027f, EventType.Repaint);
+                PlacementMarker.Draw(world, view.camera.transform.rotation, kind, PlacementMarker.PointScale);
             }
 
-            var vertexColor = new Color(0.35f, 0.92f, 0.86f);
-            var edgeColor = new Color(0.60f, 0.72f, 1f);
-            if (source is PointGraph graph)
+            using (new Handles.DrawingScope(PlacementMarker.PointColor))
             {
-                var geometry = GeneratorWcs.Geometry(graph);
-                using (new Handles.DrawingScope(vertexColor))
-                    foreach (var point in geometry.vertices) Consider(point, graph.GraphToWorld(point), false);
-                using (new Handles.DrawingScope(edgeColor))
-                    foreach (var point in geometry.midpoints) Consider(point, graph.GraphToWorld(point), true);
-            }
-            else
-            {
-                var poly = BrushHooks.LocalShape((Brush)source, out _);
-                if (poly == null) return;
-                var matrix = source.transform.localToWorldMatrix;
-                using (new Handles.DrawingScope(vertexColor))
-                    foreach (var point in poly.vertices) Consider(point, matrix.MultiplyPoint3x4(point), false);
-                using (new Handles.DrawingScope(edgeColor))
-                    foreach (var (a, b) in poly.Edges())
-                    {
-                        var point = (poly.vertices[a] + poly.vertices[b]) * 0.5f;
-                        Consider(point, matrix.MultiplyPoint3x4(point), true);
-                    }
+                if (source is PointGraph graph)
+                {
+                    var geometry = GeneratorWcs.Geometry(graph);
+                    foreach (var p in geometry.vertices) Consider(p, graph.GraphToWorld(p), PlacementMarkerKind.Vertex);
+                    foreach (var p in geometry.midpoints) Consider(p, graph.GraphToWorld(p), PlacementMarkerKind.Midpoint);
+                    foreach (var p in geometry.centers) Consider(p, graph.GraphToWorld(p), PlacementMarkerKind.FaceCenter);
+                }
+                else
+                {
+                    brushGeometry ??= PlacementGeometry.FromBrush((Brush)source);
+                    if (brushGeometry == null) return;
+                    var matrix = source.transform.localToWorldMatrix;
+                    void Local(Vector3 p, PlacementMarkerKind kind) => Consider(p, matrix.MultiplyPoint3x4(p), kind);
+                    foreach (var p in brushGeometry.Vertices) Local(p, PlacementMarkerKind.Vertex);
+                    foreach (var edge in brushGeometry.Edges)
+                        Local((brushGeometry.Vertices[edge.x] + brushGeometry.Vertices[edge.y]) * 0.5f, PlacementMarkerKind.Midpoint);
+                    foreach (var face in brushGeometry.Faces) Local(face.Center, PlacementMarkerKind.FaceCenter);
+                }
             }
             if (e.type == EventType.Repaint && picked)
-            {
-                using (new Handles.DrawingScope(Color.yellow))
-                    Handles.SphereHandleCap(0, pickedWorld, Quaternion.identity, HandleUtility.GetHandleSize(pickedWorld) * 0.12f, EventType.Repaint);
-                Handles.Label(pickedWorld, pickedEdge ? Tr("  Середина ребра") : Tr("  Вершина"));
-            }
+                PlacementMarker.Highlight(pickedWorld, view.camera.transform.rotation, pickedKind);
             if (e.type == EventType.MouseDown && HandleUtility.nearestControl == control)
             {
                 e.Use();

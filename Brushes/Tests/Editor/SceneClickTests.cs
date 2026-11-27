@@ -21,12 +21,20 @@ namespace CsgBrush.Tests
         Brush m_Floor, m_Tower;
         UnityEditor.PivotMode m_PreviousPivotMode;
         PivotRotation m_PreviousPivotRotation;
+        bool previousPerpendicular, previousMagnet, previousPoints, previousSuspended;
 
         [SetUp]
         public void Open()
         {
             m_PreviousPivotMode = Tools.pivotMode;
             m_PreviousPivotRotation = Tools.pivotRotation;
+            previousPerpendicular = SurfacePlacementMode.Perpendicular;
+            previousMagnet = SurfacePlacementMode.Magnet;
+            previousPoints = SurfacePlacementMode.ShowPoints;
+            previousSuspended = SessionState.GetBool(BrushShapeHandles.SuspendedKey, false);
+            SurfacePlacementMode.Perpendicular = false;
+            SurfacePlacementMode.Magnet = true;
+            SurfacePlacementMode.ShowPoints = false;
             EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
             m_Floor = BrushApi.Create(BrushShape.Box, new Vector3(0f, -0.5f, 0f), new Vector3(30f, 1f, 30f), Quaternion.identity, null, "Floor");
             m_Tower = BrushApi.Create(BrushShape.Box, new Vector3(4f, 3f, 4f), new Vector3(4f, 6f, 4f), Quaternion.identity, null, "Tower");
@@ -44,6 +52,11 @@ namespace CsgBrush.Tests
         [TearDown]
         public void Close()
         {
+            SurfacePlacementMode.Stop();
+            SurfacePlacementMode.Perpendicular = previousPerpendicular;
+            SurfacePlacementMode.Magnet = previousMagnet;
+            SurfacePlacementMode.ShowPoints = previousPoints;
+            SessionState.SetBool(BrushShapeHandles.SuspendedKey, previousSuspended);
             SceneView.duringSceneGui -= Observe;
             GUIUtility.hotControl = 0;
             Tools.current = Tool.Move;
@@ -69,10 +82,10 @@ namespace CsgBrush.Tests
             return m_TargetGui - m_Offset;
         }
 
-        void Send(EventType type, Vector2 at)
+        void Send(EventType type, Vector2 at, EventModifiers modifiers = EventModifiers.None)
         {
-            m_View.SendEvent(new Event { type = EventType.Layout, mousePosition = at });
-            m_View.SendEvent(new Event { type = type, button = 0, mousePosition = at, clickCount = 1 });
+            m_View.SendEvent(new Event { type = EventType.Layout, mousePosition = at, modifiers = modifiers });
+            m_View.SendEvent(new Event { type = type, button = 0, mousePosition = at, clickCount = 1, modifiers = modifiers });
         }
 
         void MoveTo(Vector2 from, Vector2 to, EventType type = EventType.MouseMove)
@@ -86,6 +99,350 @@ namespace CsgBrush.Tests
         }
 
         void Click(Vector2 at) { Send(EventType.MouseDown, at); Send(EventType.MouseUp, at); MoveTo(at, at); }
+
+        [Test]
+        public void WcsPicksTheCentreOfTheVisibleTowerFace()
+        {
+            Selection.activeGameObject = m_Tower.gameObject;
+            var face = new Vector3(4f, 3f, 2f);
+            ToolManager.SetActiveTool<BrushPivotTool>();
+            Click(Gui(face));
+            Assert.That(Vector3.Distance(m_Tower.transform.position, face), Is.LessThan(0.001f));
+            Assert.That(Tools.current, Is.EqualTo(Tool.Move));
+        }
+
+        [TestCase(0f, 0f)]
+        [TestCase(1f, 0f)]
+        [TestCase(-1f, 0f)]
+        [TestCase(0f, 1f)]
+        [TestCase(0f, -1f)]
+        public void MoveToUsesFaceCentreAndItsFourGuides(float x, float y)
+        {
+            var source = new GameObject("Опора").transform;
+            source.rotation = Quaternion.Euler(12f, 30f, -7f);
+            var previous = source.rotation;
+            Selection.activeGameObject = source.gameObject;
+            var face = new Vector3(4f, 3f, 2f);
+            ObjectPlacementTool.Begin();
+            var start = Gui(face);
+            var offset = face + new Vector3(x, y, 0f);
+            var end = Gui(offset);
+            Click(start);
+            Assert.That(Vector3.Distance(source.position, face), Is.LessThan(0.04f), "Live preview at the anchor");
+            MoveTo(start, end);
+            Assert.That(Vector3.Distance(source.position, offset), Is.LessThan(0.04f), "Live preview along the guide");
+            Click(end);
+            Assert.That(ObjectPlacementTool.Active, Is.False);
+            Assert.That(Vector3.Distance(source.position, offset), Is.LessThan(0.04f));
+            Assert.That(Quaternion.Angle(previous, source.rotation), Is.LessThan(0.001f));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void MoveToDoesNotSnapThroughTheVisibleFace(bool showPoints)
+        {
+            m_View.LookAt(new Vector3(4f, 3f, 4f), Quaternion.identity, 9f, true, true);
+            var contact = new Vector3(4.65f, 3.55f, 2f);
+            var hiddenCorner = new Vector3(contact.x, contact.y, 7f);
+            var rear = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            rear.transform.position = hiddenCorner + Vector3.one;
+            rear.transform.localScale = Vector3.one * 2f;
+            var source = new GameObject("Опора").transform;
+            Selection.activeGameObject = source.gameObject;
+            SurfacePlacementMode.ShowPoints = showPoints;
+            ObjectPlacementTool.Begin();
+
+            Click(Gui(hiddenCorner));
+
+            Assert.That(Vector3.Distance(source.position, contact), Is.LessThan(0.02f));
+            Assert.That(ObjectPlacementTool.Active, Is.False);
+        }
+
+        [Test]
+        public void MoveToKeepsItsGuideAfterAnUnrelatedPickingChange()
+        {
+            var source = BrushApi.Create(BrushShape.Box, new Vector3(-4f, 2f, 0f), Vector3.one,
+                Quaternion.identity, snap: false).transform;
+            var original = source.position;
+            var unrelated = new GameObject("Посторонний объект");
+            var visibility = SceneVisibilityManager.instance;
+            try
+            {
+                BrushApi.ForceUpdate();
+                Selection.activeGameObject = source.gameObject;
+                ObjectPlacementTool.Begin();
+                var centre = new Vector3(4f, 3f, 2f);
+                var offset = centre + Vector3.right;
+                var start = Gui(centre);
+                var end = Gui(offset);
+
+                Send(EventType.MouseDown, start, EventModifiers.Shift);
+                Assert.That(Vector3.Distance(source.position, centre), Is.LessThan(0.02f));
+                BrushApi.ForceUpdate();
+                visibility.DisablePicking(unrelated, false);
+                Send(EventType.MouseUp, start, EventModifiers.Shift);
+
+                Assert.That(Vector3.Distance(source.position, centre), Is.LessThan(0.02f), "Preview survives release");
+                Assert.That(ObjectPlacementTool.Active, Is.True);
+                MoveTo(start, end);
+                Assert.That(Vector3.Distance(source.position, offset), Is.LessThan(0.02f), "Offset guide remains usable");
+                Click(end);
+                Assert.That(ObjectPlacementTool.Active, Is.False);
+                Assert.That(Vector3.Distance(source.position, offset), Is.LessThan(0.02f));
+
+                Undo.FlushUndoRecordObjects();
+                Undo.PerformUndo();
+                Assert.That(Vector3.Distance(source.position, original), Is.LessThan(0.02f));
+                Undo.PerformRedo();
+                Assert.That(Vector3.Distance(source.position, offset), Is.LessThan(0.02f));
+            }
+            finally { visibility.EnablePicking(unrelated, false); }
+        }
+
+        [Test]
+        public void MoveToRestoresItsSourceWhenTheGuideTargetIsHidden()
+        {
+            var source = new GameObject("Опора").transform;
+            var original = new Vector3(-4f, 2f, 0f);
+            source.position = original;
+            Selection.activeGameObject = source.gameObject;
+            ObjectPlacementTool.Begin();
+            var centre = new Vector3(4f, 3f, 2f);
+            var mouse = Gui(centre);
+            Click(mouse);
+            Assert.That(Vector3.Distance(source.position, centre), Is.LessThan(0.02f));
+
+            var visibility = SceneVisibilityManager.instance;
+            try
+            {
+                visibility.Hide(m_Tower.gameObject, false);
+                Send(EventType.MouseMove, mouse);
+                Assert.That(Vector3.Distance(source.position, original), Is.LessThan(0.02f));
+            }
+            finally { visibility.Show(m_Tower.gameObject, false); }
+        }
+
+        [TestCase(true)]
+        [TestCase(false)]
+        public void SurfaceMoveSnapsToAVisibleFaceCentreAndCommitsOrCancels(bool commit)
+        {
+            bool suspended = SessionState.GetBool(BrushShapeHandles.SuspendedKey, false);
+            try
+            {
+                var rod = BrushApi.Create(BrushShape.Cylinder, new Vector3(-4f, 2f, 0f),
+                    new Vector3(0.5f, 2f, 0.5f), Quaternion.identity, snap: false);
+                BrushApi.ForceUpdate();
+                var original = rod.transform.position;
+                Selection.activeGameObject = null;
+                Tools.current = Tool.Rotate;
+                SurfacePlacementMode.Perpendicular = true;
+                ObjectPlacementTool.Begin();
+                Assert.That(Tools.current, Is.EqualTo(Tool.Move));
+                Selection.activeGameObject = rod.gameObject;
+                var centre = new Vector3(4f, 3f, 2f);
+                var mouse = Gui(centre);
+                Click(mouse);
+                Assert.That(SurfacePlacementMode.Active, Is.True, "First click opens the offset guide");
+                Assert.That(Vector3.Dot(rod.transform.up, Vector3.back), Is.GreaterThan(0.999f));
+                Assert.That(Vector3.Distance(rod.transform.position, centre + Vector3.back), Is.LessThan(0.002f));
+                if (commit) Click(mouse);
+                else Press(KeyCode.Escape);
+                Assert.That(SurfacePlacementMode.Active, Is.False);
+                if (commit) Undo.PerformUndo();
+                Assert.That(Vector3.Distance(rod.transform.position, original), Is.LessThan(0.001f));
+                Assert.That(Vector3.Dot(rod.transform.up, Vector3.up), Is.GreaterThan(0.999f));
+            }
+            finally
+            {
+                SurfacePlacementMode.Stop();
+                if (suspended) SessionState.SetBool(BrushShapeHandles.SuspendedKey, true);
+                else SessionState.EraseBool(BrushShapeHandles.SuspendedKey);
+            }
+        }
+
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public void MagnetOffPreviewsFreeContactAndCtrlGrid(bool perpendicular, bool ctrl)
+        {
+            var source = GameObject.CreatePrimitive(PrimitiveType.Cube).transform;
+            source.position = new Vector3(-4f, 2f, 0f);
+            var original = source.position;
+            Selection.activeGameObject = source.gameObject;
+            SurfacePlacementMode.Perpendicular = perpendicular;
+            SurfacePlacementMode.Magnet = false;
+            SurfacePlacementMode.ShowPoints = true;
+            ObjectPlacementTool.Begin();
+            var raw = new Vector3(4.12f, 3.09f, 2f);
+            var mouse = Gui(raw);
+            var modifiers = EventModifiers.Shift | (ctrl ? EventModifiers.Control : EventModifiers.None);
+            Send(EventType.MouseDown, mouse, modifiers);
+            var expected = ctrl ? BrushDraw.SnapOnPlane(raw, Vector3.back, BrushSettings.instance.GridMeters) : raw;
+            if (perpendicular) expected += Vector3.back * 0.5f;
+            Assert.That(Vector3.Distance(source.position, expected), Is.LessThan(0.02f), "Preview before release");
+            Assert.That(Vector3.Dot(source.up, perpendicular ? Vector3.back : Vector3.up), Is.GreaterThan(0.999f));
+            Send(EventType.MouseUp, mouse, modifiers);
+            Assert.That(ObjectPlacementTool.Active, Is.False, "Free placement commits with one click");
+            Assert.That(Vector3.Distance(source.position, expected), Is.LessThan(0.02f));
+            Undo.FlushUndoRecordObjects();
+            Undo.PerformUndo();
+            Assert.That(Vector3.Distance(source.position, original), Is.LessThan(0.001f));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void SphereStaysRoundWhenConfirmedAtTheRadiusRelease(bool samePositionMouseMove)
+        {
+            var previousOperation = BrushCreateTool.ManualOperation;
+            try
+            {
+                BrushCreateTool.ManualOperation = BrushOperation.Add;
+                BrushMenu.ActivateCreation<CreateSphereBrushTool>();
+                var start = Gui(Vector3.zero);
+                var end = Gui(new Vector3(2f, 0f, 0f));
+                Send(EventType.MouseDown, start);
+                MoveTo(start, end, EventType.MouseDrag);
+                Send(EventType.MouseUp, end);
+                if (samePositionMouseMove) Send(EventType.MouseMove, end);
+                Click(end);
+
+                var spheres = Brush.Active.Where(brush => brush.shape == BrushShape.Sphere).ToArray();
+                Assert.That(spheres, Has.Length.EqualTo(1));
+                var sphere = spheres[0];
+                Assert.That(sphere.transform.position.y, Is.Zero);
+                Assert.That(sphere.size.y, Is.EqualTo(sphere.size.x));
+                Assert.That(sphere.size.z, Is.EqualTo(sphere.size.x));
+                Assert.That(sphere.size.x, Is.GreaterThan(1f));
+            }
+            finally { BrushCreateTool.ManualOperation = previousOperation; }
+        }
+
+        [TestCase(BrushShape.Box, false)]
+        [TestCase(BrushShape.Box, true)]
+        [TestCase(BrushShape.Cylinder, true)]
+        [TestCase(BrushShape.Sphere, true)]
+        public void CreationUsesTheVisiblePocketPlaneAndKeepsTheAutomaticCutTarget(BrushShape shape, bool locked)
+        {
+            var cutter = OpenTowerPocket(locked);
+            var settings = BrushSettings.instance;
+            var previousOperation = BrushCreateTool.ManualOperation;
+            bool previousLocalGrid = BrushSurfaceGrid.Local;
+            bool previousSnap = settings.snapToGrid;
+            var previousGridSizes = settings.gridSizes;
+            int previousGridIndex = settings.gridIndex;
+            try
+            {
+                BrushCreateTool.ManualOperation = null;
+                BrushSurfaceGrid.Local = true;
+                settings.snapToGrid = true;
+                settings.gridSizes = new[] { 0.5f };
+                settings.gridIndex = 0;
+                switch (shape)
+                {
+                    case BrushShape.Box: BrushMenu.ActivateCreation<CreateBoxBrushTool>(); break;
+                    case BrushShape.Cylinder: BrushMenu.ActivateCreation<CreateCylinderBrushTool>(); break;
+                    case BrushShape.Sphere: BrushMenu.ActivateCreation<CreateSphereBrushTool>(); break;
+                }
+
+                var corner = TowerPocketCenter;
+                var opposite = corner + new Vector3(0.5f, 0.5f, 0f);
+                var start = Gui(corner + new Vector3(0.09f, 0.11f, 0f));
+                var end = Gui(opposite);
+                Send(EventType.MouseDown, start);
+                MoveTo(start, end, EventType.MouseDrag);
+                Send(EventType.MouseUp, end);
+                Assert.That(BrushCreateTool.Active.Drawing, Is.True);
+
+                var finish = shape == BrushShape.Box ? Gui(opposite + Vector3.forward * 0.5f) :
+                    shape == BrushShape.Cylinder ? Gui(corner + Vector3.back * 0.5f) : end;
+                if (shape != BrushShape.Sphere) MoveTo(end, finish);
+                Click(finish);
+
+                var created = Selection.activeGameObject?.GetComponent<Brush>();
+                Assert.That(created, Is.Not.Null);
+                Assert.That(created, Is.Not.SameAs(m_Tower));
+                Assert.That(created, Is.Not.SameAs(cutter));
+                Assert.That(created.shape, Is.EqualTo(shape));
+                Assert.That(Vector3.Distance(created.transform.position, corner), Is.LessThan(0.001f));
+                Assert.That(Vector3.Dot(created.transform.up, Vector3.back), Is.GreaterThan(0.9999f));
+                using var serialized = new SerializedObject(created);
+                Assert.That(serialized.FindProperty("workGridOwner").objectReferenceValue, Is.SameAs(m_Tower.transform));
+                Assert.That(created.operation, Is.EqualTo(shape == BrushShape.Box ? BrushOperation.Subtract : BrushOperation.Add));
+                if (shape == BrushShape.Box)
+                {
+                    Assert.That(serialized.FindProperty("addressedCut").boolValue, Is.True);
+                    Assert.That(serialized.FindProperty("cutTarget").objectReferenceValue, Is.SameAs(m_Tower));
+                    Assert.That(created.transform.parent, Is.SameAs(m_Tower.transform));
+                    Assert.That(created.transform.parent, Is.Not.SameAs(cutter.transform));
+                }
+            }
+            finally
+            {
+                ToolManager.RestorePreviousPersistentTool();
+                SceneVisibilityManager.instance.EnablePicking(cutter.gameObject, false);
+                BrushCreateTool.ManualOperation = previousOperation;
+                BrushSurfaceGrid.Local = previousLocalGrid;
+                settings.snapToGrid = previousSnap;
+                settings.gridSizes = previousGridSizes;
+                settings.gridIndex = previousGridIndex;
+            }
+        }
+
+        [TestCase(false, false)]
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        [TestCase(true, true)]
+        public void MoveToUsesTheVisiblePocketWithMagnetAndFreeGrid(bool locked, bool magnet)
+        {
+            var cutter = OpenTowerPocket(locked);
+            var settings = BrushSettings.instance;
+            var previousGridSizes = settings.gridSizes;
+            int previousGridIndex = settings.gridIndex;
+            try
+            {
+                settings.gridSizes = new[] { 0.5f };
+                settings.gridIndex = 0;
+                var source = GameObject.CreatePrimitive(PrimitiveType.Cube).transform;
+                source.position = new Vector3(-4f, 2f, 0f);
+                Selection.activeGameObject = source.gameObject;
+                SurfacePlacementMode.Perpendicular = true;
+                SurfacePlacementMode.Magnet = magnet;
+                ObjectPlacementTool.Begin();
+
+                var centre = TowerPocketCenter;
+                var contact = magnet ? centre : centre + new Vector3(0.17f, 0.13f, 0f);
+                var mouse = Gui(contact);
+                var modifiers = EventModifiers.Shift | (magnet ? EventModifiers.None : EventModifiers.Control);
+                Send(EventType.MouseDown, mouse, modifiers);
+                Assert.That(Vector3.Dot(source.up, Vector3.back), Is.GreaterThan(0.9999f));
+                Assert.That(Vector3.Distance(source.position, centre + Vector3.back * 0.5f), Is.LessThan(0.02f));
+                Send(EventType.MouseUp, mouse, modifiers);
+                if (magnet) Click(mouse);
+                Assert.That(SurfacePlacementMode.Active, Is.False);
+                Assert.That(Vector3.Distance(source.position, centre + Vector3.back * 0.5f), Is.LessThan(0.02f));
+            }
+            finally
+            {
+                SceneVisibilityManager.instance.EnablePicking(cutter.gameObject, false);
+                settings.gridSizes = previousGridSizes;
+                settings.gridIndex = previousGridIndex;
+            }
+        }
+
+        static readonly Vector3 TowerPocketCenter = new Vector3(4f, 3f, 3.375f);
+
+        Brush OpenTowerPocket(bool locked)
+        {
+            var cutter = BrushApi.CreateBox(new Vector3(2.75f, 1.5f, 1f), new Vector3(5.25f, 4.5f, TowerPocketCenter.z),
+                name: "Выемка", operation: BrushOperation.Subtract, snap: false);
+            cutter.transform.SetParent(m_Tower.transform, true);
+            BrushCutTarget.FromBrush(m_Tower).Assign(cutter);
+            BrushApi.ForceUpdate();
+            if (locked) SceneVisibilityManager.instance.DisablePicking(cutter.gameObject, false);
+            m_View.LookAt(TowerPocketCenter, Quaternion.Euler(10f, 18f, 0f), 7f, true, true);
+            return cutter;
+        }
 
         [Test]
         public void MovePlaneReadoutIncludesTheNativePickMarginOutsideTheSquare()
@@ -218,6 +575,7 @@ namespace CsgBrush.Tests
             Assert.AreEqual(before + 1, Brushes, "the box is made");
             Assert.AreNotEqual(m_Tower.gameObject, Selection.activeGameObject, "the brush behind the last click is not selected");
             Assert.AreNotEqual(m_Floor.gameObject, Selection.activeGameObject);
+            Assert.That(Selection.activeGameObject.transform.position.y, Is.Zero);
         }
 
         [Test]

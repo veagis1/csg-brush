@@ -1,6 +1,7 @@
 using static CsgBrush.Editor.BrushLanguage;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEditor.Overlays;
@@ -135,7 +136,7 @@ namespace CsgBrush.Editor
         public static IEnumerable<PointGraph> SelectedPlans()
         {
             foreach (var go in UnityEditor.Selection.gameObjects)
-                if (go.TryGetComponent<PointGraph>(out var plan)) yield return plan;
+                if (BrushSceneVisibility.CanPick(go.transform) && go.TryGetComponent<PointGraph>(out var plan)) yield return plan;
         }
 
         // ------------------------------------------------------------------ selection rules
@@ -344,13 +345,20 @@ namespace CsgBrush.Editor
         public static void OnSceneGUI()
         {
             var e = Event.current;
+            if (dragStart != null && (dragPlan == null || !BrushSceneVisibility.CanPick(dragPlan.transform))) CancelInteraction();
             if (dragStart != null && GUIUtility.hotControl == 0) EndDrag(); // the handle let go, however the release went
             if (marquee && GUIUtility.hotControl == 0) marquee = false; // let go without its release (see EditModeMouse)
+            var plans = SelectedPlans();
+            if (!plans.Any())
+            {
+                if (marquee) CancelInteraction();
+                return;
+            }
             HandleKeys(e);
             bool viewTool = Tools.current == Tool.View || Tools.viewToolActive;
             int passive = GUIUtility.GetControlID(FocusType.Passive);
             if (!viewTool) HandleUtility.AddDefaultControl(passive);
-            foreach (var plan in SelectedPlans())
+            foreach (var plan in plans)
             {
                 var sel = Sel(plan);
                 Draw(plan, sel);

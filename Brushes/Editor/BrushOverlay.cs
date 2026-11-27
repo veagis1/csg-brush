@@ -122,7 +122,7 @@ namespace CsgBrush.Editor
             if (shapes != shapeEdit) BrushShapeHandles.Enabled = shapes;
             bool editable = false;
             foreach (var go in Selection.gameObjects)
-                if (go.TryGetComponent<Brush>(out var b) && (b.shape == BrushShape.Custom || BrushApi.CanConvertToCustom(b.shape))) { editable = true; break; }
+                if (BrushSceneVisibility.CanPick(go.transform) && go.TryGetComponent<Brush>(out var b) && (b.shape == BrushShape.Custom || BrushApi.CanConvertToCustom(b.shape))) { editable = true; break; }
             using var disabled = new EditorGUI.DisabledScope(!editable);
             bool editing = BrushEditContext.IsActive;
             var edit = new GUIContent(Tr("Правка браша"), editable ? Tr("Перемещение, поворот и масштаб действуют на выделенные вершины, рёбра или грани. Режим выбора меняется на панели инструментов или клавишами 1, 2 и 3.") : Tr("Выберите браш."));

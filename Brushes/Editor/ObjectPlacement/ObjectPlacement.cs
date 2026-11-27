@@ -42,13 +42,14 @@ namespace CsgBrush.Editor
                 WallAnchors.TryWindowPlacement(source.GetComponent<Brush>(), BrushCutTarget.FromBrush(wallBrush), destination, out placement);
         }
 
-        internal static bool IsSelectableGeometry(Transform item)
+        internal static bool IsSelectableGeometry(Transform item) =>
+            IsAuthoredGeometry(item) && BrushSceneVisibility.CanPick(item);
+
+        internal static bool IsAuthoredGeometry(Transform item)
         {
             if (item == null) return false;
             var go = item.gameObject;
             if (!go.activeInHierarchy || !go.scene.IsValid() || !StageUtility.GetCurrentStageHandle().Contains(go)) return false;
-            var visibility = SceneVisibilityManager.instance;
-            if (visibility.IsHidden(go) || visibility.IsPickingDisabled(go)) return false;
             for (var parent = item; parent != null; parent = parent.parent)
                 if (BrushSync.IsGenerated(parent) || Brush.IsGeneratedChildName(parent.name)) return false;
             return true;
@@ -73,7 +74,7 @@ namespace CsgBrush.Editor
                 return TryWindowPlacement(source, candidate, destination, out var placement) &&
                     WallAnchors.MoveWindow(source.GetComponent<Brush>(), placement);
             if (source.position == destination) return false;
-            Undo.RecordObject(source, Tr("Переместить объект к вершине или ребру"));
+            Undo.RecordObject(source, Tr(ObjectPlacementTool.Label));
             source.position = destination;
             foreach (var brush in source.GetComponentsInChildren<Brush>(true))
             {
@@ -82,6 +83,76 @@ namespace CsgBrush.Editor
             }
             PrefabUtility.RecordPrefabInstancePropertyModifications(source);
             return true;
+        }
+
+        internal static bool ApplySurfacePreview(Transform source, Pose pose)
+        {
+            // The original pose must still be restorable if the selection or editability changes during the drag.
+            if (source == null || !ValidSurfacePose(pose)) return false;
+            source.SetPositionAndRotation(pose.position, pose.rotation);
+            RefreshSurfaceSource(source);
+            return true;
+        }
+
+        internal static bool ApplyPositionPreview(Transform source, Vector3 destination)
+        {
+            if (source == null || !float.IsFinite(destination.sqrMagnitude)) return false;
+            source.position = destination;
+            RefreshSurfaceSource(source);
+            return true;
+        }
+
+        internal static Quaternion SurfaceLocalRotation(Transform parent, Quaternion worldRotation)
+        {
+            if (parent == null) return worldRotation;
+            var rotation = Quaternion.Inverse(parent.rotation) * worldRotation;
+            var scaleSigns = Vector3.one;
+            for (var ancestor = parent; ancestor != null; ancestor = ancestor.parent)
+            {
+                var scale = ancestor.localScale;
+                scaleSigns.x *= Mathf.Sign(scale.x);
+                scaleSigns.y *= Mathf.Sign(scale.y);
+                scaleSigns.z *= Mathf.Sign(scale.z);
+            }
+            // Unity converts rotations through each reflected ancestor. Conjugating by the
+            // accumulated reflection changes the signs of the quaternion's vector components.
+            return new Quaternion(rotation.x * scaleSigns.y * scaleSigns.z,
+                rotation.y * scaleSigns.x * scaleSigns.z, rotation.z * scaleSigns.x * scaleSigns.y, rotation.w);
+        }
+
+        internal static void RestoreSurfacePreview(Transform source, Vector3 localPosition, Quaternion localRotation)
+        {
+            if (source == null) return;
+            source.SetLocalPositionAndRotation(localPosition, localRotation);
+            RefreshSurfaceSource(source);
+        }
+
+        static void RefreshSurfaceSource(Transform source)
+        {
+            BrushSnap.InvalidateParents();
+            foreach (var brush in source.GetComponentsInChildren<Brush>(true))
+            {
+                BrushSnap.Accept(brush);
+                BrushSync.NotifyTransformChanged(brush);
+                brush.transform.hasChanged = false;
+            }
+        }
+
+        internal static bool CommitSurface(Transform source, Pose pose)
+        {
+            if (!CanMove(source) || IsWallWindow(source) || !ValidSurfacePose(pose)) return false;
+            if (source.position.Equals(pose.position) && Quaternion.Angle(source.rotation, pose.rotation) < 0.001f) return false;
+            Undo.RegisterCompleteObjectUndo(source, Tr(ObjectPlacementTool.Label));
+            ApplySurfacePreview(source, pose);
+            PrefabUtility.RecordPrefabInstancePropertyModifications(source);
+            return true;
+        }
+
+        static bool ValidSurfacePose(Pose pose)
+        {
+            float rotationLengthSquared = Quaternion.Dot(pose.rotation, pose.rotation);
+            return float.IsFinite(pose.position.sqrMagnitude) &&
+                float.IsFinite(rotationLengthSquared) && rotationLengthSquared > 1e-8f;
         }
     }
 }

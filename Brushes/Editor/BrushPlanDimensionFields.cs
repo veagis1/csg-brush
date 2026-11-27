@@ -11,7 +11,7 @@ namespace CsgBrush.Editor
     {
         internal static void Draw(FloorPlan plan, bool singleSelection)
         {
-            bool editable = singleSelection && BrushCreateTool.Active == null &&
+            bool editable = singleSelection && BrushSceneVisibility.CanPick(plan.transform) && BrushCreateTool.Active == null &&
                 ToolManager.activeToolType != typeof(FloorPlanDrawTool) && Tools.current != Tool.View &&
                 !Tools.viewToolActive && !FloorPlanEditState.Dragging(plan) && !EditorUtility.IsPersistent(plan);
             var selection = editable && FloorPlanEditContext.IsActive ? FloorPlanEditState.Sel(plan) : null;
