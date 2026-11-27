@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.1
 
 - Export a Brush Group's finished geometry, UVs and materials to Blender from its Inspector.
 - Grid, visibility, shape editing and extrusion choices now last for the editor session. The creation panel keeps a working copy of the current shape's options. Project defaults and the fork's manual Add/Subtract controls remain available.
