@@ -137,6 +137,91 @@ namespace CsgBrush.Tests
             Assert.That(Quaternion.Angle(previous, source.rotation), Is.LessThan(0.001f));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void MoveToDoesNotSnapThroughTheVisibleFace(bool showPoints)
+        {
+            m_View.LookAt(new Vector3(4f, 3f, 4f), Quaternion.identity, 9f, true, true);
+            var contact = new Vector3(4.65f, 3.55f, 2f);
+            var hiddenCorner = new Vector3(contact.x, contact.y, 7f);
+            var rear = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            rear.transform.position = hiddenCorner + Vector3.one;
+            rear.transform.localScale = Vector3.one * 2f;
+            var source = new GameObject("Опора").transform;
+            Selection.activeGameObject = source.gameObject;
+            SurfacePlacementMode.ShowPoints = showPoints;
+            ObjectPlacementTool.Begin();
+
+            Click(Gui(hiddenCorner));
+
+            Assert.That(Vector3.Distance(source.position, contact), Is.LessThan(0.02f));
+            Assert.That(ObjectPlacementTool.Active, Is.False);
+        }
+
+        [Test]
+        public void MoveToKeepsItsGuideAfterAnUnrelatedPickingChange()
+        {
+            var source = BrushApi.Create(BrushShape.Box, new Vector3(-4f, 2f, 0f), Vector3.one,
+                Quaternion.identity, snap: false).transform;
+            var original = source.position;
+            var unrelated = new GameObject("Посторонний объект");
+            var visibility = SceneVisibilityManager.instance;
+            try
+            {
+                BrushApi.ForceUpdate();
+                Selection.activeGameObject = source.gameObject;
+                ObjectPlacementTool.Begin();
+                var centre = new Vector3(4f, 3f, 2f);
+                var offset = centre + Vector3.right;
+                var start = Gui(centre);
+                var end = Gui(offset);
+
+                Send(EventType.MouseDown, start, EventModifiers.Shift);
+                Assert.That(Vector3.Distance(source.position, centre), Is.LessThan(0.02f));
+                BrushApi.ForceUpdate();
+                visibility.DisablePicking(unrelated, false);
+                Send(EventType.MouseUp, start, EventModifiers.Shift);
+
+                Assert.That(Vector3.Distance(source.position, centre), Is.LessThan(0.02f), "Preview survives release");
+                Assert.That(ObjectPlacementTool.Active, Is.True);
+                MoveTo(start, end);
+                Assert.That(Vector3.Distance(source.position, offset), Is.LessThan(0.02f), "Offset guide remains usable");
+                Click(end);
+                Assert.That(ObjectPlacementTool.Active, Is.False);
+                Assert.That(Vector3.Distance(source.position, offset), Is.LessThan(0.02f));
+
+                Undo.FlushUndoRecordObjects();
+                Undo.PerformUndo();
+                Assert.That(Vector3.Distance(source.position, original), Is.LessThan(0.02f));
+                Undo.PerformRedo();
+                Assert.That(Vector3.Distance(source.position, offset), Is.LessThan(0.02f));
+            }
+            finally { visibility.EnablePicking(unrelated, false); }
+        }
+
+        [Test]
+        public void MoveToRestoresItsSourceWhenTheGuideTargetIsHidden()
+        {
+            var source = new GameObject("Опора").transform;
+            var original = new Vector3(-4f, 2f, 0f);
+            source.position = original;
+            Selection.activeGameObject = source.gameObject;
+            ObjectPlacementTool.Begin();
+            var centre = new Vector3(4f, 3f, 2f);
+            var mouse = Gui(centre);
+            Click(mouse);
+            Assert.That(Vector3.Distance(source.position, centre), Is.LessThan(0.02f));
+
+            var visibility = SceneVisibilityManager.instance;
+            try
+            {
+                visibility.Hide(m_Tower.gameObject, false);
+                Send(EventType.MouseMove, mouse);
+                Assert.That(Vector3.Distance(source.position, original), Is.LessThan(0.02f));
+            }
+            finally { visibility.Show(m_Tower.gameObject, false); }
+        }
+
         [TestCase(true)]
         [TestCase(false)]
         public void SurfaceMoveSnapsToAVisibleFaceCentreAndCommitsOrCancels(bool commit)

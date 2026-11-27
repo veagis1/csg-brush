@@ -214,8 +214,11 @@ namespace CsgBrush.Tests
                 Assert.That(scene.IsVisible(camera, pocketCorner), Is.False);
                 var projectedCorner = HandleUtility.WorldToGUIPointWithDepth(camera, pocketCorner.Position);
                 var plain = scene.Pick(camera, (Vector2)projectedCorner);
-                Assert.That(plain.Part, Is.SameAs(hit.Part));
-                Near(pocketCorner.Position, plain.Position);
+                if (plain.Part != null)
+                {
+                    Assert.That(scene.IsVisible(camera, plain), Is.True);
+                    Assert.That(Vector3.Distance(pocketCorner.Position, plain.Position), Is.GreaterThan(1e-5f));
+                }
                 Assert.That(features.Count(point => point.Midpoint), Is.EqualTo(24));
                 Assert.That(features.Count(point => !point.Midpoint && !point.FaceCenter), Is.EqualTo(16));
                 Assert.That(features.Count(point => point.FaceCenter), Is.EqualTo(11));
@@ -236,7 +239,7 @@ namespace CsgBrush.Tests
         }
 
         [Test]
-        public void AuthoredCutterIsAvailableForPlainPickingAndAbsentFromTheSurface()
+        public void AuthoredCutterDoesNotOccludeTheSurfaceOrSupplyMagnetPoints()
         {
             var source = new GameObject("Перемещаемый объект").transform;
             var wall = BrushApi.CreateBox(new Vector3(-2f, -2f, 3f), new Vector3(2f, 2f, 4f), name: "Стена");
@@ -255,12 +258,7 @@ namespace CsgBrush.Tests
                 BrushApi.ForceUpdate();
                 var scene = new PlacementScene(source);
                 var plain = scene.Pick(camera, mouse);
-                Assert.That(plain.Part?.Owner, Is.SameAs(cutter));
-                Near(corner, plain.Position);
-                Assert.That(scene.IsVisible(camera, plain), Is.False);
-                var overlay = new List<PlacementScene.Feature>();
-                scene.GetFeatures(plain.Part, overlay);
-                Assert.That(overlay, Is.Empty);
+                Assert.That(plain.Part?.Owner, Is.Not.SameAs(cutter));
 
                 var ray = new Ray(camera.transform.position, corner - camera.transform.position);
                 Assert.That(scene.TryRaycast(ray, out var surface), Is.True);

@@ -51,6 +51,8 @@ namespace CsgBrush.Editor
         const float MagnetRadius = 14f; // Scene GUI points
         readonly List<Part> targets = new List<Part>();
         readonly List<Part> moving = new List<Part>();
+        readonly List<(Transform item, BrushSceneVisibility.Access access)> hierarchyAccess =
+            new List<(Transform, BrushSceneVisibility.Access)>();
         readonly Dictionary<Brush, Part> targetBrushes = new Dictionary<Brush, Part>();
         readonly Dictionary<Mesh, PlacementGeometry> meshes = new Dictionary<Mesh, PlacementGeometry>();
         readonly Transform source;
@@ -64,10 +66,11 @@ namespace CsgBrush.Editor
             var occupied = new HashSet<Transform>();
             void Add(Component owner, Bounds bounds, Mesh mesh = null)
             {
-                if (owner == null || occupied.Contains(owner.transform)) return;
+                if (owner == null || !occupied.Add(owner.transform) || !ObjectPlacement.IsAuthoredGeometry(owner.transform)) return;
+                var access = BrushSceneVisibility.AccessOf(owner.transform);
+                hierarchyAccess.Add((owner.transform, access));
+                if (access != BrushSceneVisibility.Access.Pickable) return;
                 bool carried = source != null && owner.transform.IsChildOf(source);
-                if (!ObjectPlacement.IsSelectableGeometry(owner.transform)) return;
-                occupied.Add(owner.transform);
                 var part = new Part(owner, bounds, mesh, authored: carried);
                 (carried ? moving : targets).Add(part);
                 if (!carried && owner is Brush brush) targetBrushes.Add(brush, part);
@@ -87,6 +90,13 @@ namespace CsgBrush.Editor
         }
 
         PlacementScene() { }
+
+        internal bool HierarchyAccessChanged()
+        {
+            foreach (var (item, access) in hierarchyAccess)
+                if (item == null || BrushSceneVisibility.AccessOf(item) != access) return true;
+            return false;
+        }
 
         internal static PlacementScene ForConstruction(IEnumerable<Brush> brushes)
         {
@@ -139,42 +149,6 @@ namespace CsgBrush.Editor
                 return part.Geometry = PlacementGeometry.FromPolyhedron(BrushPolyhedron.Box(box.size)
                     .Transformed(Matrix4x4.Translate(box.center)));
             return null;
-        }
-
-        internal Feature Pick(Camera camera, Vector2 mouse)
-        {
-            Feature best = default;
-            float nearest = MagnetRadius * MagnetRadius, depth = float.PositiveInfinity;
-            foreach (var target in targets)
-            {
-                if (target.Owner == null || !MayContainPointer(camera, target, mouse) || !Available(camera, target)) continue;
-                var part = target.Owner is Brush cutter && cutter.operation == BrushOperation.Subtract
-                    ? AuthoredPart(cutter) : target;
-                if (part == null) continue;
-                var geometry = Read(part);
-                if (geometry == null) continue;
-                var matrix = part.Owner.transform.localToWorldMatrix;
-                void Consider(Vector3 local, int a, int b, PlacementGeometry.Face face = null)
-                {
-                    var world = matrix.MultiplyPoint3x4(local);
-                    var p = HandleUtility.WorldToGUIPointWithDepth(camera, world);
-                    if (p.z < camera.nearClipPlane || p.z > camera.farClipPlane) return;
-                    float distance = ((Vector2)p - mouse).sqrMagnitude;
-                    if (distance > nearest || (Mathf.Approximately(distance, nearest) && p.z >= depth)) return;
-                    if (face != null && !IsVisible(camera, part, face, world)) return;
-                    best = new Feature(part, a, b, face);
-                    nearest = distance;
-                    depth = p.z;
-                }
-                var vertices = geometry.Vertices;
-                for (int i = 0; i < vertices.Length; i++)
-                    if (geometry.IsFeatureVertex(i)) Consider(vertices[i], i, -1);
-                foreach (var edge in geometry.Edges)
-                    Consider((vertices[edge.x] + vertices[edge.y]) * 0.5f, edge.x, edge.y);
-                foreach (var face in geometry.Faces)
-                    Consider(face.Center, -1, -1, face);
-            }
-            return best;
         }
 
         internal void GetFeatures(Part part, List<Feature> features)

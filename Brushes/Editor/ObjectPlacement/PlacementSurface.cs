@@ -49,11 +49,20 @@ namespace CsgBrush.Editor
 
         readonly List<Feature> surfaceFeatures = new List<Feature>();
 
-        internal bool TryPickSurface(Camera camera, Vector2 mouse, out SurfaceHit hit, bool snap = true)
+        internal bool TryPickSurface(Camera camera, Vector2 mouse, out SurfaceHit hit, bool snap, bool requireFace)
         {
             bool hasSurface = TryHoverSurface(camera, mouse, out var surface);
             hit = surface;
             if (!snap) return hasSurface;
+            var feature = Pick(camera, mouse, surface, requireFace);
+            if (feature.Part == null) return hasSurface;
+            var normal = feature.Face != null ? WorldNormal(feature.Part, feature.Face) : Vector3.zero;
+            hit = new SurfaceHit(feature.Part, feature.Face, feature.Position, normal, feature);
+            return true;
+        }
+
+        internal Feature Pick(Camera camera, Vector2 mouse, SurfaceHit surface = default, bool requireFace = false)
+        {
             Feature feature = default;
             float nearest = MagnetRadius * MagnetRadius, depth = float.PositiveInfinity;
             var preferred = surface.Part;
@@ -61,10 +70,7 @@ namespace CsgBrush.Editor
             foreach (var part in targets)
                 if (part != preferred && Available(camera, part) && MayContainPointer(camera, part, mouse))
                     ConsiderPart(part);
-            if (feature.Part == null) return hasSurface;
-            var position = feature.Part == preferred && feature.Face == surface.Face ? surface.Position : feature.Position;
-            hit = new SurfaceHit(feature.Part, feature.Face, position, WorldNormal(feature.Part, feature.Face), feature);
-            return true;
+            return feature;
 
             void ConsiderPart(Part part)
             {
@@ -76,8 +82,13 @@ namespace CsgBrush.Editor
                     float distance = ((Vector2)projected - mouse).sqrMagnitude;
                     if (distance > nearest || (Mathf.Approximately(distance, nearest) && projected.z >= depth))
                         continue;
-                    var face = VisibleFace(camera, candidate, part == preferred ? surface.Face : null);
-                    if (face == null) continue;
+                    var face = candidate.Face;
+                    if (requireFace)
+                    {
+                        face = VisibleFace(camera, candidate, part == preferred ? surface.Face : null);
+                        if (face == null) continue;
+                    }
+                    else if (!IsVisible(camera, candidate)) continue;
                     nearest = distance;
                     depth = projected.z;
                     feature = new Feature(part, candidate.A, candidate.B, face);

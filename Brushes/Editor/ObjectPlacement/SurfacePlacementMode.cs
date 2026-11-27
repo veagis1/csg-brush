@@ -125,7 +125,10 @@ namespace CsgBrush.Editor
 
         static void HierarchyAccessChanged()
         {
-            CancelGesture();
+            // Unity also broadcasts visibility and picking changes when a CSG rebuild replaces
+            // generated objects. Keep the pre-drag geometry unless access to authored geometry changed.
+            if (owner != null && (!ObjectPlacement.CanMove(source) || scene.HierarchyAccessChanged()))
+                CancelGesture();
             Invalidate();
         }
 
@@ -326,15 +329,14 @@ namespace CsgBrush.Editor
         }
 
         static bool GuideVisible(SceneView view) =>
-            !Perpendicular || scene.IsVisible(view.camera, anchor.Part, anchor.Face, guide.Position);
+            scene.IsVisible(view.camera, anchor.Part, anchor.Face, guide.Position);
 
         static void TargetInput(SceneView view, int id)
         {
             var e = Event.current;
-            bool wantFaceSnap = Perpendicular && Magnet;
-            bool surfaceHit = scene.TryPickSurface(view.camera, e.mousePosition, out var surface, wantFaceSnap);
-            var feature = Magnet && !Perpendicular ? scene.Pick(view.camera, e.mousePosition) : surface.Feature;
-            var target = feature.Part ?? surface.Part;
+            scene.TryPickSurface(view.camera, e.mousePosition, out var surface, Magnet, Perpendicular);
+            var feature = surface.Feature;
+            var target = surface.Part;
             if (e.type == EventType.MouseDown && e.button == 0 &&
                 (e.shift || target != null && (HandleUtility.nearestControl == id || BrushHooks.UnitySelectionTakes(view))))
             {
@@ -345,7 +347,7 @@ namespace CsgBrush.Editor
             }
             if (target != null)
             {
-                var contact = feature.Part != null ? feature.Position : surface.Position;
+                var contact = surface.Position;
                 if (feature.Part == null && e.control)
                     contact = GridContact(view.camera, surface, BrushSettings.instance.GridMeters);
                 var pose = PoseAt(contact, surface.Normal);
@@ -361,7 +363,7 @@ namespace CsgBrush.Editor
                 if (e.type == EventType.Repaint)
                 {
                     DrawPreview(target, pose);
-                    pointDisplay.Draw(scene, view.camera, surfaceHit ? surface.Part : target, feature, ShowPoints);
+                    pointDisplay.Draw(scene, view.camera, target, feature, ShowPoints);
                     if (feature.Part == null)
                         using (new Handles.DrawingScope(PreviewColor))
                             Handles.DrawWireDisc(contact, surface.Normal, HandleUtility.GetHandleSize(contact) * 0.06f);

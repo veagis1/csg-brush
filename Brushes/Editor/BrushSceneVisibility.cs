@@ -75,12 +75,12 @@ namespace CsgBrush.Editor
             RenderPipelineManager.endCameraRendering += (_, camera) => EndCamera(camera);
         }
 
-        enum Access { Pickable, Locked, Hidden }
+        internal enum Access { Pickable, Locked, Hidden }
 
         internal static bool IsVisible(Transform item) => AccessOf(item, false) != Access.Hidden;
         internal static bool CanPick(Transform item) => AccessOf(item) == Access.Pickable;
 
-        static Access AccessOf(Transform item, bool checkPicking = true)
+        internal static Access AccessOf(Transform item, bool checkPicking = true)
         {
             if (item == null) return Access.Hidden;
             var manager = SceneVisibilityManager.instance;

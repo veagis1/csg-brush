@@ -42,12 +42,14 @@ namespace CsgBrush.Editor
                 WallAnchors.TryWindowPlacement(source.GetComponent<Brush>(), BrushCutTarget.FromBrush(wallBrush), destination, out placement);
         }
 
-        internal static bool IsSelectableGeometry(Transform item)
+        internal static bool IsSelectableGeometry(Transform item) =>
+            IsAuthoredGeometry(item) && BrushSceneVisibility.CanPick(item);
+
+        internal static bool IsAuthoredGeometry(Transform item)
         {
             if (item == null) return false;
             var go = item.gameObject;
             if (!go.activeInHierarchy || !go.scene.IsValid() || !StageUtility.GetCurrentStageHandle().Contains(go)) return false;
-            if (!BrushSceneVisibility.CanPick(item)) return false;
             for (var parent = item; parent != null; parent = parent.parent)
                 if (BrushSync.IsGenerated(parent) || Brush.IsGeneratedChildName(parent.name)) return false;
             return true;
