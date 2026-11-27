@@ -33,7 +33,7 @@ namespace CsgBrush.Editor
             var a = (WallAnchor)target;
             if (a.Plan == null) EditorGUILayout.HelpBox(Tr("Объект свободен. Чтобы привязать его к плану, выберите стену."), MessageType.Info);
             bool picking;
-            using (new EditorGUI.DisabledScope(ObjectPlacementTool.Active))
+            using (new EditorGUI.DisabledScope(ObjectPlacementTool.Active || !BrushSceneVisibility.CanPick(a.transform)))
                 picking = GUILayout.Toggle(Picking, new GUIContent(Tr("Выбрать стену"), Tr("Щёлкните по стене в окне сцены, чтобы привязать объект. Escape отменяет выбор.")), EditorStyles.miniButton);
             if (picking != Picking) { Picking = picking; m_HoverPlan = null; SceneView.RepaintAll(); }
             if (a.Plan == null) return;
@@ -120,16 +120,23 @@ namespace CsgBrush.Editor
         {
             var e = Event.current;
             var a = (WallAnchor)target;
-            if (Picking) PickGUI(e);
+            bool canPick = BrushSceneVisibility.CanPick(a.transform);
+            if (Picking)
+            {
+                if (canPick) PickGUI(e);
+                else CancelPicking();
+            }
+            if (!BrushSceneVisibility.IsVisible(a.transform)) return;
             if (e.type != EventType.Repaint) return;
             var plan = a.Plan;
-            if (plan != null)
+            if (plan != null && BrushSceneVisibility.IsVisible(plan.transform))
             {
                 plan.Walls(s_Walls);
                 int i = WallAnchors.WallIndex(a, s_Walls);
                 if (i >= 0) DrawWall(plan, s_Walls[i], BrushEditState.SelectedColor);
             }
-            if (Picking && m_HoverPlan != null && m_HoverWall >= 0)
+            if (Picking && m_HoverPlan != null &&
+                BrushSceneVisibility.CanPick(m_HoverPlan.transform) && m_HoverWall >= 0)
             {
                 m_HoverPlan.Walls(s_Walls);
                 if (m_HoverWall < s_Walls.Count) DrawWall(m_HoverPlan, s_Walls[m_HoverWall], HoverColor);
@@ -146,6 +153,7 @@ namespace CsgBrush.Editor
                 var hit = BrushHooks.PickBrushSurface(e.mousePosition, out var point, out var hitNormal);
                 m_HoverPlan = hit != null && Mathf.Abs(hitNormal.y) < 0.5f ? hit.generatedBy as FloorPlan : null; // a wall's side, not the floor or ceiling
                 m_HoverWall = -1;
+                if (m_HoverPlan != null && !BrushSceneVisibility.CanPick(m_HoverPlan.transform)) m_HoverPlan = null;
                 if (m_HoverPlan != null)
                 {
                     var local = m_HoverPlan.WorldToGraph(point);
@@ -158,7 +166,9 @@ namespace CsgBrush.Editor
                 if (m_HoverPlan != null && m_HoverWall >= 0)
                 {
                     int group = Undo.GetCurrentGroup();
-                    foreach (var go in Selection.gameObjects) if (go.TryGetComponent<WallAnchor>(out var picked)) WallAnchors.SetWall(picked, m_HoverPlan, m_HoverWall); // every selected one (targets is off limits here)
+                    foreach (var go in Selection.gameObjects)
+                        if (BrushSceneVisibility.CanPick(go.transform) && go.TryGetComponent<WallAnchor>(out var picked))
+                            WallAnchors.SetWall(picked, m_HoverPlan, m_HoverWall);
                     Undo.CollapseUndoOperations(group);
                     Picking = false;
                     Repaint();

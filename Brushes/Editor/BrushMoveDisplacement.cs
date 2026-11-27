@@ -58,7 +58,7 @@ namespace CsgBrush.Editor
             if (e.rawType == EventType.MouseDown && e.button == 0 && !e.alt && !Tools.viewToolActive)
             {
                 target = Selection.activeTransform;
-                if (target == null) { Reset(); return; }
+                if (!BrushSceneVisibility.CanPick(target)) { Reset(); return; }
                 owner = view;
                 target.TryGetComponent(out brush);
                 start = target.position;
@@ -73,7 +73,7 @@ namespace CsgBrush.Editor
                 }
             }
             if (owner != view) return;
-            if (target == null || e.rawType == EventType.MouseUp || e.rawType == EventType.Ignore ||
+            if (!BrushSceneVisibility.CanPick(target) || e.rawType == EventType.MouseUp || e.rawType == EventType.Ignore ||
                 (e.rawType == EventType.KeyDown && e.keyCode == KeyCode.Escape))
             {
                 Reset();

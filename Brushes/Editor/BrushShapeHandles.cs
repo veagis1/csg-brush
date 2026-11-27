@@ -722,9 +722,14 @@ namespace CsgBrush.Editor
                 e.Use();
                 return;
             }
+            if (s_HotControl != 0 && (s_HotBrush == null || !BrushSceneVisibility.CanPick(s_HotBrush.transform)))
+                CancelGesture();
+            else if (s_Dragging)
+                foreach (var brush in s_Start.Keys)
+                    if (brush == null || !BrushSceneVisibility.CanPick(brush.transform)) { CancelGesture(); break; }
             var brushes = new List<Brush>();
             foreach (var go in Selection.gameObjects)
-                if (go != null && go.TryGetComponent<Brush>(out var b) && !b.IsGenerated && b.shape != BrushShape.Custom) brushes.Add(b);
+                if (go != null && BrushSceneVisibility.CanPick(go.transform) && go.TryGetComponent<Brush>(out var b) && !b.IsGenerated && b.shape != BrushShape.Custom) brushes.Add(b);
             if (brushes.Count == 0 || brushes.Count > 32) return;
             Plane? near = NearPlane(view.camera);
             foreach (var b in brushes)
@@ -1026,7 +1031,7 @@ namespace CsgBrush.Editor
         static void Click(Event e)
         {
             // the same as a click anywhere else: see BrushHooks
-            var front = HandleUtility.PickGameObject(e.mousePosition, false);
+            var front = BrushHooks.PickFront(e.mousePosition);
             Brush brush = BrushHooks.BrushUnder(HandleUtility.GUIPointToWorldRay(e.mousePosition), front);
             GameObject picked = brush != null ? BrushGenerators.SelectionTarget(brush) : front;
             if (e.shift || EditorGUI.actionKey)

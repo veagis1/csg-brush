@@ -72,8 +72,8 @@ namespace CsgBrush.Editor
             AssemblyReloadEvents.beforeAssemblyReload += Stop;
             EditorApplication.hierarchyChanged += Invalidate;
             EditorApplication.projectChanged += Invalidate;
-            SceneVisibilityManager.visibilityChanged += Invalidate;
-            SceneVisibilityManager.pickingChanged += Invalidate;
+            SceneVisibilityManager.visibilityChanged += HierarchyAccessChanged;
+            SceneVisibilityManager.pickingChanged += HierarchyAccessChanged;
             BrushCsg.MeshesWritten += MeshesWritten;
             ObjectChangeEvents.changesPublished += GeometryChanged;
             SceneView.lastActiveSceneView?.Focus();
@@ -99,8 +99,8 @@ namespace CsgBrush.Editor
             AssemblyReloadEvents.beforeAssemblyReload -= Stop;
             EditorApplication.hierarchyChanged -= Invalidate;
             EditorApplication.projectChanged -= Invalidate;
-            SceneVisibilityManager.visibilityChanged -= Invalidate;
-            SceneVisibilityManager.pickingChanged -= Invalidate;
+            SceneVisibilityManager.visibilityChanged -= HierarchyAccessChanged;
+            SceneVisibilityManager.pickingChanged -= HierarchyAccessChanged;
             BrushCsg.MeshesWritten -= MeshesWritten;
             ObjectChangeEvents.changesPublished -= GeometryChanged;
             CancelGesture();
@@ -122,6 +122,12 @@ namespace CsgBrush.Editor
         }
 
         static void MeshesWritten(BrushGroup group) { if (owner == null) Invalidate(); }
+
+        static void HierarchyAccessChanged()
+        {
+            CancelGesture();
+            Invalidate();
+        }
 
         static void Invalidate()
         {

@@ -47,8 +47,7 @@ namespace CsgBrush.Editor
             if (item == null) return false;
             var go = item.gameObject;
             if (!go.activeInHierarchy || !go.scene.IsValid() || !StageUtility.GetCurrentStageHandle().Contains(go)) return false;
-            var visibility = SceneVisibilityManager.instance;
-            if (visibility.IsHidden(go) || visibility.IsPickingDisabled(go)) return false;
+            if (!BrushSceneVisibility.CanPick(item)) return false;
             for (var parent = item; parent != null; parent = parent.parent)
                 if (BrushSync.IsGenerated(parent) || Brush.IsGeneratedChildName(parent.name)) return false;
             return true;

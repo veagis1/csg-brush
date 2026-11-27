@@ -18,7 +18,7 @@ namespace CsgBrush.Editor
         public override GUIContent toolbarIcon => new GUIContent(BrushIcons.Get("Mode_Vertex"), PickCommand.tooltip);
         Component source;
         PlacementGeometry brushGeometry;
-        public override bool IsAvailable() => CanEdit(Selected());
+        public override bool IsAvailable() => CanPick(Selected());
 
         static Component Selected()
         {
@@ -30,6 +30,8 @@ namespace CsgBrush.Editor
         static bool CanEdit(Component item) => item != null && item.gameObject.scene.IsValid() &&
             !EditorApplication.isPlayingOrWillChangePlaymode && !EditorUtility.IsPersistent(item) &&
             (item is PointGraph graph && graph.points.Count > 0 || item is Brush brush && BrushApi.CanPickPivot(brush));
+
+        static bool CanPick(Component item) => CanEdit(item) && BrushSceneVisibility.CanPick(item.transform);
 
         public override void OnActivated()
         {
@@ -57,7 +59,8 @@ namespace CsgBrush.Editor
             using (new EditorGUI.DisabledScope(!CanEdit(item)))
             using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button(PickCommand)) Schedule(item, reset: false);
+                using (new EditorGUI.DisabledScope(!CanPick(item)))
+                    if (GUILayout.Button(PickCommand)) Schedule(item, reset: false);
                 if (GUILayout.Button(ResetCommand)) Schedule(item, reset: true);
             }
         }
@@ -70,7 +73,8 @@ namespace CsgBrush.Editor
             var menu = new GenericMenu();
             if (CanEdit(item))
             {
-                menu.AddItem(PickCommand, false, () => Schedule(item, reset: false));
+                if (CanPick(item)) menu.AddItem(PickCommand, false, () => Schedule(item, reset: false));
+                else menu.AddDisabledItem(PickCommand);
                 menu.AddItem(ResetCommand, false, () => Schedule(item, reset: true));
             }
             else
@@ -94,7 +98,7 @@ namespace CsgBrush.Editor
                     else BrushApi.ResetPivot((Brush)item);
                     MoveFromPivot();
                 }
-                else Begin();
+                else if (CanPick(item)) Begin();
             };
         }
 
@@ -119,7 +123,12 @@ namespace CsgBrush.Editor
 
         public override void OnToolGUI(EditorWindow window)
         {
-            if (!(window is SceneView view) || !CanEdit(source)) return;
+            if (!(window is SceneView view)) return;
+            if (!CanPick(source))
+            {
+                ToolManager.RestorePreviousPersistentTool();
+                return;
+            }
             var e = Event.current;
             if (e.alt || Tools.viewToolActive) return;
             if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)

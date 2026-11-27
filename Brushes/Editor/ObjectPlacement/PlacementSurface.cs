@@ -237,19 +237,19 @@ namespace CsgBrush.Editor
                 if (meshObject == null || meshObject.gameObject.layer != layer ||
                     !meshObject.TryGetComponent<MeshFilter>(out var filter) || filter.sharedMesh == null ||
                     !meshObject.TryGetComponent<MeshRenderer>(out var renderer)) continue;
-                var owners = BrushCsg.TriangleBrushes(meshObject);
+                var mesh = BrushSceneVisibility.MeshFor(meshObject, true, out var owners);
                 if (owners == null) continue;
                 available = true;
-                if (renderer.enabled && owners.Length > 0) Collect(filter, owners);
+                if (renderer.enabled && BrushSceneVisibility.CanPick(meshObject) && mesh != null && owners.Length > 0)
+                    Collect(mesh, filter.transform.localToWorldMatrix, owners);
             }
             loadedCsgLayers.Add(key, available);
             foreach (var pair in builders) pair.Key.Geometry = pair.Value.Build(simplify: true);
             return available;
 
-            void Collect(MeshFilter filter, Brush[] owners)
+            void Collect(Mesh mesh, Matrix4x4 toWorld, Brush[] owners)
             {
-                var toWorld = filter.transform.localToWorldMatrix;
-                using var snapshot = MeshUtility.AcquireReadOnlyMeshData(filter.sharedMesh);
+                using var snapshot = MeshUtility.AcquireReadOnlyMeshData(mesh);
                 var data = snapshot[0];
                 using var vertices = new NativeArray<Vector3>(data.vertexCount, Allocator.Temp);
                 data.GetVertices(vertices);
@@ -366,7 +366,7 @@ namespace CsgBrush.Editor
             {
                 if (cutter == wall) afterWall = true;
                 if (cutter == null || cutter.operation != BrushOperation.Subtract ||
-                    cutter.gameObject.layer != wall.gameObject.layer || cutter.transform.IsChildOf(source) ||
+                    cutter.gameObject.layer != wall.gameObject.layer || cutter.transform.IsChildOf(source) || !BrushSceneVisibility.IsVisible(cutter.transform) ||
                     (BrushCutTarget.TryScope(cutter, out var scope) ? !scope.Contains(wall) : !afterWall)) continue;
                 var cut = AuthoredPart(cutter);
                 if (cut != null) cuts.Add(cut);

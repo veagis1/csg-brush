@@ -30,7 +30,7 @@ namespace CsgBrush.Editor
                     BrushDraw.SurfaceRotation(normal), true);
             }
 
-            internal bool Valid => worldPlane || (Owner != null && Owner.gameObject.activeInHierarchy);
+            internal bool Valid => worldPlane || (Owner != null && Owner.gameObject.activeInHierarchy && BrushSceneVisibility.CanPick(Owner));
             internal Vector3 Origin => worldPlane ? localOrigin : Owner.TransformPoint(localOrigin);
             internal Quaternion Rotation => worldPlane ? localRotation : Owner.rotation * localRotation;
             internal Vector3 Normal => Rotation * Vector3.up;
@@ -48,7 +48,7 @@ namespace CsgBrush.Editor
         static Vector3 candidatePoint;
         static SceneView pickingView;
         internal static bool Picking => pickingView != null;
-        internal static bool HasHeld => held.Valid && !SceneVisibilityManager.instance.IsHidden(held.Owner.gameObject);
+        internal static bool HasHeld => held.Valid;
 
         internal static bool Local
         {
@@ -91,7 +91,7 @@ namespace CsgBrush.Editor
                 normal = frame.Normal;
                 return true;
             }
-            if (surface == null) return false;
+            if (surface == null || !BrushSceneVisibility.CanPick(surface.transform)) return false;
             frame = ForSurface(surface, point, normal);
             return frame.Valid;
         }
@@ -112,7 +112,7 @@ namespace CsgBrush.Editor
 
         static bool UsableFor(Transform owner, Brush brush) => owner != null && owner != brush.transform &&
             owner.gameObject.scene == brush.gameObject.scene && !owner.IsChildOf(brush.transform) &&
-            !SceneVisibilityManager.instance.IsHidden(owner.gameObject);
+            owner.gameObject.activeInHierarchy && BrushSceneVisibility.CanPick(owner);
 
         internal static void DrawMenu()
         {

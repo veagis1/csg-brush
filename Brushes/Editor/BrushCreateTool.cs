@@ -216,6 +216,7 @@ namespace CsgBrush.Editor
         bool hoverValid, pickingTarget, hadDrawTarget;
         BrushSurfaceGrid.Frame hoverGrid, drawGrid;
         BrushCutTarget hoverTarget, drawTarget, selectedTarget;
+        Transform hoverSurface, drawSurface;
         BrushOperation? drawManual;
         readonly BrushCutPreview cutPreview = new BrushCutPreview();
         int controlId;
@@ -235,6 +236,7 @@ namespace CsgBrush.Editor
             state = State.Idle;
             pickingTarget = hoverValid = m_OpeningValid = false;
             hoverTarget = drawTarget = default;
+            hoverSurface = drawSurface = null;
             hoverGrid = drawGrid = default;
         }
 
@@ -262,7 +264,7 @@ namespace CsgBrush.Editor
             if (ManualOperation != BrushOperation.Subtract || Drawing) return;
             using (new EditorGUILayout.HorizontalScope())
             {
-                string title = selectedTarget.Valid ? Tr("Цель: ") + selectedTarget.Parent.name : Tr("Выбрать цель");
+                string title = selectedTarget.CanPick ? Tr("Цель: ") + selectedTarget.Parent.name : Tr("Выбрать цель");
                 if (GUILayout.Button(new GUIContent(title, Tr("Укажите браш или стену. Без выбора цель берётся с грани начала жеста.")),
                         EditorStyles.miniButton))
                 {
@@ -294,7 +296,7 @@ namespace CsgBrush.Editor
             hoverTarget = BrushCutTarget.FromBrush(BrushHooks.PickConstructionSurface(ray, out _, out _));
             if (e.type == EventType.MouseDown && HandleUtility.nearestControl == controlId)
             {
-                if (hoverTarget.Valid)
+                if (hoverTarget.CanPick)
                 {
                     selectedTarget = hoverTarget;
                     pickingTarget = false;
@@ -308,16 +310,17 @@ namespace CsgBrush.Editor
         {
             var ray = HandleUtility.GUIPointToWorldRay(mouse);
             var surface = BrushHooks.PickConstructionSurface(ray, out var point, out var faceNormal);
+            hoverSurface = surface != null ? surface.transform : null;
             var hit = point;
             var workingNormal = faceNormal;
             hoverValid = BrushSurfaceGrid.TryDrawingFrame(ray, surface, ref point, ref workingNormal, out hoverGrid) ||
                 (!BrushSurfaceGrid.HasHeld && (surface != null || FindGridPlane(view, ray, out point, out workingNormal)));
             bool onSurface = surface != null && Mathf.Abs(Vector3.Dot(point - hit, faceNormal)) < 0.001f &&
                 Mathf.Abs(Vector3.Dot(workingNormal, faceNormal)) > 0.999f;
-            var selected = ManualOperation == BrushOperation.Subtract && selectedTarget.Valid &&
+            var selected = ManualOperation == BrushOperation.Subtract && selectedTarget.CanPick &&
                 StageUtility.GetCurrentStageHandle().Contains(selectedTarget.Parent.gameObject);
             hoverTarget = selected ? selectedTarget : onSurface ? BrushCutTarget.FromBrush(surface) : default;
-            if (ManualOperation == BrushOperation.Subtract && !hoverTarget.Valid) hoverValid = false;
+            if (ManualOperation == BrushOperation.Subtract && !hoverTarget.CanPick) hoverValid = false;
             if (!hoverValid) return;
             surfaceNormal = onSurface ? faceNormal : Vector3.zero;
             hoverNormal = hoverGrid.Valid || AlignsToSurface || onSurface ? workingNormal : BrushDraw.Cardinal(workingNormal);
@@ -404,6 +407,12 @@ namespace CsgBrush.Editor
         {
             if (!(window is SceneView view) || BrushSurfaceGrid.Picking) return;
             var e = Event.current;
+            if (Drawing && ((drawSurface != null && !BrushSceneVisibility.CanPick(drawSurface)) ||
+                (hadDrawTarget && !drawTarget.CanPick)))
+                ResetGesture();
+            if (state == State.Idle && ((hoverSurface != null && !BrushSceneVisibility.CanPick(hoverSurface)) ||
+                (hoverTarget.Valid && !hoverTarget.CanPick)))
+                hoverValid = false;
             controlId = GUIUtility.GetControlID(FocusType.Passive);
             HandleUtility.AddDefaultControl(controlId);
             if (e.alt || Tools.viewToolActive) return;
@@ -434,8 +443,9 @@ namespace CsgBrush.Editor
                         EditModeMouse.Take(controlId);
                         normal = hoverNormal;
                         drawGrid = hoverGrid;
-                        drawTarget = hoverTarget;
-                        hadDrawTarget = hoverTarget.Valid;
+                        drawTarget = hoverTarget.CanPick ? hoverTarget : default;
+                        drawSurface = hoverSurface;
+                        hadDrawTarget = drawTarget.Valid;
                         drawManual = ManualOperation;
                         planeRotation = drawGrid.Valid ? drawGrid.Rotation : BrushDraw.SurfaceRotation(normal);
                         origin = hoverPoint; opposite = origin; height = 0f; side = 0f; centred = false; // a new brush starts at the default width, not the last one
@@ -525,6 +535,7 @@ namespace CsgBrush.Editor
         void OpeningGUI(Event e)
         {
             if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape) { ToolManager.RestorePreviousPersistentTool(); e.Use(); return; }
+            if (m_Opening.surface != null && !BrushSceneVisibility.CanPick(m_Opening.surface)) m_OpeningValid = false;
             if (e.type == EventType.MouseMove || e.type == EventType.MouseDown)
             {
                 m_OpeningValid = WallAnchors.Find(HandleUtility.GUIPointToWorldRay(e.mousePosition), Shape, out m_Opening);
@@ -653,7 +664,7 @@ namespace CsgBrush.Editor
                 for (int i = 0; i < face.indices.Length; i++)
                     Handles.DrawLine(m.MultiplyPoint3x4(poly.vertices[face.indices[i]]), m.MultiplyPoint3x4(poly.vertices[face.indices[(i + 1) % face.indices.Length]]), 2f);
             Handles.zTest = previousDepth;
-            if (cut && drawTarget.Valid)
+            if (cut && drawTarget.CanPick)
             {
                 drawTarget.Draw();
                 if (Mathf.Abs(height) >= 0.001f)
@@ -677,7 +688,7 @@ namespace CsgBrush.Editor
         {
             if (Mathf.Abs(height) < 0.001f) return;
             bool cut = DrawOperation == BrushOperation.Subtract;
-            if (cut && (!drawTarget.Valid || (drawTarget.Plan != null && !drawTarget.TryWall(out _))))
+            if (cut && (!drawTarget.CanPick || (drawTarget.Plan != null && !drawTarget.TryWall(out _))))
             {
                 ResetGesture();
                 SceneView.lastActiveSceneView?.ShowNotification(new GUIContent(Tr("Укажите цель вычета заново.")));

@@ -30,6 +30,7 @@ namespace CsgBrush.Editor
         internal bool Valid => Brush != null ? Brush.isActiveAndEnabled && Brush.operation == BrushOperation.Add :
             Plan != null && Plan.isActiveAndEnabled && Start != End;
         internal int Layer => Parent.gameObject.layer;
+        internal bool CanPick => Valid && BrushSceneVisibility.CanPick(Parent);
 
         static Brush RootOf(Brush brush)
         {
@@ -127,10 +128,10 @@ namespace CsgBrush.Editor
 
         internal void Draw()
         {
-            if (!Valid) return;
+            if (!CanPick) return;
             foreach (var brush in CsgBrush.Brush.Active)
             {
-                if (brush.operation != BrushOperation.Add || !Contains(brush)) continue;
+                if (brush.operation != BrushOperation.Add || !Contains(brush) || !BrushSceneVisibility.IsVisible(brush.transform)) continue;
                 var shape = BrushHooks.LocalShape(brush, out _);
                 if (shape == null) continue;
                 using (new Handles.DrawingScope(new Color(1f, 0.76f, 0.25f, 0.95f), BrushGeometry.LocalToWorld(brush)))

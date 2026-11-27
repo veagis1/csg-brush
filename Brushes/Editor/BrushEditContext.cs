@@ -1,6 +1,7 @@
 using static CsgBrush.Editor.BrushLanguage;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEngine;
@@ -86,7 +87,7 @@ namespace CsgBrush.Editor
         public static IEnumerable<Brush> SelectedBrushes()
         {
             foreach (var go in UnityEditor.Selection.gameObjects)
-                if (go.TryGetComponent<Brush>(out var brush)) yield return brush;
+                if (BrushSceneVisibility.CanPick(go.transform) && go.TryGetComponent<Brush>(out var brush)) yield return brush;
         }
 
         public static BrushPolyhedron ShapeOf(Brush brush)
@@ -99,13 +100,20 @@ namespace CsgBrush.Editor
         public static void OnSceneGUI(EditorToolContext context)
         {
             var e = Event.current;
+            if (dragging && (dragBrush == null || !BrushSceneVisibility.CanPick(dragBrush.transform))) CancelInteraction();
             if (dragging && GUIUtility.hotControl == 0) EndDrag();
             if (marquee && GUIUtility.hotControl == 0) marquee = false; // let go without its release (see EditModeMouse)
+            var brushes = SelectedBrushes();
+            if (!brushes.Any())
+            {
+                if (marquee) CancelInteraction();
+                return;
+            }
             HandleKeys(e);
             bool viewTool = Tools.current == Tool.View || Tools.viewToolActive; // the hand tool pans; it never selects
             int passive = GUIUtility.GetControlID(FocusType.Passive);
             if (!viewTool) HandleUtility.AddDefaultControl(passive); // clicks on empty space stay in the edit mode
-            foreach (var brush in SelectedBrushes())
+            foreach (var brush in brushes)
             {
                 var poly = ShapeOf(brush);
                 if (poly == null || !poly.IsValid)

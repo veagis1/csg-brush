@@ -1217,6 +1217,15 @@ namespace CsgBrush.Editor
             var mesh = mf.sharedMesh;
             // a mesh saved in an asset (a built prefab's) is never rewritten from here: the scene gets its own
             if (mesh == null || EditorUtility.IsPersistent(mesh)) { mesh = new Mesh { name = "brush mesh" }; mf.sharedMesh = mesh; }
+            FillMesh(mesh, parts, out var materials, out var sources);
+            mr.sharedMaterials = materials;
+            s_TriangleBrush[t] = sources;
+            SaveSources(t, sources);
+            return t;
+        }
+
+        static void FillMesh(Mesh mesh, List<Part> parts, out Material[] sharedMaterials, out Brush[] sources)
+        {
             mesh.Clear(false); // the vertex layout too: lightmap UVs made for the old mesh must not stay behind as zeros
             s_Vertices.Clear(); s_Normals.Clear(); s_Uvs.Clear();
             var materials = new List<Material>(); var materialIndex = new Dictionary<Material, int>();
@@ -1234,17 +1243,58 @@ namespace CsgBrush.Editor
                     submeshBrush[mi].AddRange(part.triangleBrush[m]);
                 }
             }
-            if (s_Vertices.Count == 0) { mr.sharedMaterials = new Material[0]; s_TriangleBrush[t] = new Brush[0]; SaveSources(t, s_TriangleBrush[t]); return t; }
+            sharedMaterials = materials.ToArray();
+            var triangleBrush = new List<Brush>(); foreach (var list in submeshBrush) triangleBrush.AddRange(list);
+            sources = triangleBrush.ToArray();
+            if (s_Vertices.Count == 0) return;
             mesh.indexFormat = s_Vertices.Count > 65000 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16;
             mesh.SetVertices(s_Vertices); mesh.SetNormals(s_Normals); mesh.SetUVs(0, s_Uvs);
             mesh.subMeshCount = submeshTris.Count;
             for (int i = 0; i < submeshTris.Count; i++) mesh.SetTriangles(submeshTris[i], i);
             mesh.RecalculateBounds();
-            mr.sharedMaterials = materials.ToArray();
-            var triangleBrush = new List<Brush>(); foreach (var list in submeshBrush) triangleBrush.AddRange(list);
-            s_TriangleBrush[t] = triangleBrush.ToArray();
-            SaveSources(t, s_TriangleBrush[t]);
-            return t;
+        }
+
+        // Evaluate the same booleans without hidden operands. Only the temporary Scene view meshes
+        // receive the result. Apply would also change saved meshes, colliders and the model's build key.
+        internal static void BuildScenePreview(BrushGroup model, List<Brush> visible, HashSet<int> hiddenLayers,
+            Dictionary<Transform, BrushSceneVisibility.Preview> output)
+        {
+            WaitForJob();
+            var job = Prepare(model, visible);
+            job.needMesh = true;
+            var children = MeshObjects(model);
+            children.RemoveAll(t => !hiddenLayers.Contains(t.gameObject.layer));
+            var partsByChild = new Dictionary<Transform, List<Part>>();
+            foreach (var child in children) partsByChild.Add(child, new List<Part>());
+            try
+            {
+                Compute(job);
+                var fallback = DefaultMaterial();
+                int defaultFlags = (int)BrushSettings.instance.defaultModelStaticFlags;
+                foreach (var (layer, islands) in job.layers)
+                {
+                    foreach (var island in islands)
+                    {
+                        if (!StillConverted(island, fallback, defaultFlags)) Convert(island, fallback, defaultFlags);
+                        foreach (var part in island.parts)
+                        {
+                            var child = model.transform.Find(MeshChildName(layer, (StaticEditorFlags)part.flags));
+                            // A previously carved-away brush can introduce a new set of flags on this layer.
+                            if (child == null) child = children.Find(t => t.gameObject.layer == layer);
+                            if (child != null) partsByChild[child].Add(part);
+                        }
+                    }
+                }
+                foreach (var (child, parts) in partsByChild)
+                {
+                    var preview = new BrushSceneVisibility.Preview();
+                    output.Add(child, preview);
+                    FillMesh(preview.Mesh, parts, out preview.Materials, out preview.Sources);
+                    if (child.TryGetComponent<MeshFilter>(out var filter))
+                        BrushSceneLightmapUVs.Transfer(filter.sharedMesh, preview.Mesh);
+                }
+            }
+            finally { DisposeJob(job); }
         }
     }
 }

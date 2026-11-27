@@ -161,7 +161,7 @@ namespace CsgBrush.Editor
         public override void OnToolGUI(EditorWindow window)
         {
             var spline = target as Spline;
-            if (spline == null || !(window is SceneView)) return;
+            if (!(window is SceneView) || spline == null || !BrushSceneVisibility.CanPick(spline.transform)) return;
             var e = Event.current;
             int id = GUIUtility.GetControlID(FocusType.Passive);
             if (e.type == EventType.Layout) HandleUtility.AddDefaultControl(id);
@@ -337,7 +337,7 @@ namespace CsgBrush.Editor
             for (int i = -1; i < m_Splines.Count; i++)
             {
                 var s = i < 0 ? selected : m_Splines[i]; // the selected spline first
-                if (s == null || (i >= 0 && s == selected)) continue;
+                if (s == null || (i >= 0 && s == selected) || !BrushSceneVisibility.CanPick(s.transform)) continue;
                 s.EnsureGraph();
                 int point = FloorPlanTools.PointUnderMouse(s, mouse);
                 if (point >= 0) { m_Spline = s; m_Point = point; return; }
@@ -383,7 +383,7 @@ namespace CsgBrush.Editor
                 m_HoverValid = false;
                 e.Use();
             }
-            if (e.type == EventType.Repaint && m_HoverValid)
+            if (e.type == EventType.Repaint && m_HoverValid && (m_Spline == null || BrushSceneVisibility.CanPick(m_Spline.transform)))
             {
                 bool joining = m_Spline != null; // white and larger on a spline's point or link, as when drawing
                 if (!joining) BrushSurfaceGrid.Draw(m_Grid, m_Hover);
