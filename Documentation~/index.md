@@ -8,6 +8,7 @@ This documentation covers the following features:
 
 | **Feature** | **Description** |
 | :--- | :--- |
+| [What's new in 0.7.2](https://github.com/veagis1/csg-brush/releases/tag/v0.7.2) | Move long stairs faster, draw child brushes on selected faces and keep the floor grid aligned to world axes. |
 | [What's new in 0.7.1](https://github.com/veagis1/csg-brush/releases/tag/v0.7.1) | Export brush groups to Blender, use context menus in the Scene view and keep tool choices for the session. |
 | [What's new in 0.6.2](https://github.com/veagis1/csg-brush/releases/tag/v0.6.2) | Place brushes on visible faces, hide or lock them in the Hierarchy, and move compound brushes faster. |
 | [What's new in 0.6.1](fork-0.6.1.md) | Draw on a surface grid, enter exact dimensions, set an origin and move objects to vertices and edges. |

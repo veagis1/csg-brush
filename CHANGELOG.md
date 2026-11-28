@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.2
+
+- Moving long solid straight stairs rebuilds far less geometry. In the six-brush test scene with 160 steps, the median time to move the stairs and rebuild synchronously fell from 8.84 s to 18.88 ms near the other brushes.
+- Translating a standalone brush reuses its solid geometry and collider parts. Cuts and overlapping brush unions update when their relative positions change.
+- Drawing an additive brush on a selected brush's face makes the new brush its child. Drawing elsewhere follows the usual parent rules, and cuts still use the additive target of the hit surface.
+- The Scene view floor grid remains on the world XZ plane at Y = 0 m in perspective and freely rotated orthographic views. Brush creation, picking a different brush in the Scene view and WCS placement align the gizmo to world axes.
+- Thin triangles far from the origin no longer distort the texture projection of their face.
+
 ## 0.7.1
 
 - Export a Brush Group's finished geometry, UVs and materials to Blender from its Inspector.
