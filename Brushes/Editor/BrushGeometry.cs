@@ -188,16 +188,35 @@ namespace CsgBrush.Editor
         internal static Vector3 ConvexPartsInLocalFrame(Brush b, Matrix4x4 toModel, List<ConvexPolytope> add,
             List<ConvexPolytope> remove, ref string problem, Vector3? modelCentre = null)
         {
-            float weld = Mathf.Max(1e-3f, BrushSettings.instance.GridMeters / 16f); // for decomposition pieces: slivers a hair apart merge
-            var local = Polyhedron(b);
+            bool closedStairs = b.shape == BrushShape.Stairs && b.supportUnderSteps;
+            var local = closedStairs ? null : Polyhedron(b);
             // Binary multiples translate exactly. Nearby brushes usually share a frame, with
             // plane distances small enough for the clipping epsilon (0.0001 m).
             const float span = 512f;
-            var centreInCells = (modelCentre ?? toModel.MultiplyPoint3x4(local.Bounds().center)) / span;
+            var centreInCells = (modelCentre ?? toModel.MultiplyPoint3x4(closedStairs ? b.PivotShift : local.Bounds().center)) / span;
             var origin = new Vector3(Mathf.Round(centreInCells.x), Mathf.Round(centreInCells.y), Mathf.Round(centreInCells.z)) * span;
             toModel.m03 -= origin.x;
             toModel.m13 -= origin.y;
             toModel.m23 -= origin.z;
+
+            if (closedStairs)
+            {
+                // The tread profile already defines an exact convex decomposition. Each column spans one
+                // tread and reaches the floor. Avoid splitting the generated surface with the generic BSP.
+                var size = b.ClampedSize;
+                float floor = -size.y * 0.5f;
+                var shift = b.PivotShift;
+                foreach (var (start, end, top) in BrushPolyhedron.StairTreads(size, b.stepHeight))
+                {
+                    var centre = shift + new Vector3(0f, (floor + top) * 0.5f, (start + end) * 0.5f);
+                    var box = BrushPolyhedron.Box(new Vector3(size.x, top - floor, end - start));
+                    var part = ToPolytope(box.Transformed(toModel * Matrix4x4.Translate(centre)), ConvexPolytope.Epsilon);
+                    if (part != null) add.Add(part);
+                    else problem = Tr("Одну ступень не удалось построить, она пропущена.");
+                }
+                return origin;
+            }
+
             bool grouped = false; foreach (var f in local.faces) if (f.group >= 0) { grouped = true; break; }
             if (grouped)
             {
@@ -226,6 +245,7 @@ namespace CsgBrush.Editor
             }
             else
             {
+                float weld = Mathf.Max(1e-3f, BrushSettings.instance.GridMeters / 16f); // for decomposition pieces: slivers a hair apart merge
                 var pieces = new List<ConvexPolytope>();
                 ConvexDecomposition.VertexWeld = weld;
                 ConvexDecomposition.Decompose(local, pieces);

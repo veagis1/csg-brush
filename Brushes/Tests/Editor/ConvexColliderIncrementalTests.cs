@@ -43,13 +43,13 @@ namespace CsgBrush.Tests
             foreach (Transform child in container)
             {
                 string line;
-                if (child.TryGetComponent<BoxCollider>(out var bc)) line = "box " + bc.center.ToString("F3") + " " + bc.size.ToString("F3") + (bc.isTrigger ? " trigger" : "");
+                if (child.TryGetComponent<BoxCollider>(out var bc)) line = "box " + (child.localPosition + bc.center).ToString("F3") + " " + bc.size.ToString("F3") + (bc.isTrigger ? " trigger" : "");
                 else
                 {
                     var mc = child.GetComponent<MeshCollider>();
                     Assert.IsNotNull(mc, "piece without a collider: " + child.name);
                     var verts = mc.sharedMesh.vertices; var b = mc.sharedMesh.bounds;
-                    line = "convex v=" + verts.Length + " t=" + mc.sharedMesh.triangles.Length + " b=" + b.center.ToString("F3") + "/" + b.size.ToString("F3") + (mc.isTrigger ? " trigger" : "");
+                    line = "convex v=" + verts.Length + " t=" + mc.sharedMesh.triangles.Length + " b=" + (child.localPosition + b.center).ToString("F3") + "/" + b.size.ToString("F3") + (mc.isTrigger ? " trigger" : "");
                 }
                 var id = child.GetComponent<ConvexPiece>();
                 Assert.IsNotNull(id, "piece without identity: " + child.name);
@@ -96,7 +96,7 @@ namespace CsgBrush.Tests
         }
 
         [Test]
-        public void MovingOneBrushOnlyTouchesItsPiece()
+        public void MovingOneBrushReusesEveryPiece()
         {
             var boxes = Row(10);
             Assert.AreEqual(10, Pieces().Count);
@@ -105,15 +105,48 @@ namespace CsgBrush.Tests
             BrushApi.Move(boxes[3], new Vector3(9f, 3f, 0f));
             BrushApi.ForceUpdate();
 
-            Assert.AreEqual(9, ConvexColliderBuilder.LastReusedPieces, "untouched pieces reused");
-            Assert.AreEqual(1, ConvexColliderBuilder.LastCreatedPieces, "moved piece recreated");
-            Assert.AreEqual(1, ConvexColliderBuilder.LastDestroyedPieces, "old piece of the moved brush destroyed");
-            Assert.AreEqual(9, BrushCsg.LastCachedSolids, "solids of untouched brushes come from the cache");
-            Assert.AreEqual(1, BrushCsg.LastBuiltSolids);
+            Assert.AreEqual(10, ConvexColliderBuilder.LastReusedPieces);
+            Assert.AreEqual(0, ConvexColliderBuilder.LastCreatedPieces);
+            Assert.AreEqual(0, ConvexColliderBuilder.LastDestroyedPieces);
+            Assert.AreEqual(10, BrushCsg.LastCachedSolids);
+            Assert.AreEqual(0, BrushCsg.LastBuiltSolids);
             var after = PieceObjects();
-            after.IntersectWith(before);
-            Assert.AreEqual(9, after.Count, "the nine untouched piece objects are the same objects as before");
+            CollectionAssert.AreEquivalent(before, after);
             AssertSameAsFromScratch("after moving a brush");
+        }
+
+        [TestCase(0f)]
+        [TestCase(27f)]
+        public void LongStairsKeepEveryTreadAndReuseTheirCollidersOnTranslation(float angle)
+        {
+            const int steps = 160;
+            var size = new Vector3(86.125f, 39.875f, 68.5f);
+            var rotation = Quaternion.Euler(0f, angle, 0f);
+            var stairs = BrushApi.Create(BrushShape.Stairs, Vector3.zero, size, rotation, snap: false);
+            BrushApi.SetStairs(stairs, 0.25f);
+            var shape = BrushGeometry.Polyhedron(stairs);
+            Assert.IsTrue(shape.IsClosed());
+            Assert.AreEqual(7 * steps - 1, shape.faces.Length, "the side walls grow linearly with the tread count");
+            Assert.AreEqual(size.x * size.y * size.z * (steps + 1) / (2 * steps), shape.Volume(), 0.02f);
+
+            BrushApi.ForceUpdate();
+            Assert.IsNull(stairs.problem);
+            var before = PieceObjects();
+            Assert.AreEqual(steps, before.Count, "one full convex column per tread");
+            var child = BrushCsg.MeshObject(Model(), false);
+            Assert.AreEqual(12 * steps, BrushCsg.TriangleBrushes(child).Length);
+            var highestTread = rotation * new Vector3(0f, size.y * 0.5f, size.z * (0.5f - 0.5f / steps));
+
+            var moved = new Vector3(192f, 16f, 256f);
+            BrushApi.Move(stairs, moved);
+            BrushApi.ForceUpdate();
+            Assert.AreEqual(0, BrushCsg.LastBuiltSolids);
+            Assert.AreEqual(0, BrushCsg.LastBuiltIslands);
+            CollectionAssert.AreEquivalent(before, PieceObjects());
+            Physics.SyncTransforms();
+            Assert.IsTrue(Physics.Raycast(moved + highestTread + Vector3.up, Vector3.down, out var hit, 2f));
+            Assert.AreEqual(moved.y + highestTread.y, hit.point.y, 0.001f);
+            Assert.IsFalse(Physics.Raycast(highestTread + Vector3.up, Vector3.down, 2f));
         }
 
         [Test]
@@ -226,7 +259,7 @@ namespace CsgBrush.Tests
             BrushApi.Move(cutter, new Vector3(6f, 0.5f, 0f)); // cut the next box instead
             BrushApi.ForceUpdate();
             Assert.GreaterOrEqual(ConvexColliderBuilder.LastReusedPieces, 8, "boxes away from both cutter positions keep their pieces");
-            Assert.AreEqual(10, BrushCsg.LastCachedSolids);
+            Assert.AreEqual(11, BrushCsg.LastCachedSolids, "the cutter's solid is translated, only its effects are recomputed");
             AssertSameAsFromScratch("after moving the subtract brush");
         }
 

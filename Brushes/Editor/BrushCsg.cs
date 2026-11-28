@@ -424,8 +424,8 @@ namespace CsgBrush.Editor
         }
 
         // ---- step 1: main thread
-        // A nested brush and its topmost participating brush share an origin. Folders are transparent;
-        // the model's brush list already excludes nested BrushGroups and disabled operands.
+        // Each brush has a translation-independent frame. Nested brushes share their topmost participating
+        // brush's origin. Folders are transparent; the list excludes nested BrushGroups and disabled operands.
         readonly struct CompoundFrame
         {
             readonly Transform root;
@@ -507,14 +507,18 @@ namespace CsgBrush.Editor
                     cache.keyModel = model;
                 }
                 var toFrame = cache.toModel;
-                int localKey = cache.key;
-                Vector3 origin = Vector3.zero;
+                Vector3 origin;
                 if (frames.TryGetValue(b, out var frame))
                 {
                     origin = frame.origin;
                     toFrame = frame.Pose(b, cache.toModel);
-                    localKey = BrushGeometry.PoseKey(cache.shapeKey, toFrame);
                 }
+                else
+                {
+                    origin = toFrame.GetColumn(3);
+                    toFrame.SetColumn(3, new Vector4(0f, 0f, 0f, 1f));
+                }
+                int localKey = BrushGeometry.PoseKey(cache.shapeKey, toFrame);
                 s_Solids.TryGetValue(b, out var entry);
                 var r = new Record { brush = b, identity = b.GetHashCode(), toFrame = toFrame, origin = origin,
                     key = cache.key, localKey = localKey, subtract = b.operation == BrushOperation.Subtract,
@@ -1386,7 +1390,17 @@ namespace CsgBrush.Editor
                 var sum = faceNormals[faceOf[tri]]; float sumLength = sum.magnitude;
                 bool byFace = face >= 0 && sumLength > 1e-12f;
                 var n = byFace ? sum / sumLength : own / ownLength;
-                if (byFace && ownLength > 1e-4f && Vector3.Dot(own / ownLength, n) < 0.99f) { n = own / ownLength; byFace = false; } // a well-shaped triangle off its face's plane: its own
+                if (byFace && ownLength > 1e-4f)
+                {
+                    var triangleNormal = own / ownLength;
+                    // A well-shaped triangle can need its own projection even when its normal is close to
+                    // the face average. Near a tie between axes, the projection planes are different.
+                    if (Vector3.Dot(triangleNormal, n) < 0.99f || ProjectionAxis(triangleNormal) != ProjectionAxis(n))
+                    {
+                        n = triangleNormal;
+                        byFace = false;
+                    }
+                }
                 int flags = brush != null ? StaticFlags(brush) : defaultFlags;
                 Brush cutFrom = null;
                 if (brush != null && brush.operation == BrushOperation.Subtract)
@@ -1401,8 +1415,8 @@ namespace CsgBrush.Editor
                 if (!part.materialIndex.TryGetValue(mat, out int mi)) { mi = part.materials.Count; part.materials.Add(mat); part.materialIndex[mat] = mi; part.triangles.Add(new List<int>()); part.triangleBrush.Add(new List<Brush>()); }
                 part.triangleBrush[mi].Add(brush);
                 // planar UVs on the dominant axis plane, one texture per metre
-                float ax = Mathf.Abs(n.x), ay = Mathf.Abs(n.y), az = Mathf.Abs(n.z);
-                Vector2 UV(Vector3 p) => ax >= ay && ax >= az ? new Vector2(p.z, p.y) : ay >= az ? new Vector2(p.x, p.z) : new Vector2(p.x, p.y);
+                int projection = ProjectionAxis(n);
+                Vector2 UV(Vector3 p) => projection == 0 ? new Vector2(p.z, p.y) : projection == 1 ? new Vector2(p.x, p.z) : new Vector2(p.x, p.y);
                 int fkey = byFace ? faceOf[tri] : -1 - tri; // a triangle with its own normal has its own vertices
                 for (int corner = 0; corner < 3; corner++)
                 {
@@ -1416,6 +1430,12 @@ namespace CsgBrush.Editor
                     part.triangles[mi].Add(vi);
                 }
             }
+        }
+
+        static int ProjectionAxis(Vector3 normal)
+        {
+            float x = Mathf.Abs(normal.x), y = Mathf.Abs(normal.y), z = Mathf.Abs(normal.z);
+            return x >= y && x >= z ? 0 : y >= z ? 1 : 2;
         }
 
         /// <summary>A brush's static flags: what its render triangles and its collider pieces get.</summary>

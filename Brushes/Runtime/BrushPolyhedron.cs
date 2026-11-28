@@ -212,18 +212,15 @@ namespace CsgBrush
 
         public static BrushPolyhedron Stairs(Vector3 size, float stepHeight)
         {
-            float w = size.x * 0.5f, h = size.y * 0.5f, d = size.z * 0.5f;
-            int steps = StepCount(size.y, stepHeight);
-            stepHeight = size.y / steps;
-            float stepDepth = size.z / steps;
+            float w = size.x * 0.5f, floor = -size.y * 0.5f;
             var verts = new List<Vector3>(); var lookup = new Dictionary<Vector3, int>();
             int V(float x, float y, float z)
             {
-                var key = new Vector3(Mathf.Round(x * 1e5f) / 1e5f, Mathf.Round(y * 1e5f) / 1e5f, Mathf.Round(z * 1e5f) / 1e5f);
+                var key = new Vector3(x, y, z);
                 if (!lookup.TryGetValue(key, out int i))
                 {
                     i = verts.Count;
-                    verts.Add(new Vector3(x, y, z));
+                    verts.Add(key);
                     lookup.Add(key, i);
                 }
                 return i;
@@ -237,38 +234,46 @@ namespace CsgBrush
                 if (Vector3.Dot(n, outward) < 0f) Array.Reverse(idx);
                 faces.Add(new Face(idx));
             }
-            // the top of every step (capped at the box top: once the stairs reach it the remaining steps are flat)
-            var tops = new List<float>(); var zs = new List<float> { -d };
-            for (int k = 0; k < steps; k++)
+            float previous = floor, back = -size.z * 0.5f;
+            foreach (var (z0, z1, top) in StairTreads(size, stepHeight))
             {
-                tops.Add(Mathf.Min(h, -h + (k + 1) * stepHeight));
-                float z1 = Mathf.Min(d, -d + (k + 1) * stepDepth);
-                zs.Add(z1);
-                if (z1 >= d - 1e-6f) break;
-            }
-            int n = zs.Count - 1;
-            // distinct wall levels: every side wall and the back wall are split at all of them, so shared edges match exactly
-            var levels = new List<float> { -h };
-            foreach (var t in tops) if (t > levels[levels.Count - 1] + 1e-6f) levels.Add(t);
-            for (int k = 0; k < n; k++)
-            {
-                float z0 = zs[k], z1 = zs[k + 1], yPrev = k > 0 ? tops[k - 1] : -h, yTop = tops[k];
-                if (yTop > yPrev + 1e-6f) Add(Vector3.back, V(-w, yPrev, z0), V(w, yPrev, z0), V(w, yTop, z0), V(-w, yTop, z0)); // riser
-                Add(Vector3.up, V(-w, yTop, z0), V(w, yTop, z0), V(w, yTop, z1), V(-w, yTop, z1));       // tread
-                Add(Vector3.down, V(-w, -h, z0), V(w, -h, z0), V(w, -h, z1), V(-w, -h, z1));             // bottom strip
-                for (int l = 0; l + 1 < levels.Count && levels[l + 1] <= yTop + 1e-6f; l++)
+                Add(Vector3.back, V(-w, previous, z0), V(w, previous, z0), V(w, top, z0), V(-w, top, z0)); // riser
+                Add(Vector3.up, V(-w, top, z0), V(w, top, z0), V(w, top, z1), V(-w, top, z1)); // tread
+                Add(Vector3.down, V(-w, floor, z0), V(w, floor, z0), V(w, floor, z1), V(-w, floor, z1)); // bottom strip
+
+                void Side(float x, Vector3 outward)
                 {
-                    float ya = levels[l], yb = levels[l + 1];
-                    Add(Vector3.left, V(-w, ya, z0), V(-w, ya, z1), V(-w, yb, z1), V(-w, yb, z0));
-                    Add(Vector3.right, V(w, ya, z0), V(w, ya, z1), V(w, yb, z1), V(w, yb, z0));
+                    // Split the front edge at the previous tread. The diagonal keeps both faces nondegenerate
+                    // and gives the adjoining riser and side exactly the same edges, without a grid of strips.
+                    int bottomFront = V(x, floor, z0), bottomBack = V(x, floor, z1), join = V(x, previous, z0);
+                    if (previous > floor) Add(outward, bottomFront, bottomBack, join);
+                    Add(outward, join, bottomBack, V(x, top, z1), V(x, top, z0));
                 }
+                Side(-w, Vector3.left);
+                Side(w, Vector3.right);
+                previous = top;
+                back = z1;
             }
-            float zBack = zs[n], yBack = tops[n - 1];
-            for (int l = 0; l + 1 < levels.Count && levels[l + 1] <= yBack + 1e-6f; l++)
-                Add(Vector3.forward, V(-w, levels[l], zBack), V(w, levels[l], zBack), V(w, levels[l + 1], zBack), V(-w, levels[l + 1], zBack));
+            Add(Vector3.forward, V(-w, floor, back), V(w, floor, back), V(w, previous, back), V(-w, previous, back));
             var p = new BrushPolyhedron { vertices = verts.ToArray(), faces = faces.ToArray() };
             p.EnsureOutward();
             return p;
+        }
+
+        /// <summary>The same tread boundaries for the closed surface and its convex step columns.</summary>
+        internal static IEnumerable<(float start, float end, float top)> StairTreads(Vector3 size, float stepHeight)
+        {
+            int steps = StepCount(size.y, stepHeight);
+            float halfHeight = size.y * 0.5f, halfDepth = size.z * 0.5f;
+            float rise = size.y / steps, run = size.z / steps;
+            float start = -halfDepth;
+            for (int step = 1; step <= steps; step++)
+            {
+                float end = step == steps ? halfDepth : -halfDepth + step * run;
+                float top = step == steps ? halfHeight : -halfHeight + step * rise;
+                yield return (start, end, top);
+                start = end;
+            }
         }
 
         /// <summary>The widest angle one block of a curved stair covers: 32 per full turn.</summary>
@@ -276,9 +281,8 @@ namespace CsgBrush
 
         /// <summary>How many steps of about <paramref name="stepHeight"/> fill <paramref name="height"/>: at least one.</summary>
         /// <summary>
-        /// The lowest step a stair may have, metres. Each step is its own block for the CSG and the colliders, and a stair's
-        /// sides are split at every step level, so the cost grows with the square of the step count: steps of a few
-        /// millimetres made thousands of blocks and froze or crashed the editor.
+        /// The lowest step a stair may have, metres. Steps of a few millimetres made thousands of blocks
+        /// and froze or crashed the editor.
         /// </summary>
         public const float MinStepHeight = 0.1f;
 

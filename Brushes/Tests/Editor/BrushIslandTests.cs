@@ -14,7 +14,7 @@ namespace CsgBrush.Tests
         static Mesh GroupMesh(Brush any) => BrushCsg.MeshObject(BrushCsg.ModelOf(any), false).GetComponent<MeshFilter>().sharedMesh;
 
         [Test]
-        public void MovingABrushThatTouchesNothingRebuildsOnlyItsIsland()
+        public void MovingABrushThatTouchesNothingReusesItsIsland()
         {
             for (int i = 0; i < 5; i++) BrushApi.Create(BrushShape.Box, new Vector3(i * 4f, 0f, 0f), new Vector3(2f, 2f, 2f), Quaternion.identity);
             var loner = BrushApi.Create(BrushShape.Box, new Vector3(0f, 0f, 20f), new Vector3(2f, 2f, 2f), Quaternion.identity);
@@ -23,9 +23,14 @@ namespace CsgBrush.Tests
             int triangles = GroupMesh(loner).triangles.Length;
             BrushApi.Move(loner, new Vector3(4f, 0f, 20f));
             BrushApi.ForceUpdate();
-            Assert.AreEqual(1, BrushCsg.LastBuiltIslands, "only the moved brush's island");
-            Assert.AreEqual(5, BrushCsg.LastCachedIslands);
-            Assert.AreEqual(triangles, GroupMesh(loner).triangles.Length, "the mesh still holds every island");
+            Assert.AreEqual(0, BrushCsg.LastBuiltIslands);
+            Assert.AreEqual(6, BrushCsg.LastCachedIslands);
+            var mesh = GroupMesh(loner);
+            Assert.AreEqual(triangles, mesh.triangles.Length, "the mesh still holds every island");
+            var child = BrushCsg.MeshObject(BrushCsg.ModelOf(loner), false);
+            var ray = new Ray(loner.transform.position + Vector3.up * 5f, Vector3.down);
+            Assert.IsTrue(BrushHooks.IntersectRayMesh(ray, mesh, child.localToWorldMatrix, out var hit));
+            Assert.AreSame(loner, BrushCsg.TriangleBrushes(child)[hit.triangleIndex]);
         }
 
         [Test]
@@ -78,12 +83,12 @@ namespace CsgBrush.Tests
         }
 
         [Test]
-        public void MovingABrushThatTouchesNothingReplacesOnlyItsColliders()
+        public void RotatingABrushThatTouchesNothingReplacesOnlyItsColliders()
         {
             for (int i = 0; i < 5; i++) BrushApi.Create(BrushShape.Box, new Vector3(i * 4f, 0f, 0f), new Vector3(2f, 2f, 2f), Quaternion.identity);
             var loner = BrushApi.Create(BrushShape.Box, new Vector3(0f, 0f, 20f), new Vector3(2f, 2f, 2f), Quaternion.identity);
             BrushApi.ForceUpdate();
-            BrushApi.Move(loner, new Vector3(4f, 0f, 20f));
+            BrushApi.Rotate(loner, Quaternion.Euler(0f, 30f, 0f));
             BrushApi.ForceUpdate();
             Assert.AreEqual(5, CsgBrush.Colliders.Editor.ConvexColliderBuilder.LastReusedPieces, "the others keep their pieces");
             Assert.AreEqual(1, CsgBrush.Colliders.Editor.ConvexColliderBuilder.LastCreatedPieces);
