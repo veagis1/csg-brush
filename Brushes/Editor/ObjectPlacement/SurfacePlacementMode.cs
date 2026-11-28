@@ -46,6 +46,41 @@ namespace CsgBrush.Editor
         static bool previewing;
         static Pose lastPreview;
         static int held;
+        static SceneView escapeView;
+
+        static SurfacePlacementMode()
+        {
+            SceneView.beforeSceneGui += view =>
+            {
+                // Let a native Move handle process Escape for its own drag.
+                if (GUIUtility.hotControl == 0 || GUIUtility.hotControl == held) HandleEscape(view);
+            };
+            EditorWindow.windowFocusChanged += () =>
+            {
+                if (escapeView != EditorWindow.focusedWindow) escapeView = null;
+            };
+        }
+
+        // Placement exits on key-down. Keep the matching key-up away from scene selection,
+        // including when the keyboard focus stays on the CSG overlay during hover preview.
+        internal static bool HandleEscape(SceneView view)
+        {
+            var e = Event.current;
+            if (view == null || e.keyCode != KeyCode.Escape) return false;
+            if (e.type == EventType.KeyDown && (Active || escapeView == view))
+            {
+                escapeView = view;
+                e.Use();
+                Stop();
+            }
+            else if (e.type == EventType.KeyUp && escapeView == view)
+            {
+                escapeView = null;
+                e.Use();
+            }
+            else return false;
+            return true;
+        }
 
         static void SetOption(string key, bool previous, bool value, bool restartGesture)
         {
@@ -236,12 +271,7 @@ namespace CsgBrush.Editor
         {
             if (!Active || view.camera == null) return false;
             var e = Event.current;
-            if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape)
-            {
-                e.Use();
-                Stop();
-                return true;
-            }
+            if (HandleEscape(view)) return true;
             SelectSource();
             if (source == null)
             {

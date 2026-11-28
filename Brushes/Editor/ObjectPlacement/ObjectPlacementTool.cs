@@ -35,6 +35,7 @@ namespace CsgBrush.Editor
 
         internal static void DrawButton()
         {
+            SurfacePlacementMode.HandleEscape(EditorWindow.focusedWindow as SceneView);
             using var row = new EditorGUILayout.HorizontalScope();
             using var disabled = new EditorGUI.DisabledScope(!Available());
             if (GUILayout.Toggle(Active, new GUIContent(Tr(Label), Tr(Tip)), EditorStyles.miniButton,

@@ -7,6 +7,7 @@ using UnityEditor.EditorTools;
 using UnityEditor.SceneManagement;
 using UnityEditor.ShortcutManagement;
 using UnityEngine;
+using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
 
 namespace CsgBrush.Tests
@@ -137,6 +138,94 @@ namespace CsgBrush.Tests
             Assert.That(ObjectPlacementTool.Active, Is.False);
             Assert.That(Vector3.Distance(source.position, offset), Is.LessThan(0.04f));
             Assert.That(Quaternion.Angle(previous, source.rotation), Is.LessThan(0.001f));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void EscapeSentToTheBrushOverlayCancelsMoveTo(bool toolbar)
+        {
+            var overlay = new BrushOverlay();
+            VisualElement content = toolbar ? overlay.CreateHorizontalToolbarContent() : overlay.CreatePanelContent();
+            var controls = toolbar ? (IMGUIContainer)content[1] : (IMGUIContainer)content;
+            m_View.rootVisualElement.Add(content);
+            try
+            {
+                for (int attempt = 0; attempt < 2; attempt++)
+                {
+                    Selection.activeGameObject = attempt == 0 ? null : m_Tower.gameObject;
+                    ObjectPlacementTool.Begin();
+                    Assert.That(ObjectPlacementTool.Active, Is.True);
+                    using var down = KeyDownEvent.GetPooled(new Event { type = EventType.KeyDown, keyCode = KeyCode.Escape });
+                    down.target = controls;
+                    controls.SendEvent(down);
+                    Assert.That(ObjectPlacementTool.Active, Is.False, "One Escape delivered to the overlay exits placement");
+                    using var up = KeyUpEvent.GetPooled(new Event { type = EventType.KeyUp, keyCode = KeyCode.Escape });
+                    up.target = controls;
+                    controls.SendEvent(up);
+                    Assert.That(Selection.activeGameObject, Is.EqualTo(attempt == 0 ? null : m_Tower.gameObject));
+                }
+            }
+            finally { content.RemoveFromHierarchy(); }
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void EscapeRestoresRepeatedDragsAcrossTwoFaces(bool perpendicular)
+        {
+            var source = BrushApi.Create(BrushShape.Box, new Vector3(-4f, 2f, 0f), Vector3.one,
+                Quaternion.identity, snap: false).transform;
+            BrushApi.ForceUpdate();
+            var original = source.localPosition;
+            var rotation = source.localRotation;
+            Selection.activeGameObject = source.gameObject;
+            SurfacePlacementMode.Perpendicular = perpendicular;
+            var front = Gui(new Vector3(4f, 3f, 2f));
+            var side = Gui(new Vector3(2f, 3f, 4f));
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                ObjectPlacementTool.Begin();
+                Send(EventType.MouseDown, front, EventModifiers.Shift);
+                var frontPosition = source.position;
+                Send(EventType.MouseDrag, side, EventModifiers.Shift);
+                Assert.That(Vector3.Distance(source.position, frontPosition), Is.GreaterThan(1f), "Preview follows the second face");
+                Assert.That(GUIUtility.hotControl, Is.Not.Zero);
+
+                m_View.SendEvent(new Event { type = EventType.KeyDown, keyCode = KeyCode.Escape,
+                    modifiers = EventModifiers.Shift, mousePosition = side });
+                Assert.That(ObjectPlacementTool.Active, Is.False, $"Drag {attempt + 1} survives Escape");
+                Assert.That(GUIUtility.hotControl, Is.Zero);
+                Send(EventType.MouseUp, side, EventModifiers.Shift);
+                m_View.SendEvent(new Event { type = EventType.KeyUp, keyCode = KeyCode.Escape, mousePosition = side });
+                Assert.That(source.localPosition, Is.EqualTo(original));
+                Assert.That(Quaternion.Angle(source.localRotation, rotation), Is.LessThan(0.001f));
+                Assert.That(Selection.activeGameObject, Is.EqualTo(source.gameObject));
+            }
+        }
+
+        [Test]
+        public void CancellingHoverConsumesOnlyTheMatchingEscapeRelease()
+        {
+            Selection.activeGameObject = m_Tower.gameObject;
+            ObjectPlacementTool.Begin();
+            Send(EventType.MouseMove, Gui(Vector3.zero));
+            int unhandledReleases = 0;
+            void ObserveRelease(SceneView view)
+            {
+                var e = Event.current;
+                if (view == m_View && e.type == EventType.KeyUp && e.keyCode == KeyCode.Escape)
+                    unhandledReleases++;
+            }
+            SceneView.beforeSceneGui += ObserveRelease;
+            try
+            {
+                Press(KeyCode.Escape);
+                Assert.That(unhandledReleases, Is.Zero);
+                Assert.That(ObjectPlacementTool.Active, Is.False);
+                Assert.That(Selection.activeGameObject, Is.EqualTo(m_Tower.gameObject));
+                Press(KeyCode.Escape);
+                Assert.That(unhandledReleases, Is.EqualTo(1), "An independent Escape belongs to the editor");
+            }
+            finally { SceneView.beforeSceneGui -= ObserveRelease; }
         }
 
         [TestCase(false)]
