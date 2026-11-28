@@ -103,12 +103,14 @@ namespace CsgBrush.Tests
         [Test]
         public void WcsPicksTheCentreOfTheVisibleTowerFace()
         {
+            Tools.pivotRotation = PivotRotation.Local;
             Selection.activeGameObject = m_Tower.gameObject;
             var face = new Vector3(4f, 3f, 2f);
             ToolManager.SetActiveTool<BrushPivotTool>();
             Click(Gui(face));
             Assert.That(Vector3.Distance(m_Tower.transform.position, face), Is.LessThan(0.001f));
             Assert.That(Tools.current, Is.EqualTo(Tool.Move));
+            Assert.That(Tools.pivotRotation, Is.EqualTo(PivotRotation.Global));
         }
 
         [TestCase(0f, 0f)]
@@ -389,6 +391,124 @@ namespace CsgBrush.Tests
             }
         }
 
+        [TestCase("selected")]
+        [TestCase("unselected")]
+        [TestCase("other")]
+        [TestCase("nested")]
+        [TestCase("pocket")]
+        [TestCase("empty")]
+        [TestCase("subtract")]
+        [TestCase("nested subtract")]
+        public void DrawingOnASelectedFaceParentsOnlyToTheBrushOfThatFace(string scenario)
+        {
+            var previousOperation = BrushCreateTool.ManualOperation;
+            bool previousGridVisibility = m_View.showGrid;
+            try
+            {
+                var surface = m_Tower;
+                var face = new Vector3(3.5f, 3f, 2f);
+                var opposite = face + new Vector3(0.5f, 0.5f, 0f);
+                var extrusion = Vector3.back;
+                if (scenario == "nested" || scenario == "nested subtract")
+                {
+                    surface = BrushApi.Create(BrushShape.Box, new Vector3(4f, 3f, 1f), new Vector3(2f, 2f, 2f),
+                        Quaternion.identity, m_Tower.transform, snap: false);
+                    BrushApi.ForceUpdate();
+                    face.z = opposite.z = 0f;
+                }
+                else if (scenario == "pocket")
+                {
+                    surface = OpenTowerPocket(false);
+                    face = TowerPocketCenter;
+                    opposite = face + new Vector3(0.5f, 0.5f, 0f);
+                }
+                else if (scenario == "empty")
+                {
+                    m_Floor.gameObject.SetActive(false);
+                    BrushApi.ForceUpdate();
+                    m_View.showGrid = true;
+                    face = new Vector3(-6f, 0f, -2f);
+                    opposite = face + new Vector3(1f, 0f, 1f);
+                    extrusion = Vector3.up;
+                }
+                var operation = scenario == "subtract" || scenario == "nested subtract" ? BrushOperation.Subtract : BrushOperation.Add;
+                Selection.activeGameObject = scenario == "unselected" || scenario == "subtract" ? null :
+                    scenario == "other" ? m_Floor.gameObject : surface.gameObject;
+                Tools.pivotRotation = PivotRotation.Local;
+                BrushCreateTool.ManualOperation = operation;
+                BrushMenu.ActivateCreation<CreateBoxBrushTool>();
+                var start = Gui(face);
+                var end = Gui(opposite);
+                int count = Brushes;
+                Send(EventType.MouseDown, start);
+                MoveTo(start, end, EventType.MouseDrag);
+                Send(EventType.MouseUp, end);
+                Assert.That(BrushCreateTool.Active.Drawing, Is.True);
+                var finish = Gui(opposite + extrusion * (operation == BrushOperation.Add ? 0.75f : -0.75f));
+                MoveTo(end, finish);
+                Click(finish);
+
+                Assert.That(Brushes, Is.EqualTo(count + 1));
+                var created = Selection.activeGameObject.GetComponent<Brush>();
+                Assert.That(created.operation, Is.EqualTo(operation));
+                var expectedParent = scenario == "other" || scenario == "unselected" || scenario == "empty" ?
+                    null : surface.transform;
+                Assert.That(created.transform.parent, Is.SameAs(expectedParent));
+                Assert.That(Tools.pivotRotation, Is.EqualTo(PivotRotation.Global));
+                Assert.That(Quaternion.Angle(Tools.handleRotation, Quaternion.identity), Is.LessThan(0.01f));
+            }
+            finally
+            {
+                ToolManager.RestorePreviousPersistentTool();
+                BrushCreateTool.ManualOperation = previousOperation;
+                m_View.showGrid = previousGridVisibility;
+            }
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void WorldGridStaysAtTheOriginWithLocalAxesOnARotatedBrush(bool orthographic)
+        {
+            var oldPosition = EditorSnapSettings.gridPosition;
+            var oldRotation = EditorSnapSettings.gridRotation;
+            bool checkedBeforeDrawing = false;
+            void CheckGrid(SceneView view)
+            {
+                if (view != m_View || Event.current.type != EventType.Repaint) return;
+                checkedBeforeDrawing = true;
+                Assert.That(EditorSnapSettings.gridPosition, Is.EqualTo(Vector3.zero));
+                Assert.That(Quaternion.Angle(EditorSnapSettings.gridRotation, Quaternion.identity), Is.LessThan(0.01f));
+                BrushSurfaceGrid.SceneGridPlane(view, out var normal, out var pivot);
+                Assert.That(normal, Is.EqualTo(Vector3.up));
+                Assert.That(pivot, Is.EqualTo(Vector3.zero));
+                Assert.That(Tools.pivotRotation, Is.EqualTo(PivotRotation.Local));
+            }
+            SceneView.beforeSceneGui += CheckGrid;
+            try
+            {
+                Selection.activeGameObject = m_Tower.gameObject;
+                m_View.orthographic = orthographic;
+                Tools.current = Tool.Rotate;
+                Tools.pivotRotation = PivotRotation.Local;
+                foreach (var angle in new[] { 37f, 90f })
+                {
+                    m_Tower.transform.rotation = Quaternion.Euler(angle, 0f, 0f);
+                    // Simulate another Scene GUI tool aligning Unity's grid to the selection.
+                    EditorSnapSettings.gridPosition = m_Tower.transform.position;
+                    EditorSnapSettings.gridRotation = m_Tower.transform.rotation;
+                    checkedBeforeDrawing = false;
+                    m_View.SendEvent(new Event { type = EventType.Repaint });
+                    Assert.That(checkedBeforeDrawing, Is.True);
+                }
+            }
+            finally
+            {
+                SceneView.beforeSceneGui -= CheckGrid;
+                EditorSnapSettings.gridPosition = oldPosition;
+                EditorSnapSettings.gridRotation = oldRotation;
+            }
+        }
+
         [TestCase(false, false)]
         [TestCase(false, true)]
         [TestCase(true, false)]
@@ -582,8 +702,10 @@ namespace CsgBrush.Tests
         public void AClickOnTheLevelSelectsTheBrushUnderThePointer()
         {
             Tools.current = Tool.Move;
+            Tools.pivotRotation = PivotRotation.Local;
             Click(Gui(new Vector3(3f, 4f, 2f)));
             Assert.AreEqual(m_Tower.gameObject, Selection.activeGameObject, "the tower");
+            Assert.That(Tools.pivotRotation, Is.EqualTo(PivotRotation.Global));
             Click(Gui(new Vector3(-8f, 0f, -6f)));
             Assert.AreEqual(m_Floor.gameObject, Selection.activeGameObject, "the floor");
         }

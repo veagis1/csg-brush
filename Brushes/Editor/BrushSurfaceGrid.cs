@@ -1,13 +1,59 @@
 using static CsgBrush.Editor.BrushLanguage;
+using System;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEngine;
 using UnityEngine.Rendering;
+using Object = UnityEngine.Object;
 
 namespace CsgBrush.Editor
 {
     internal static class BrushSurfaceGrid
     {
+        const BindingFlags InstanceMembers = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        static readonly PropertyInfo SceneGrids = typeof(SceneView).GetProperty("sceneViewGrids", InstanceMembers);
+        static readonly PropertyInfo GridAxis = SceneGrids?.PropertyType.GetProperty("gridAxis", InstanceMembers);
+        static readonly PropertyInfo GridFollowsHandle = SceneGrids?.PropertyType.GetProperty("nearestPlaneToHandleMode", InstanceMembers);
+        static readonly MethodInfo GridPivot = SceneGrids?.PropertyType.GetMethod("GetPivot", InstanceMembers);
+        static readonly MethodInfo ResetGridOffset = SceneGrids?.PropertyType.GetMethod("ResetOffsetAlongAxis", InstanceMembers);
+        static readonly object[] FloorAxis = GridAxis == null ? null : new[] { Enum.ToObject(GridAxis.PropertyType, 1) };
+
+        static bool IsCreating => BrushCreateTool.Active != null || ToolManager.activeToolType == typeof(CreateFloorPlanTool) ||
+            ToolManager.activeToolType == typeof(CreateSplineTool);
+
+        internal static void SceneGridPlane(SceneView view, out Vector3 normal, out Vector3 pivot)
+        {
+            normal = Vector3.up;
+            pivot = Vector3.zero;
+            var grids = SceneGrids?.GetValue(view);
+            var axis = grids != null ? GridAxis?.GetValue(grids) : null;
+            if (axis == null || GridPivot == null) return;
+            int index = Convert.ToInt32(axis);
+            normal = index == 0 ? Vector3.right : index == 2 ? Vector3.forward : Vector3.up;
+            pivot = (Vector3)GridPivot.Invoke(grids, new[] { axis });
+        }
+
+        internal static void KeepWorldFloor(SceneView view)
+        {
+            if (Application.isPlaying || view.in2DMode) return;
+            var selected = Selection.activeGameObject;
+            if (!IsCreating && (selected == null ||
+                !(selected.TryGetComponent<Brush>(out _) || selected.TryGetComponent<BrushGroup>(out _) ||
+                  selected.TryGetComponent<PointGraph>(out _)))) return;
+
+            // Other Scene GUI tools can leave a custom Unity grid behind. Put it back on the
+            // world floor before Unity draws it. The CSG surface grid has its own frame.
+            EditorSnapSettings.gridRotation = Quaternion.identity;
+            EditorSnapSettings.gridPosition = Vector3.zero;
+            var grids = SceneGrids?.GetValue(view);
+            if (grids == null || FloorAxis == null) return;
+            if (!FloorAxis[0].Equals(GridAxis.GetValue(grids))) GridAxis.SetValue(grids, FloorAxis[0]);
+            if (GridFollowsHandle?.GetValue(grids) is true) GridFollowsHandle.SetValue(grids, false);
+            if (GridPivot?.Invoke(grids, FloorAxis) is Vector3 pivot && pivot != Vector3.zero)
+                ResetGridOffset?.Invoke(grids, FloorAxis);
+        }
+
         internal readonly struct Frame
         {
             internal readonly Transform Owner;
@@ -159,8 +205,7 @@ namespace CsgBrush.Editor
             if (pickingView != view)
             {
                 // Each creation tool draws the plane it actually uses, including wall openings and floor plans.
-                if (BrushCreateTool.Active != null || ToolManager.activeToolType == typeof(CreateFloorPlanTool) ||
-                    ToolManager.activeToolType == typeof(CreateSplineTool)) return false;
+                if (IsCreating) return false;
                 if (HasHeld) Draw(held);
                 else if (Tools.current == Tool.Move && GUIUtility.hotControl != 0 &&
                     Selection.activeGameObject != null && Selection.activeGameObject.TryGetComponent<Brush>(out var brush) &&

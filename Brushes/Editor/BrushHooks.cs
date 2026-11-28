@@ -67,6 +67,7 @@ namespace CsgBrush.Editor
             Undo.postprocessModifications += OnPostprocessModifications;
             EditorApplication.update += OnEditorUpdate;
             Colliders.Editor.ConvexColliderBuilder.DeferWhile = () => BrushSnap.DragInProgress;
+            SceneView.beforeSceneGui += BrushSurfaceGrid.KeepWorldFloor;
             SceneView.duringSceneGui += OnSceneGUI;
             Selection.selectionChanged += OnSelectionChanged;
             EditorApplication.hierarchyChanged += OnHierarchyChanged;
@@ -272,7 +273,11 @@ namespace CsgBrush.Editor
             var picked = hit != null ? BrushGenerators.SelectionTarget(hit) : front;
             if (e.shift) { var list = new List<Object>(Selection.objects); if (picked != null && !list.Contains(picked)) list.Add(picked); Selection.objects = list.ToArray(); }
             else if (e.control || e.command) { var list = new List<Object>(Selection.objects); if (picked != null && !list.Remove(picked)) list.Add(picked); Selection.objects = list.ToArray(); }
-            else Selection.activeGameObject = picked;
+            else
+            {
+                if (hit != null && Selection.activeGameObject != picked) Tools.pivotRotation = PivotRotation.Global;
+                Selection.activeGameObject = picked;
+            }
             e.Use();
         }
 
@@ -326,7 +331,7 @@ namespace CsgBrush.Editor
             else
             {
                 float frontDistance = front != null ? Found(front, ray) : float.PositiveInfinity;
-                onLevel = LevelMeshUnder(ray, false, out brush, out var hit) && hit.distance < frontDistance;
+                onLevel = LevelMeshUnder(ray, false, out brush, out var hit, out _) && hit.distance < frontDistance;
                 distance = onLevel ? hit.distance : frontDistance;
                 if (!onLevel) brush = null;
             }
@@ -348,18 +353,20 @@ namespace CsgBrush.Editor
         /// picking skips them while they are hidden in the Hierarchy. <paramref name="brush"/> is the brush that made the
         /// triangle hit, null while the mesh's table isn't there yet (a scene just loaded). False when no mesh is hit.
         /// </summary>
-        static bool LevelMeshUnder(Ray ray, bool construction, out Brush brush, out RaycastHit hit)
+        static bool LevelMeshUnder(Ray ray, bool construction, out Brush brush, out RaycastHit hit, out Brush source)
         {
-            brush = null;
+            brush = source = null;
             hit = new RaycastHit { distance = float.PositiveInfinity };
             int layers = SceneLayers;
             foreach (var t in BrushSceneVisibility.MeshObjects)
             {
                 if (t == null || !t.gameObject.activeInHierarchy || (layers & (1 << t.gameObject.layer)) == 0 ||
                     !BrushSceneVisibility.CanPick(t) || !t.TryGetComponent<MeshRenderer>(out var renderer) || !renderer.enabled) continue;
-                if (!BrushSceneVisibility.PickMesh(t, ray, construction, out var owner, out var candidate) || candidate.distance >= hit.distance) continue;
+                if (!BrushSceneVisibility.PickMesh(t, ray, construction, out var owner, out var candidate, out var faceSource) ||
+                    candidate.distance >= hit.distance) continue;
                 hit = candidate;
                 brush = owner;
+                source = faceSource;
             }
             return hit.distance < float.PositiveInfinity;
         }
@@ -458,12 +465,19 @@ namespace CsgBrush.Editor
 
         static int SceneLayers => Tools.visibleLayers & (SceneView.currentDrawingSceneView?.camera?.cullingMask ?? ~0);
 
-        internal static Brush PickConstructionSurface(Ray ray, out Vector3 point, out Vector3 normal)
+        internal static Brush PickConstructionSurface(Ray ray, out Vector3 point, out Vector3 normal) =>
+            PickConstructionSurface(ray, out point, out normal, out _);
+
+        internal static Brush PickConstructionSurface(Ray ray, out Vector3 point, out Vector3 normal, out Brush source)
         {
             BrushSceneVisibility.SyncForPicking();
             var shape = PickBrushSurface(ray, out point, out normal, false, true, unbuiltOnly: true);
-            if (!LevelMeshUnder(ray, true, out var visible, out var hit) ||
-                shape != null && (point - ray.origin).sqrMagnitude <= hit.distance * hit.distance) return shape;
+            if (!LevelMeshUnder(ray, true, out var visible, out var hit, out source) ||
+                shape != null && (point - ray.origin).sqrMagnitude <= hit.distance * hit.distance)
+            {
+                source = shape;
+                return shape;
+            }
             point = hit.point;
             normal = hit.normal;
             return visible;

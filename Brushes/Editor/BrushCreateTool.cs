@@ -1,7 +1,6 @@
 using static CsgBrush.Editor.BrushLanguage;
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using UnityEditor;
 using UnityEditor.EditorTools;
 using UnityEditor.Overlays;
@@ -230,6 +229,7 @@ namespace CsgBrush.Editor
         BrushSurfaceGrid.Frame hoverGrid, drawGrid;
         BrushCutTarget hoverTarget, drawTarget, selectedTarget;
         Transform hoverSurface, drawSurface;
+        Transform hoverAddParent, drawAddParent;
         BrushOperation? drawManual;
         readonly BrushCutPreview cutPreview = new BrushCutPreview();
         int controlId;
@@ -256,6 +256,7 @@ namespace CsgBrush.Editor
             pickingTarget = hoverValid = m_OpeningValid = false;
             hoverTarget = drawTarget = default;
             hoverSurface = drawSurface = null;
+            hoverAddParent = drawAddParent = null;
             hoverGrid = drawGrid = default;
         }
 
@@ -328,7 +329,7 @@ namespace CsgBrush.Editor
         void UpdateHover(SceneView view, Vector2 mouse)
         {
             var ray = HandleUtility.GUIPointToWorldRay(mouse);
-            var surface = BrushHooks.PickConstructionSurface(ray, out var point, out var faceNormal);
+            var surface = BrushHooks.PickConstructionSurface(ray, out var point, out var faceNormal, out var source);
             hoverSurface = surface != null ? surface.transform : null;
             var hit = point;
             var workingNormal = faceNormal;
@@ -337,6 +338,7 @@ namespace CsgBrush.Editor
             hoverValid &= BrushDraw.WithinViewDepth(view.camera, point);
             bool onSurface = surface != null && Mathf.Abs(Vector3.Dot(point - hit, faceNormal)) < 0.001f &&
                 Mathf.Abs(Vector3.Dot(workingNormal, faceNormal)) > 0.999f;
+            hoverAddParent = onSurface ? SelectedParent(source) ?? SelectedParent(surface) : null;
             var selected = ManualOperation == BrushOperation.Subtract && selectedTarget.CanPick &&
                 StageUtility.GetCurrentStageHandle().Contains(selectedTarget.Parent.gameObject);
             hoverTarget = selected ? selectedTarget : onSurface ? BrushCutTarget.FromBrush(surface) : default;
@@ -349,6 +351,10 @@ namespace CsgBrush.Editor
             // The owner's local grid frame can lose height in its world/local round trip.
             if (workingNormal.x == 0f && workingNormal.z == 0f) hoverPoint.y = point.y;
         }
+
+        static Transform SelectedParent(Brush brush) =>
+            brush != null && !brush.IsGenerated && Selection.Contains(brush.gameObject) &&
+            BrushSceneVisibility.CanPick(brush.transform) ? brush.transform : null;
 
         /// <summary>Step sizes and wall thickness for new brushes: the settings, or grid-derived defaults when left at 0.</summary>
         public static void NewBrushParameters(out float stepHeight, out float wallThickness)
@@ -432,6 +438,7 @@ namespace CsgBrush.Editor
             if (!(window is SceneView view) || BrushSurfaceGrid.Picking) return;
             var e = Event.current;
             if (Drawing && ((drawSurface != null && !BrushSceneVisibility.CanPick(drawSurface)) ||
+                (drawAddParent != null && !BrushSceneVisibility.CanPick(drawAddParent)) ||
                 (hadDrawTarget && !drawTarget.CanPick)))
                 ResetGesture();
             if (state == State.Idle && ((hoverSurface != null && !BrushSceneVisibility.CanPick(hoverSurface)) ||
@@ -469,6 +476,7 @@ namespace CsgBrush.Editor
                         drawGrid = hoverGrid;
                         drawTarget = hoverTarget.CanPick ? hoverTarget : default;
                         drawSurface = hoverSurface;
+                        drawAddParent = hoverAddParent;
                         hadDrawTarget = drawTarget.Valid;
                         drawManual = ManualOperation;
                         planeRotation = drawGrid.Valid ? drawGrid.Rotation : BrushDraw.SurfaceRotation(normal);
@@ -569,6 +577,7 @@ namespace CsgBrush.Editor
             {
                 var brush = WallAnchors.Create(Shape, m_Opening);
                 BrushApi.ForceUpdate();
+                Tools.pivotRotation = PivotRotation.Global;
                 Selection.activeGameObject = brush.gameObject;
                 e.Use();
             }
@@ -609,15 +618,23 @@ namespace CsgBrush.Editor
         }
 
         /// <summary>
-        /// The plane to draw on in empty space, as ProBuilder does: the grid the Scene view shows (its axis and position),
-        /// facing the camera; with the grid hidden, a plane through the view pivot, horizontal unless the view looks level.
+        /// Use the visible world floor, or the world plane Unity shows in a straight-on ortho view.
+        /// When the visible plane cannot be used, draw on a plane through the view pivot.
         /// </summary>
         static Plane GridPlane(SceneView view)
         {
             var camera = view.camera.transform;
             if (view.showGrid || EditorSnapSettings.gridSnapActive)
             {
-                GridAxisAndPivot(view, out var normal, out var pivot);
+                var normal = Vector3.up;
+                var pivot = Vector3.zero;
+                if (view.in2DMode) BrushSurfaceGrid.SceneGridPlane(view, out normal, out pivot);
+                else if (view.orthographic)
+                {
+                    var direction = camera.forward;
+                    if (direction == Vector3.right || direction == Vector3.left) normal = Vector3.right;
+                    else if (direction == Vector3.forward || direction == Vector3.back) normal = Vector3.forward;
+                }
                 if (Vector3.Dot(camera.forward, normal) > 0f) normal = -normal;
                 var grid = new Plane(normal, pivot);
                 if (grid.GetSide(camera.position)) return grid;
@@ -626,30 +643,6 @@ namespace CsgBrush.Editor
             var n = Mathf.Abs(f.y) >= 0.02f ? Vector3.up : Mathf.Abs(f.x) > Mathf.Abs(f.z) ? Vector3.right : Vector3.forward;
             if (Vector3.Dot(f, n) > 0f) n = -n;
             return new Plane(n, Grid > 0f ? BrushSnap.Round(view.pivot, Grid) : view.pivot);
-        }
-
-        static PropertyInfo s_Grids, s_GridAxis;
-        static MethodInfo s_GridPivot;
-
-        /// <summary>The Scene view grid's axis and position. Unity keeps them internal; without them the grid is the floor through the origin.</summary>
-        static void GridAxisAndPivot(SceneView view, out Vector3 normal, out Vector3 pivot)
-        {
-            normal = Vector3.up; pivot = Vector3.zero;
-            try
-            {
-                const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-                s_Grids ??= typeof(SceneView).GetProperty("sceneViewGrids", flags);
-                var grids = s_Grids?.GetValue(view);
-                if (grids == null) return;
-                s_GridAxis ??= grids.GetType().GetProperty("gridAxis", flags);
-                s_GridPivot ??= grids.GetType().GetMethod("GetPivot", flags);
-                if (s_GridAxis == null || s_GridPivot == null) return;
-                var axis = s_GridAxis.GetValue(grids);
-                int a = System.Convert.ToInt32(axis); // X, Y, Z, All
-                normal = a == 0 ? Vector3.right : a == 2 ? Vector3.forward : Vector3.up;
-                pivot = (Vector3)s_GridPivot.Invoke(grids, new[] { axis });
-            }
-            catch (System.Exception) { normal = Vector3.up; pivot = Vector3.zero; }
         }
 
         void CurrentPose(out Vector3 centre, out Vector3 size, out Quaternion rotation)
@@ -721,13 +714,15 @@ namespace CsgBrush.Editor
             }
             CurrentPose(out var centre, out var size, out var rotation);
             int group = Undo.GetCurrentGroup();
-            var parent = cut ? drawTarget.Parent : BrushMenu.CreationParent();
+            var parent = cut ? drawTarget.Parent : drawAddParent;
+            if (parent == null) parent = BrushMenu.CreationParent();
             var brush = CreateDrawnBrush(Shape, origin, centre, size, rotation, parent);
             if (drawGrid.Owner != null) drawGrid.Store(brush);
             if (cut) drawTarget.Assign(brush);
             if (cut && drawTarget.Plan != null) WallAnchors.AttachCutToWall(brush, drawTarget);
             Undo.CollapseUndoOperations(group);
             BrushApi.ForceUpdate();
+            Tools.pivotRotation = PivotRotation.Global;
             Selection.activeGameObject = brush.gameObject;
             ResetGesture();
             SceneView.RepaintAll();

@@ -117,7 +117,7 @@ namespace CsgBrush.Editor
             PointGraphEditContext.Exit();
             Tools.current = Tool.Move;
             Tools.pivotMode = UnityEditor.PivotMode.Pivot;
-            Tools.pivotRotation = PivotRotation.Local;
+            Tools.pivotRotation = PivotRotation.Global;
             SceneView.RepaintAll();
         }
 

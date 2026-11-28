@@ -33,12 +33,13 @@ namespace CsgBrush.Editor
 
             // Trace front faces of the rendered CSG result. A blind pocket has a wall surface
             // to select even when the cutter is locked. A through opening has no such triangle.
-            internal bool Hit(Transform child, Ray ray, bool construction, out Brush brush, out RaycastHit hit)
+            internal bool Hit(Transform child, Ray ray, bool construction, out Brush brush, out RaycastHit hit,
+                out Brush source)
             {
                 var toLocal = child.worldToLocalMatrix;
                 var origin = toLocal.MultiplyPoint3x4(ray.origin);
                 var direction = toLocal.MultiplyVector(ray.direction);
-                brush = null;
+                brush = source = null;
                 hit = new RaycastHit { distance = float.PositiveInfinity };
                 for (int i = 0; i < indices.Length; i += 3)
                 {
@@ -55,7 +56,8 @@ namespace CsgBrush.Editor
                     if (u < 0f || v < 0f || u + v > det) continue;
                     float t = Vector3.Dot(ac, q) / det;
                     if (t < 0f || t >= hit.distance) continue;
-                    var owner = i / 3 < sources.Length ? sources[i / 3] : null;
+                    var faceSource = i / 3 < sources.Length ? sources[i / 3] : null;
+                    var owner = faceSource;
                     // Interpolate on the triangle. Reconstructing the hit from the ray distance
                     // introduces a camera-dependent height even when all three vertices have Y = 0.
                     var point = child.TransformPoint(a + ab * (u / det) + ac * (v / det));
@@ -71,6 +73,7 @@ namespace CsgBrush.Editor
                     hit.distance = t;
                     hit.point = point;
                     brush = owner;
+                    source = faceSource;
                 }
                 return brush != null;
             }
@@ -206,9 +209,10 @@ namespace CsgBrush.Editor
             return mesh;
         }
 
-        internal static bool PickMesh(Transform child, Ray ray, bool construction, out Brush brush, out RaycastHit hit)
+        internal static bool PickMesh(Transform child, Ray ray, bool construction, out Brush brush, out RaycastHit hit,
+            out Brush source)
         {
-            brush = null;
+            brush = source = null;
             hit = default;
             var mesh = MeshFor(child, out var sources);
             if (mesh == null || mesh.vertexCount == 0) return false;
@@ -219,11 +223,11 @@ namespace CsgBrush.Editor
                 if (sources == null) return false;
                 if (!pickGeometry.TryGetValue(child, out var geometry))
                     pickGeometry.Add(child, geometry = new PickGeometry(mesh, sources));
-                return geometry.Hit(child, ray, construction, out brush, out hit);
+                return geometry.Hit(child, ray, construction, out brush, out hit, out source);
             }
             if (!BrushHooks.IntersectRayMesh(ray, mesh, child.localToWorldMatrix, out hit)) return false;
             int triangle = hit.triangleIndex;
-            if (sources != null && triangle >= 0 && triangle < sources.Length) brush = sources[triangle];
+            if (sources != null && triangle >= 0 && triangle < sources.Length) brush = source = sources[triangle];
             return true;
         }
 

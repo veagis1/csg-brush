@@ -1,7 +1,7 @@
 ---
 type: system
 status: implemented
-updated: 2026-11-25
+updated: 2026-11-28
 sources:
   - "repo:Development~/Sandbox/Packages/manifest.json"
   - "repo:Development~/Sandbox/Packages/packages-lock.json"
@@ -25,6 +25,8 @@ Chisel установлен в `Sandbox` для знакомства с отде
 Для пустой сцены создайте модель через **GameObject → Chisel → Create Model** и добавьте форму через **GameObject → Chisel → Create Generators**. Chisel хранит авторские параметры в собственных компонентах, а сгенерированные меши под объектом модели. Первое построение может занять больше времени из-за компиляции Burst. [Начало работы с Chisel](https://github.com/RadicalCSG/com.chisel/blob/96e8f7ceaa0efca9cf90c746c0a89f74c126bcf4/GETTING_STARTED.md) · [Инструкция по установке](https://github.com/RadicalCSG/com.chisel/blob/96e8f7ceaa0efca9cf90c746c0a89f74c126bcf4/INSTALLATION.md)
 
 ## Проверка и ограничения
+
+Обработчик сцены Chisel вычисляет штатную сетку Unity из ориентации локальных гизмо и положения родителя выделенного объекта. При построении и выделении объектов CSG Brush+ в 3D пакет устанавливает мировые координаты сетки перед штатной отрисовкой Unity. Плоскость пола XZ проходит через Y = 0 м, а сетка построения по грани использует собственную плоскость. [Исходник обработчика Chisel](https://github.com/RadicalCSG/com.chisel/blob/96e8f7ceaa0efca9cf90c746c0a89f74c126bcf4/Editor/Settings/ChiselGridSettings.cs).
 
 В фоновом Unity `6000.6.8f1` пример импортирован штатным API `Sample.Import` и открыт дополнительно к исходной сцене. Найдено 382 компонента Chisel, включая 4 модели, и 75 непустых `MeshFilter` под моделями после обновления редактора. Отсутствующих скриптов и новых ошибок при открытии нет. Burst выдал предупреждение `Synchronous compilation was requested` для `DisposeListChildrenBlobAssetReferenceJob<SubMeshTriangleLookup>`. Открытие и закрытие сцены завершились. Вид и управление в окне Scene графически не проверены.
 
